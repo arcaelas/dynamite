@@ -1,19 +1,18 @@
 {
-  "name": "@arcaelas/dynamite",
-  "version": "1.0.0",
-  "main": "index.js",
-  "license": "MIT",
+  "author": {
+    "email": "comunity@arcaelas.com",
+    "name": "Arcaelas Insiders",
+    "url": "https://github.com/arcaelas"
+  },
+  "bugs": {
+    "email": "community@arcaelas.com",
+    "url": "https://github.com/arcaelas/dynamite/issues"
+  },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "3.329.0",
     "@aws-sdk/lib-dynamodb": "3.329.0",
     "pluralize": "^8.0.0",
     "uuid": "^11.1.0"
-  },
-  "scripts": {
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
-    "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
@@ -25,5 +24,31 @@
     "tsconfig-paths": "^4.2.0",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3"
-  }
+  },
+  "files": [
+    "build/",
+    "*.md",
+    "*.json"
+  ],
+  "homepage": "https://github.com/arcaelas/dynamite",
+  "license": "ISC",
+  "main": "build/index.js",
+  "name": "@arcaelas/dynamite",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/arcaelas/dynamite.git"
+  },
+  "scripts": {
+    "build": "tsc && node esbuild.js",
+    "commit": "npm publish --access=public",
+    "postpublish": "rm -rf build",
+    "prepare": "husky",
+    "prepublishOnly": "yarn test",
+    "test": "yarn build && jest"
+  },
+  "version": "1.0.0"
 }
