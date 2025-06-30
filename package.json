@@ -46,8 +46,7 @@
     "build": "tsc && node esbuild.js",
     "commit": "npm publish --access=public",
     "postpublish": "rm -rf build",
-    "prepare": "husky",
-    "prepublishOnly": "yarn test",
+    "prepublishOnly": "yarn test && npm version patch",
     "test": "yarn build && jest"
   },
   "version": "1.0.0"
