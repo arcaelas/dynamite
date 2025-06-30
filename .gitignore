@@ -1,0 +1,41 @@
+node_modules
+.env
+.env.local
+.env.development.local
+.env.production.local
+.env.test.local
+
+# testing
+/coverage
+/jest
+
+# production
+/build
+
+# misc
+.DS_Store
+.env.local
+.env.development.local
+.env.production.local
+.env.test.local
+
+*.log
+*.pid
+*.seed
+*.pid.lock
+
+# dependencies
+yarn-error.log
+
+# editor
+*.sublime-project
+*.sublime-workspace
+.vscode
+
+# misc
+npm-debug.log*
+
+# IDEs
+.idea
+.vscode
+.cache

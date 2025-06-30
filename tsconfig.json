@@ -1,0 +1,32 @@
+{
+  "include": ["src/**/*", "__tests__/**/*"],
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "baseUrl": "./",
+    "paths": {
+      "@type/*": ["src/@types/*"],
+      "@controller/*": ["src/app/controllers/*"],
+      "@provider/*": ["src/app/providers/*"],
+      "@resource/*": ["src/resources/*"]
+    },
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "noImplicitAny": false,
+    "skipLibCheck": true,
+    "outDir": "./build",
+    "declaration": true,
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "downlevelIteration": true,
+    "lib": ["ES2022", "DOM"],
+    "allowSyntheticDefaultImports": true,
+    "useDefineForClassFields": false,
+    "strictPropertyInitialization": false
+  },
+  "exclude": ["node_modules", "**/*.test.ts"]
+}
