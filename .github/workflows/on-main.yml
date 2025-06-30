@@ -1,0 +1,31 @@
+name: On Push | main
+on:
+  push:
+    branches:
+      - main
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org/
+      - name: install
+        run: |
+          npm i -g yarn
+          yarn --frozen-lockfile
+      - name: github-config
+        run: |
+          git config --global user.name "$(git --no-pager log --format=format:'%an' -n 1)"
+          git config --global user.email "$(git --no-pager log --format=format:'%ae' -n 1)"
+      - name: publish
+        run: |
+          pkg_name="$(sed 's/.*"name": "\(.*\)".*/\1/;t;d' ./package.json)"
+          pkg_version="$(sed 's/.*"version": "\(.*\)".*/\1/;t;d' ./package.json)"
+          [[ $pkg_version != "$(npm view $pkg_name version)" ]] && {
+            npm publish --access=public
+          }
+        env:
+          NODE_AUTH_TOKEN: ${{secrets.npm_token}}
