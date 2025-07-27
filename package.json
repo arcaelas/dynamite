@@ -47,7 +47,7 @@
     "commit": "npm publish --access=public",
     "postpublish": "rm -rf build",
     "prepublishOnly": "yarn test && npm version patch",
-    "test": "yarn build && jest"
+    "test": "jest && yarn build"
   },
   "version": "1.0.1"
 }

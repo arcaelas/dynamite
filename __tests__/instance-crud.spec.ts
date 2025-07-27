@@ -17,7 +17,7 @@ import {
 beforeAll(() =>
   connect({
     region: "local",
-    endpoint: "http://localhost:7007",
+    endpoint: "http://localhost:8000",
     credentials: { accessKeyId: "x", secretAccessKey: "x" },
   })
 );

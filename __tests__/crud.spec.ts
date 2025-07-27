@@ -15,7 +15,7 @@ import PrimaryKey from "../src/decorators/primary_key";
 
 const ddbCfg = {
   region: "local",
-  endpoint: "http://localhost:7007",
+  endpoint: "http://localhost:8000",
   credentials: { accessKeyId: "x", secretAccessKey: "x" },
 };
 
