@@ -45,7 +45,7 @@
     "url": "https://github.com/arcaelas/dynamite.git"
   },
   "scripts": {
-    "build": "tsc && node esbuild.js",
+    "build": "tsc && tsc-alias && node esbuild.js",
     "commit": "npm publish --access=public",
     "postpublish": "rm -rf build",
     "prepublishOnly": "yarn test && npm version patch",

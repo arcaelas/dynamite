@@ -17,11 +17,4 @@ build({
   platform: "node",
   format: "cjs",
   external: ["@aws-sdk/*", "pluralize", "uuid"],
-})
-  .then(() => {
-    console.log("✅ Bundle JavaScript completado!");
-  })
-  .catch((error) => {
-    console.error("❌ Error durante el bundle:", error);
-    process.exit(1);
-  });
+});
