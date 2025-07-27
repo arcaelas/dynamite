@@ -49,5 +49,5 @@
     "prepublishOnly": "yarn test && npm version patch",
     "test": "jest && yarn build"
   },
-  "version": "1.0.1"
+  "version": "1.0.2"
 }
