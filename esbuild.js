@@ -1,12 +1,27 @@
 #! ts-node
-const { build } = require("esbuild")
+/*
+@file esbuild.js
+@descripcion Script de build que bundlea JavaScript en index.js
+@autor Miguel Alejandro
+@fecha 2025-01-27
+*/
+
+const { build } = require("esbuild");
 
 build({
-    entryPoints: ['src/index.ts'],
-    outdir: "build",
-    sourcemap: true,
-    bundle: false,
-    minify: true,
-    platform: "node",
-    format: "cjs",
+  entryPoints: ["src/index.ts"],
+  outfile: "build/index.js",
+  sourcemap: true,
+  bundle: true,
+  minify: true,
+  platform: "node",
+  format: "cjs",
+  external: ["@aws-sdk/*", "pluralize", "uuid"],
 })
+  .then(() => {
+    console.log("✅ Bundle JavaScript completado!");
+  })
+  .catch((error) => {
+    console.error("❌ Error durante el bundle:", error);
+    process.exit(1);
+  });

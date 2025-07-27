@@ -1,8 +1,8 @@
 {
-  "include": ["src/**/*", "__tests__/**/*"],
+  "include": ["src/**/*"],
   "compilerOptions": {
     "target": "ES2022",
-    "module": "commonjs",
+    "module": "amd",
     "moduleResolution": "node",
     "baseUrl": "./",
     "paths": {
@@ -16,9 +16,9 @@
     "strict": true,
     "noImplicitAny": false,
     "skipLibCheck": true,
-    "outDir": "./build",
+    "outFile": "./build/index.d.ts",
     "declaration": true,
-    "sourceMap": true,
+    "emitDeclarationOnly": true,
     "resolveJsonModule": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
@@ -28,5 +28,5 @@
     "useDefineForClassFields": false,
     "strictPropertyInitialization": false
   },
-  "exclude": ["node_modules", "**/*.test.ts"]
+  "exclude": ["node_modules", "**/*.test.ts", "__tests__/**/*", "build/**/*"]
 }
