@@ -119,21 +119,10 @@ const batchLoadBelongsTo = async (Model: any, items: any[], relation: any) => {
   });
 
   if (keysToFetch.length) {
-    console.log(
-      "DEBUG: batchLoadBelongsTo fetching keys:",
-      keysToFetch,
-      "for foreignKey:",
-      foreignKey
-    );
-    console.log("DEBUG: TargetModel:", TargetModel.name);
     try {
       const fetchedItems = await TargetModel.where({
         [foreignKey]: { in: keysToFetch },
       });
-      console.log(
-        "DEBUG: batchLoadBelongsTo fetched items:",
-        fetchedItems.length
-      );
       const expires = now + 300000;
       fetchedItems.forEach((item) => {
         const key = item[foreignKey];
@@ -141,7 +130,6 @@ const batchLoadBelongsTo = async (Model: any, items: any[], relation: any) => {
         cachedResults.set(key, item);
       });
     } catch (error) {
-      console.error("DEBUG: batchLoadBelongsTo error:", error);
       throw error;
     }
   }

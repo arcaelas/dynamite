@@ -34,7 +34,7 @@
   ],
   "homepage": "https://github.com/arcaelas/dynamite",
   "license": "ISC",
-  "main": "build/index.js",
+  "main": "build/src/index.js",
   "name": "@arcaelas/dynamite",
   "publishConfig": {
     "access": "public",

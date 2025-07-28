@@ -1,81 +1,53 @@
-import {
-  DeleteItemCommand,
-  PutItemCommand,
-  QueryCommand,
-  ScanCommand,
-} from "@aws-sdk/client-dynamodb";
+import { DeleteItemCommand, PutItemCommand, QueryCommand, ScanCommand, BatchWriteItemCommand } from "@aws-sdk/client-dynamodb";
 import { marshall, unmarshall } from "@aws-sdk/util-dynamodb";
-import {
-  clearRelationCache,
-  processIncludes,
-  separateQueryOptions,
-} from "../utils/relations";
+import { clearRelationCache, processIncludes, separateQueryOptions } from "../utils/relations";
 import { getGlobalClient } from "./client";
 import wrapper, { InferAttributes, STORE, WrapperEntry } from "./wrapper";
 
-/** Get required DynamoDB client */
 const requireClient = () => getGlobalClient();
-
-/** Get metadata for constructor or throw error */
 const mustMeta = (ctor: Function): WrapperEntry => {
   const meta = wrapper.get(ctor);
   if (!meta) throw new Error(`Class ${ctor.name} not registered in wrapper`);
   return meta;
 };
 
-/** Base Table class for DynamoDB ORM with CRUD operations */
 export default class Table<T extends {} = any> {
   protected [STORE]!: { [K in keyof T]?: T[K] };
 
-  /** Initialize table instance with data */
   constructor(data: InferAttributes<T>) {
     requireClient();
     const meta = mustMeta(Object.getPrototypeOf(this).constructor);
-    meta.columns.forEach((c) => {
-      if (!(c.name in data)) (this as any)[c.name] = undefined;
-    });
+    meta.columns.forEach(c => !(c.name in data) && ((this as any)[c.name] = undefined));
     Object.assign(this, data);
   }
 
-  /** Save instance to database (create or update) */
   async save(): Promise<this> {
     const id: unknown = this["id"];
     const Ctor = this.constructor as typeof Table<any>;
     const record = this.toJSON();
 
-    if (id === undefined || id === null) {
-      delete (record as any).id;
-      const fresh = await (Ctor as any).create(record);
-      Object.assign(this, fresh);
-    } else {
-      await (Ctor as any).update(String(id), record);
-    }
+    id === undefined || id === null 
+      ? Object.assign(this, await (Ctor as any).create(record)) 
+      : await (Ctor as any).update(String(id), record);
     return this;
   }
 
-  /** Update instance with partial data */
   async update(patch: Partial<InferAttributes<T>>): Promise<this> {
     const id: unknown = this["id"];
-    if (id === undefined || id === null)
-      throw new Error("update() requiere id");
-
+    if (id === undefined || id === null) throw new Error("update() requiere id");
     Object.assign(this, patch);
-    const Ctor = this.constructor as typeof Table<any>;
-    await (Ctor as any).update(String(id), this.toJSON());
+    await ((this.constructor as typeof Table<any>) as any).update(String(id), this.toJSON());
     return this;
   }
 
-  /** Delete instance from database */
-  async destroy(): Promise<void> {
+  async destroy(): Promise<null> {
     const id: unknown = this["id"];
-    if (id === undefined || id === null)
-      throw new Error("destroy() requiere id");
-
-    const Ctor = this.constructor as typeof Table<any>;
-    await (Ctor as any).destroy(String(id));
+    if (id === undefined || id === null) throw new Error("destroy() requiere id");
+    return await ((this.constructor as typeof Table<any>) as any).destroy(String(id));
   }
 
-  /* ------------------------------- static CRUD --------------------------- */
+
+
   static async create<M extends Table>(
     this: { new (data: InferAttributes<M>): M; prototype: M },
     data: InferAttributes<M>
@@ -84,84 +56,216 @@ export default class Table<T extends {} = any> {
     const meta = mustMeta(this);
     const payload = new this(data).toJSON();
 
-    await client.send(
-      new PutItemCommand({
-        TableName: meta.name,
-        Item: marshall(payload, { removeUndefinedValues: true }),
-      })
-    );
+    await client.send(new PutItemCommand({
+      TableName: meta.name,
+      Item: marshall(payload, { removeUndefinedValues: true }),
+    }));
 
     return new this(data);
   }
 
-  // prettier-ignore
   static async update<M extends Table>(
     this: { new (data: InferAttributes<M>): M; prototype: M },
     id: string,
-    record: InferAttributes<M>,
-  ): Promise<void> {
-    const client = requireClient();
-    const meta = mustMeta(this);
-    const payload = { ...record, id };
+    record: InferAttributes<M>
+  ): Promise<void>;
 
-    await client.send(
-      new PutItemCommand({
-        TableName: meta.name,
-        Item: marshall(payload, { removeUndefinedValues: true }),
-      })
-    );
-  }
+  static async update<M extends Table>(
+    this: { new (data: InferAttributes<M>): M; prototype: M },
+    updates: Partial<InferAttributes<M>>
+  ): Promise<number>;
 
-  /**
-   * Actualiza múltiples registros que coincidan con los filtros especificados
-   * @param updates - Objeto con los valores a actualizar
-   * @param filters - Filtros para seleccionar qué registros actualizar
-   * @returns Número de registros actualizados
-   */
-  // prettier-ignore
-  static async updateWhere<M extends Table>(
+  static async update<M extends Table>(
     this: { new (data: InferAttributes<M>): M; prototype: M },
     updates: Partial<InferAttributes<M>>,
     filters: Partial<InferAttributes<M>>
-  ): Promise<number> {
-    // Buscar todos los registros que coincidan con los filtros
-    const records = await (this as any).where(filters);
+  ): Promise<number>;
+
+  // Implementación unificada
+  static async update<M extends Table>(
+    this: { new (data: InferAttributes<M>): M; prototype: M },
+    updatesOrId: string | Partial<InferAttributes<M>>,
+    recordOrFilters?: InferAttributes<M> | Partial<InferAttributes<M>>
+  ): Promise<void | number> {
+    // Caso 1: update(id, record) - actualización por ID (comportamiento original)
+    if (typeof updatesOrId === 'string' && recordOrFilters) {
+      const client = requireClient();
+      const meta = mustMeta(this);
+      const payload = { ...recordOrFilters, id: updatesOrId };
+
+      await client.send(
+        new PutItemCommand({
+          TableName: meta.name,
+          Item: marshall(payload, { removeUndefinedValues: true }),
+        })
+      );
+      return;
+    }
+
+    // Caso 2 y 3: Actualización masiva con BatchWriteItemCommand
+    const updates = updatesOrId as Partial<InferAttributes<M>>;
+    const filters = recordOrFilters as Partial<InferAttributes<M>> | undefined;
+
+    const records = filters 
+      ? await (this as any).where(filters)
+      : await (this as any).where({});
     
-    // Actualizar cada registro individualmente
+    if (records.length === 0) return 0;
+
+    const client = requireClient();
+    const meta = mustMeta(this);
     let updatedCount = 0;
-    for (const record of records) {
+
+    // Procesar en lotes de 25 (límite de BatchWriteItemCommand)
+    for (let i = 0; i < records.length; i += 25) {
+      const batch = records.slice(i, i + 25);
+      const writeRequests = batch.map(record => ({
+        PutRequest: {
+          Item: marshall({ ...record.toJSON(), ...updates, id: record.id }, { removeUndefinedValues: true })
+        }
+      }));
+
       try {
-        await (this as any).update(record.id, { ...record.toJSON(), ...updates } as InferAttributes<M>);
-        updatedCount++;
+        await client.send(new BatchWriteItemCommand({
+          RequestItems: { [meta.name]: writeRequests }
+        }));
+        updatedCount += batch.length;
       } catch (error) {
-        // Continuar con el siguiente registro si hay un error
-        console.warn(`Error actualizando registro ${record.id}:`, error);
+        console.warn(`Error en lote de actualización:`, error);
+        // Fallback a operaciones individuales para este lote
+        for (const record of batch) {
+          try {
+            await client.send(new PutItemCommand({
+              TableName: meta.name,
+              Item: marshall({ ...record.toJSON(), ...updates, id: record.id }, { removeUndefinedValues: true }),
+            }));
+            updatedCount++;
+          } catch (err) {
+            console.warn(`Error actualizando registro ${record.id}:`, err);
+          }
+        }
       }
     }
     
     return updatedCount;
   }
 
+
+
+  /**
+   * Elimina un registro específico por ID
+   */
   // prettier-ignore
   static async destroy<M extends Table>(
     this: { new (data: InferAttributes<M>): M; prototype: M },
-    id: string,
-  ): Promise<null> {
+    id: string
+  ): Promise<null>;
+
+  /**
+   * Elimina registros por campo y valor (campo = valor)
+   */
+  // prettier-ignore
+  static async destroy<M extends Table, K extends keyof InferAttributes<M>>(
+    this: { new (data: InferAttributes<M>): M; prototype: M },
+    key: K,
+    value: InferAttributes<M>[K]
+  ): Promise<number>;
+
+  /**
+   * Elimina registros usando objeto filtro
+   */
+  // prettier-ignore
+  static async destroy<M extends Table>(
+    this: { new (data: InferAttributes<M>): M; prototype: M },
+    filters: Partial<InferAttributes<M>>
+  ): Promise<number>;
+
+  /**
+   * Elimina registros por campo, operador y valor
+   */
+  // prettier-ignore
+  static async destroy<M extends Table, K extends keyof InferAttributes<M>>(
+    this: { new (data: InferAttributes<M>): M; prototype: M },
+    key: K,
+    op: "=" | "!=" | "<" | "<=" | ">" | ">=" | "in" | "not-in",
+    value: InferAttributes<M>[K] | InferAttributes<M>[K][]
+  ): Promise<number>;
+
+  // Implementación unificada
+  static async destroy<M extends Table>(
+    this: { new (data: InferAttributes<M>): M; prototype: M },
+    idOrKeyOrFilters: string | keyof InferAttributes<M> | Partial<InferAttributes<M>>,
+    valueOrOp?: any,
+    valueForOp?: any
+  ): Promise<null | number> {
+    // Caso 1: destroy(id) - eliminación por ID (comportamiento original)
+    if (typeof idOrKeyOrFilters === 'string' && valueOrOp === undefined) {
+      const client = requireClient();
+      const meta = mustMeta(this);
+
+      try {
+        await client.send(
+          new DeleteItemCommand({
+            TableName: meta.name,
+            Key: marshall({ id: idOrKeyOrFilters }),
+          })
+        );
+      } catch (err: any) {
+        if (err.name === "ResourceNotFoundException") return null;
+        throw err;
+      }
+      return null;
+    }
+
+    // Caso 2, 3 y 4: Eliminación masiva con BatchWriteItemCommand
+    let records: any[] = [];
+
+    if (typeof idOrKeyOrFilters === 'object') {
+      records = await (this as any).where(idOrKeyOrFilters);
+    } else if (typeof idOrKeyOrFilters === 'string' && valueForOp !== undefined) {
+      records = await (this as any).where(idOrKeyOrFilters, valueOrOp, valueForOp);
+    } else if (typeof idOrKeyOrFilters === 'string' && valueOrOp !== undefined) {
+      records = await (this as any).where(idOrKeyOrFilters, valueOrOp);
+    }
+
+    if (records.length === 0) return 0;
+
     const client = requireClient();
     const meta = mustMeta(this);
+    let deletedCount = 0;
 
-    try {
-      await client.send(
-        new DeleteItemCommand({
-          TableName: meta.name,
-          Key: marshall({ id }),
-        }),
-      );
-    } catch (err: any) {
-      if (err.name === "ResourceNotFoundException") return null;
-      throw err;
+    // Procesar en lotes de 25 (límite de BatchWriteItemCommand)
+    for (let i = 0; i < records.length; i += 25) {
+      const batch = records.slice(i, i + 25);
+      const writeRequests = batch.map(record => ({
+        DeleteRequest: {
+          Key: marshall({ id: record.id })
+        }
+      }));
+
+      try {
+        await client.send(new BatchWriteItemCommand({
+          RequestItems: { [meta.name]: writeRequests }
+        }));
+        deletedCount += batch.length;
+      } catch (error) {
+        console.warn(`Error en lote de eliminación:`, error);
+        // Fallback a operaciones individuales para este lote
+        for (const record of batch) {
+          try {
+            await client.send(new DeleteItemCommand({
+              TableName: meta.name,
+              Key: marshall({ id: record.id }),
+            }));
+            deletedCount++;
+          } catch (err) {
+            console.warn(`Error eliminando registro ${record.id}:`, err);
+          }
+        }
+      }
     }
-    return null;
+
+    return deletedCount;
   }
 
   /**
@@ -327,33 +431,45 @@ export default class Table<T extends {} = any> {
         throw new Error("Argumentos inválidos");
       }
 
-      // Si no hay condiciones, hacer scan completo
+      // Si no hay condiciones, hacer scan completo con paginación nativa
       if (conditions.length === 0) {
         const client = requireClient();
-        const res = await client.send(
-          new ScanCommand({
-            TableName: meta.name,
-          })
-        );
-        let items = (res.Items ?? []).map(
-          (i) => new this(unmarshall(i) as InferAttributes<M>)
-        );
+        let lastEvaluatedKey: Record<string, any> | undefined;
+        let scannedCount = 0;
+        let items: M[] = [];
 
-        const paginatedItems = items.slice(skip, skip + limit);
+        // Usar paginación nativa para skip
+        while (scannedCount < skip + limit) {
+          const res = await client.send(
+            new ScanCommand({
+              TableName: meta.name,
+              Limit: Math.min(limit * 2, 1000), // Fetch más para manejar skip eficientemente
+              ExclusiveStartKey: lastEvaluatedKey,
+            })
+          );
+
+          const currentItems = (res.Items ?? []).map(
+            (i) => new this(unmarshall(i) as InferAttributes<M>)
+          );
+
+          // Agregar items después del skip
+          const startIndex = Math.max(0, skip - scannedCount);
+          const endIndex = Math.min(currentItems.length, skip + limit - scannedCount);
+          items.push(...currentItems.slice(startIndex, endIndex));
+
+          scannedCount += currentItems.length;
+          lastEvaluatedKey = res.LastEvaluatedKey;
+
+          // Parar si ya tenemos suficientes items o no hay más datos
+          if (items.length >= limit || !lastEvaluatedKey) break;
+        }
 
         // Procesar includes si están presentes
         if (includeOptions && Object.keys(includeOptions).length > 0) {
-          console.log("DEBUG: processIncludes called with:", includeOptions);
-          const result = await processIncludes(
-            this,
-            [...paginatedItems],
-            includeOptions
-          );
-          console.log("DEBUG: processIncludes result:", result.length, "items");
-          return result;
+          return await processIncludes(this, [...items], includeOptions);
         }
 
-        return paginatedItems;
+        return items;
       }
 
       // Query optimizado si es por PK/SK e igualdad
@@ -363,43 +479,45 @@ export default class Table<T extends {} = any> {
       if (conditions.length === 1 && isIndex && conditions[0].op === "=") {
         const client = requireClient();
         const { key, value } = conditions[0];
-        const res = await client.send(
-          new QueryCommand({
-            TableName: meta.name,
-            KeyConditionExpression: `#K = :v`,
-            ExpressionAttributeNames: { "#K": key },
-            ExpressionAttributeValues: marshall({ ":v": value }),
-            Limit: limit,
-            ScanIndexForward: order === "ASC",
-          })
-        );
-        let items = (res.Items ?? []).map(
-          (i) => new this(unmarshall(i) as InferAttributes<M>)
-        );
+        let lastEvaluatedKey: Record<string, any> | undefined;
+        let scannedCount = 0;
+        let items: M[] = [];
 
-        const paginatedItems =
-          skip > 0 ? items.slice(skip, skip + limit) : items;
+        // Usar paginación nativa para skip en Query
+        while (scannedCount < skip + limit) {
+          const res = await client.send(
+            new QueryCommand({
+              TableName: meta.name,
+              KeyConditionExpression: `#K = :v`,
+              ExpressionAttributeNames: { "#K": key },
+              ExpressionAttributeValues: marshall({ ":v": value }),
+              Limit: Math.min(limit * 2, 1000),
+              ScanIndexForward: order === "ASC",
+              ExclusiveStartKey: lastEvaluatedKey,
+            })
+          );
+
+          const currentItems = (res.Items ?? []).map(
+            (i) => new this(unmarshall(i) as InferAttributes<M>)
+          );
+
+          // Agregar items después del skip
+          const startIndex = Math.max(0, skip - scannedCount);
+          const endIndex = Math.min(currentItems.length, skip + limit - scannedCount);
+          items.push(...currentItems.slice(startIndex, endIndex));
+
+          scannedCount += currentItems.length;
+          lastEvaluatedKey = res.LastEvaluatedKey;
+
+          if (items.length >= limit || !lastEvaluatedKey) break;
+        }
 
         // Procesar includes si están presentes
         if (includeOptions && Object.keys(includeOptions).length > 0) {
-          console.log(
-            "DEBUG: processIncludes called with (optimized path):",
-            includeOptions
-          );
-          const result = await processIncludes(
-            this,
-            [...paginatedItems],
-            includeOptions
-          );
-          console.log(
-            "DEBUG: processIncludes result (optimized path):",
-            result.length,
-            "items"
-          );
-          return result;
+          return await processIncludes(this, [...items], includeOptions);
         }
 
-        return paginatedItems;
+        return items;
       }
 
       // Fallback: Scan + FilterExpression
@@ -437,51 +555,59 @@ export default class Table<T extends {} = any> {
       });
 
       const client = requireClient();
-      const res = await client.send(
-        new ScanCommand({
-          TableName: meta.name,
-          FilterExpression: exprParts.join(" AND "),
-          ExpressionAttributeNames: names,
-          ExpressionAttributeValues: marshall(vals),
-        })
-      );
+      let lastEvaluatedKey: Record<string, any> | undefined;
+      let scannedCount = 0;
+      let items: M[] = [];
 
-      let items = (res.Items ?? []).map(
-        (i) => new this(unmarshall(i) as InferAttributes<M>)
-      );
+      // Scan con paginación nativa para fallback
+      while (scannedCount < skip + limit) {
+        const res = await client.send(
+          new ScanCommand({
+            TableName: meta.name,
+            FilterExpression: exprParts.join(" AND "),
+            ExpressionAttributeNames: names,
+            ExpressionAttributeValues: marshall(vals),
+            Limit: Math.min(limit * 2, 1000),
+            ExclusiveStartKey: lastEvaluatedKey,
+          })
+        );
 
-      // Ordenar items según el primer campo de condición
-      if (conditions.length > 0) {
-        const sortKey = conditions[0].key;
-        items.sort((a: any, b: any) => {
-          const aVal = a[sortKey];
-          const bVal = b[sortKey];
+        const currentItems = (res.Items ?? []).map(
+          (i) => new this(unmarshall(i) as InferAttributes<M>)
+        );
 
-          // Ordenamiento numérico o string
-          if (typeof aVal === "number" && typeof bVal === "number") {
-            return order === "ASC" ? aVal - bVal : bVal - aVal;
-          } else {
-            const comparison = String(aVal).localeCompare(String(bVal));
-            return order === "ASC" ? comparison : -comparison;
-          }
-        });
+        // Ordenar lote actual si es necesario
+        if (conditions.length > 0) {
+          const sortKey = conditions[0].key;
+          currentItems.sort((a: any, b: any) => {
+            const aVal = a[sortKey];
+            const bVal = b[sortKey];
+            if (typeof aVal === "number" && typeof bVal === "number") {
+              return order === "ASC" ? aVal - bVal : bVal - aVal;
+            } else {
+              const comparison = String(aVal).localeCompare(String(bVal));
+              return order === "ASC" ? comparison : -comparison;
+            }
+          });
+        }
+
+        // Agregar items después del skip
+        const startIndex = Math.max(0, skip - scannedCount);
+        const endIndex = Math.min(currentItems.length, skip + limit - scannedCount);
+        items.push(...currentItems.slice(startIndex, endIndex));
+
+        scannedCount += currentItems.length;
+        lastEvaluatedKey = res.LastEvaluatedKey;
+
+        if (items.length >= limit || !lastEvaluatedKey) break;
       }
-
-      const paginatedItems = items.slice(skip, skip + limit);
 
       // Procesar includes si están presentes
       if (includeOptions && Object.keys(includeOptions).length > 0) {
-        console.log("DEBUG: processIncludes called with:", includeOptions);
-        const result = await processIncludes(
-          this,
-          [...paginatedItems],
-          includeOptions
-        );
-        console.log("DEBUG: processIncludes result:", result.length, "items");
-        return result;
+        return await processIncludes(this, [...items], includeOptions);
       }
 
-      return paginatedItems;
+      return items;
     } finally {
       // Limpiar cache de relaciones al finalizar
       clearRelationCache(this);
@@ -603,9 +729,10 @@ export default class Table<T extends {} = any> {
     const buf = (this as any)[STORE] ?? {};
     const out: Record<string, unknown> = {};
 
-    for (const [prop, col] of meta.columns) {
-      if (prop in buf) out[col.name] = buf[prop];
-      else if (prop in this) out[col.name] = (this as any)[prop];
+    for (const [prop] of meta.columns) {
+      const key = String(prop);
+      if (prop in buf) out[key] = buf[prop];
+      else if (prop in this) out[key] = (this as any)[prop];
     }
     return out;
   }
