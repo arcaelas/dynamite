@@ -353,8 +353,8 @@ describe("Dinamite ORM – CRUD & where()", () => {
     expect(lastNonExistent).toBeUndefined();
 
     // last() devuelve el último elemento (DESC por defecto)
-    const lastByRating = await Review.last("rating", ">=", 0);
-    expect(lastByRating?.rating).toBe(5); // El mayor (Excellent)
+    const lastByRating = await Review.last("rating", ">=", 1);
+    expect(lastByRating?.rating).toBe(5); // El mayor (r2)
   });
 
   it("first() y last() - comparación de comportamiento", async () => {
@@ -396,5 +396,184 @@ describe("Dinamite ORM – CRUD & where()", () => {
     expect(singleFirst?.id).toBe("i3");
     expect(singleLast?.id).toBe("i3");
     expect(singleFirst?.value).toBe(singleLast?.value);
+  });
+
+  it("where() - operador 'in' con array", async () => {
+    @Name("crud_in_test")
+    class Product extends Table {
+      @PrimaryKey() declare id: CreationOptional<string>;
+      @NotNull() declare name: string;
+      @NotNull() declare category: string;
+    }
+
+    // Crear datos de prueba
+    await Promise.all([
+      Product.create({ id: "p1", name: "Laptop", category: "electronics" }),
+      Product.create({ id: "p2", name: "Book", category: "education" }),
+      Product.create({ id: "p3", name: "Phone", category: "electronics" }),
+      Product.create({ id: "p4", name: "Pen", category: "office" }),
+    ]);
+
+    // Buscar productos con IDs específicos usando 'in'
+    const products = await Product.where("id", "in", ["p1", "p3"]);
+    expect(products).toHaveLength(2);
+    expect(products.map(p => p.id).sort()).toEqual(["p1", "p3"]);
+
+    // Buscar por categorías usando 'in'
+    const electronicsOrOffice = await Product.where("category", "in", ["electronics", "office"]);
+    expect(electronicsOrOffice).toHaveLength(3);
+    expect(electronicsOrOffice.map(p => p.category).sort()).toEqual(["electronics", "electronics", "office"]);
+  });
+
+  it("where() - operador 'not-in' con array", async () => {
+    @Name("crud_not_in_test")
+    class Employee extends Table {
+      @PrimaryKey() declare id: CreationOptional<string>;
+      @NotNull() declare name: string;
+      @NotNull() declare department: string;
+    }
+
+    // Crear datos de prueba
+    await Promise.all([
+      Employee.create({ id: "e1", name: "Alice", department: "IT" }),
+      Employee.create({ id: "e2", name: "Bob", department: "HR" }),
+      Employee.create({ id: "e3", name: "Charlie", department: "Finance" }),
+      Employee.create({ id: "e4", name: "David", department: "IT" }),
+    ]);
+
+    // Buscar empleados que NO estén en IT o HR
+    const notItOrHr = await Employee.where("department", "not-in", ["IT", "HR"]);
+    expect(notItOrHr).toHaveLength(1);
+    expect(notItOrHr[0].department).toBe("Finance");
+    expect(notItOrHr[0].name).toBe("Charlie");
+
+    // Buscar empleados que NO tengan IDs específicos
+    const notSpecificIds = await Employee.where("id", "not-in", ["e1", "e4"]);
+    expect(notSpecificIds).toHaveLength(2);
+    expect(notSpecificIds.map(e => e.id).sort()).toEqual(["e2", "e3"]);
+  });
+
+  it("where() - arrays en objetos de filtro (conversión automática a 'in')", async () => {
+    @Name("crud_object_arrays_test")
+    class Order extends Table {
+      @PrimaryKey() declare id: CreationOptional<string>;
+      @NotNull() declare status: string;
+      @NotNull() declare priority: string;
+    }
+
+    // Crear datos de prueba
+    await Promise.all([
+      Order.create({ id: "o1", status: "pending", priority: "high" }),
+      Order.create({ id: "o2", status: "completed", priority: "low" }),
+      Order.create({ id: "o3", status: "pending", priority: "medium" }),
+      Order.create({ id: "o4", status: "cancelled", priority: "high" }),
+    ]);
+
+    // Usar array en objeto → automáticamente se convierte a 'in'
+    const pendingOrCompleted = await Order.where({
+      status: ["pending", "completed"]
+    });
+    expect(pendingOrCompleted).toHaveLength(3);
+    expect(pendingOrCompleted.map(o => o.status).sort()).toEqual(["completed", "pending", "pending"]);
+
+    // Combinar valor simple + array
+    const highPriorityPendingOrCancelled = await Order.where({
+      priority: "high",
+      status: ["pending", "cancelled"]
+    });
+    expect(highPriorityPendingOrCancelled).toHaveLength(2);
+    expect(highPriorityPendingOrCancelled.every(o => o.priority === "high")).toBe(true);
+  });
+
+  it("where() - validaciones de error para operadores 'in' y 'not-in'", async () => {
+    @Name("crud_in_validations_test")
+    class Item extends Table {
+      @PrimaryKey() declare id: CreationOptional<string>;
+      @NotNull() declare type: string;
+    }
+
+    // Error: operador 'in' sin array
+    await expect(
+      Item.where("id", "in", "not-an-array" as any)
+    ).rejects.toThrow("Operador 'in' requiere un array");
+
+    // Error: operador 'not-in' sin array
+    await expect(
+      Item.where("type", "not-in", "not-an-array" as any)
+    ).rejects.toThrow("Operador 'not-in' requiere un array");
+
+    // Error: array vacío
+    await expect(
+      Item.where("id", "in", [])
+    ).rejects.toThrow("Operador 'in' requiere array no vacío");
+
+    await expect(
+      Item.where("type", "not-in", [])
+    ).rejects.toThrow("Operador 'not-in' requiere array no vacío");
+
+    // Error: array demasiado grande (más de 100 elementos)
+    const bigArray = Array.from({ length: 101 }, (_, i) => `item${i}`);
+    await expect(
+      Item.where("id", "in", bigArray)
+    ).rejects.toThrow("Operador 'in' limitado a 100 valores máximo");
+
+    await expect(
+      Item.where("type", "not-in", bigArray)
+    ).rejects.toThrow("Operador 'not-in' limitado a 100 valores máximo");
+
+    // Error: usar array con operadores que no lo soportan
+    await expect(
+      Item.where("id", "=", ["item1", "item2"] as any)
+    ).rejects.toThrow("Operador '=' no acepta arrays");
+
+    await expect(
+      Item.where("type", ">", ["type1", "type2"] as any)
+    ).rejects.toThrow("Operador '>' no acepta arrays");
+  });
+
+  it("where() - validaciones de error para arrays en objetos", async () => {
+    @Name("crud_object_array_validations_test")
+    class Task extends Table {
+      @PrimaryKey() declare id: CreationOptional<string>;
+      @NotNull() declare status: string;
+    }
+
+    // Error: array vacío en objeto
+    await expect(
+      Task.where({ status: [] })
+    ).rejects.toThrow("Array vacío no permitido en filtros");
+
+    // Error: array demasiado grande en objeto
+    const bigArray = Array.from({ length: 101 }, (_, i) => `status${i}`);
+    await expect(
+      Task.where({ status: bigArray })
+    ).rejects.toThrow("Operador 'in' limitado a 100 valores máximo");
+  });
+
+  it("first() y last() - con operadores 'in' y 'not-in'", async () => {
+    @Name("crud_first_last_in_test")
+    class Document extends Table {
+      @PrimaryKey() declare id: CreationOptional<string>;
+      @NotNull() declare version: number;
+      @NotNull() declare type: string;
+    }
+
+    // Crear datos de prueba
+    await Promise.all([
+      Document.create({ id: "d1", version: 1, type: "pdf" }),
+      Document.create({ id: "d2", version: 3, type: "doc" }),
+      Document.create({ id: "d3", version: 2, type: "pdf" }),
+      Document.create({ id: "d4", version: 5, type: "txt" }),
+    ]);
+
+    // first() con 'in'
+    const firstPdfOrDoc = await Document.first("type", "in", ["pdf", "doc"]);
+    expect(firstPdfOrDoc).toBeDefined();
+    expect(["pdf", "doc"]).toContain(firstPdfOrDoc!.type);
+
+    // last() con 'not-in'
+    const lastNotTxt = await Document.last("type", "not-in", ["txt"]);
+    expect(lastNotTxt).toBeDefined();
+    expect(lastNotTxt!.type).not.toBe("txt");
   });
 });

@@ -241,13 +241,17 @@ export default class Table<T extends {} = any> {
   static async where<M extends Table, K extends keyof InferAttributes<M>>(
     this: { new (data: InferAttributes<M>): M; prototype: M },
     key: K,
-    op: "=" | "!=" | "<" | "<=" | ">" | ">=",
-    value: InferAttributes<M>[K],
+    op: "=" | "!=" | "<" | "<=" | ">" | ">=" | "in" | "not-in",
+    value: InferAttributes<M>[K] | InferAttributes<M>[K][],
     options?: { limit?: number; skip?: number; order?: "ASC" | "DESC" }
   ): Promise<M[]>;
   static async where<M extends Table>(
     this: { new (data: InferAttributes<M>): M; prototype: M },
-    filters: Partial<InferAttributes<M>>,
+    filters: Partial<{
+      [K in keyof InferAttributes<M>]:
+        | InferAttributes<M>[K]
+        | InferAttributes<M>[K][];
+    }>,
     options?: { limit?: number; skip?: number; order?: "ASC" | "DESC" }
   ): Promise<M[]>;
   static async where<M extends Table>(
@@ -297,7 +301,18 @@ export default class Table<T extends {} = any> {
         if (!meta.columns.has(key)) {
           return [];
         }
-        conditions.push({ key, op: "=", value });
+        // Detectar arrays y convertir a operador 'in'
+        if (Array.isArray(value)) {
+          if (value.length === 0) {
+            throw new Error("Array vacío no permitido en filtros");
+          }
+          if (value.length > 100) {
+            throw new Error("Operador 'in' limitado a 100 valores máximo");
+          }
+          conditions.push({ key, op: "in", value });
+        } else {
+          conditions.push({ key, op: "=", value });
+        }
       }
     } else if (args.length === 2) {
       const [key, value] = args;
@@ -309,9 +324,23 @@ export default class Table<T extends {} = any> {
     } else if (args.length === 3) {
       const [key, op, value] = args;
       // Validar operador
-      const validOps = ["=", "!=", "<", "<=", ">", ">="];
+      const validOps = ["=", "!=", "<", "<=", ">", ">=", "in", "not-in"];
       if (!validOps.includes(op)) {
         throw new Error("Argumentos inválidos");
+      }
+      // Validar arrays para operadores in/not-in
+      if (op === "in" || op === "not-in") {
+        if (!Array.isArray(value)) {
+          throw new Error(`Operador '${op}' requiere un array`);
+        }
+        if (value.length === 0) {
+          throw new Error(`Operador '${op}' requiere array no vacío`);
+        }
+        if (value.length > 100) {
+          throw new Error(`Operador '${op}' limitado a 100 valores máximo`);
+        }
+      } else if (Array.isArray(value)) {
+        throw new Error(`Operador '${op}' no acepta arrays`);
       }
       // Validar que el campo existe en el modelo
       if (!meta.columns.has(key)) {
@@ -352,10 +381,28 @@ export default class Table<T extends {} = any> {
 
     conditions.forEach((c, i) => {
       const nk = `#k${i}`;
-      const nv = `:v${i}`;
-      exprParts.push(`${nk} ${normalize(c.op)} ${nv}`);
       names[nk] = c.key;
-      vals[nv] = c.value;
+
+      if (c.op === "in" || c.op === "not-in") {
+        // Manejar arrays para operadores IN/NOT-IN
+        const values = c.value as any[];
+        const placeholders = values.map((_, idx) => `:v${i}_${idx}`).join(", ");
+        const expression =
+          c.op === "in"
+            ? `${nk} IN (${placeholders})`
+            : `NOT (${nk} IN (${placeholders}))`;
+        exprParts.push(expression);
+
+        // Agregar cada valor del array
+        values.forEach((val, idx) => {
+          vals[`:v${i}_${idx}`] = val;
+        });
+      } else {
+        // Operadores simples
+        const nv = `:v${i}`;
+        exprParts.push(`${nk} ${normalize(c.op)} ${nv}`);
+        vals[nv] = c.value;
+      }
     });
 
     const res = await client!.send(
@@ -370,42 +417,42 @@ export default class Table<T extends {} = any> {
     let items = (res.Items ?? []).map(
       (i) => new this(unmarshall(i) as InferAttributes<M>)
     );
-    
+
     // Ordenar items según el primer campo de condición
     if (conditions.length > 0) {
       const sortKey = conditions[0].key;
       items.sort((a: any, b: any) => {
         const aVal = a[sortKey];
         const bVal = b[sortKey];
-        
+
         // Ordenamiento numérico o string
-        if (typeof aVal === 'number' && typeof bVal === 'number') {
-          return order === 'ASC' ? aVal - bVal : bVal - aVal;
+        if (typeof aVal === "number" && typeof bVal === "number") {
+          return order === "ASC" ? aVal - bVal : bVal - aVal;
         } else {
           const comparison = String(aVal).localeCompare(String(bVal));
-          return order === 'ASC' ? comparison : -comparison;
+          return order === "ASC" ? comparison : -comparison;
         }
       });
     }
-    
+
     return items.slice(skip, skip + limit);
   }
 
   /**
    * Obtiene el primer elemento que coincida con la condición especificada.
    * Equivalente a where() con { limit: 1, skip: 0, order: "ASC" }.
-   * 
+   *
    * @template M Instancia de la clase Table.
    * @template K Clave de atributos inferida.
-   * 
+   *
    * @param key   - Clave a filtrar (ej. "id").
    * @param value - Valor a comparar (equivalente a '=' implícito).
-   * 
+   *
    * @example
    *   const user = await User.first('id', 'u1');
    *   const firstActive = await User.first('status', '=', 'active');
    *   const firstMatch = await User.first({ email: 'test@example.com' });
-   * 
+   *
    * @returns - El primer elemento encontrado o undefined si no hay coincidencias.
    */
   static async first<M extends Table, K extends keyof InferAttributes<M>>(
@@ -416,36 +463,44 @@ export default class Table<T extends {} = any> {
   static async first<M extends Table, K extends keyof InferAttributes<M>>(
     this: { new (data: InferAttributes<M>): M; prototype: M },
     key: K,
-    op: "=" | "!=" | "<" | "<=" | ">" | ">=",
-    value: InferAttributes<M>[K]
+    op: "=" | "!=" | "<" | "<=" | ">" | ">=" | "in" | "not-in",
+    value: InferAttributes<M>[K] | InferAttributes<M>[K][]
   ): Promise<M | undefined>;
   static async first<M extends Table>(
     this: { new (data: InferAttributes<M>): M; prototype: M },
-    filters: Partial<InferAttributes<M>>
+    filters: Partial<{
+      [K in keyof InferAttributes<M>]:
+        | InferAttributes<M>[K]
+        | InferAttributes<M>[K][];
+    }>
   ): Promise<M | undefined>;
   static async first<M extends Table>(
     this: { new (data: InferAttributes<M>): M; prototype: M },
     ...args: any[]
   ): Promise<M | undefined> {
-    const results = await (this as any).where(...args, { limit: 1, skip: 0, order: "ASC" });
+    const results = await (this as any).where(...args, {
+      limit: 1,
+      skip: 0,
+      order: "ASC",
+    });
     return results[0] || undefined;
   }
 
   /**
    * Obtiene el último elemento que coincida con la condición especificada.
    * Equivalente a where() con { limit: 1, skip: 0, order: "DESC" }.
-   * 
+   *
    * @template M Instancia de la clase Table.
    * @template K Clave de atributos inferida.
-   * 
+   *
    * @param key   - Clave a filtrar (ej. "id").
    * @param value - Valor a comparar (equivalente a '=' implícito).
-   * 
+   *
    * @example
    *   const user = await User.last('id', 'u1');
    *   const lastActive = await User.last('status', '=', 'active');
    *   const lastMatch = await User.last({ email: 'test@example.com' });
-   * 
+   *
    * @returns - El último elemento encontrado o undefined si no hay coincidencias.
    */
   static async last<M extends Table, K extends keyof InferAttributes<M>>(
@@ -456,18 +511,26 @@ export default class Table<T extends {} = any> {
   static async last<M extends Table, K extends keyof InferAttributes<M>>(
     this: { new (data: InferAttributes<M>): M; prototype: M },
     key: K,
-    op: "=" | "!=" | "<" | "<=" | ">" | ">=",
-    value: InferAttributes<M>[K]
+    op: "=" | "!=" | "<" | "<=" | ">" | ">=" | "in" | "not-in",
+    value: InferAttributes<M>[K] | InferAttributes<M>[K][]
   ): Promise<M | undefined>;
   static async last<M extends Table>(
     this: { new (data: InferAttributes<M>): M; prototype: M },
-    filters: Partial<InferAttributes<M>>
+    filters: Partial<{
+      [K in keyof InferAttributes<M>]:
+        | InferAttributes<M>[K]
+        | InferAttributes<M>[K][];
+    }>
   ): Promise<M | undefined>;
   static async last<M extends Table>(
     this: { new (data: InferAttributes<M>): M; prototype: M },
     ...args: any[]
   ): Promise<M | undefined> {
-    const results = await (this as any).where(...args, { limit: 1, skip: 0, order: "DESC" });
+    const results = await (this as any).where(...args, {
+      limit: 1,
+      skip: 0,
+      order: "DESC",
+    });
     return results[0] || undefined;
   }
 
