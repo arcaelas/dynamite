@@ -13,7 +13,6 @@ import {
   UpdatedAt,
 } from "../src";
 
-// ---------- conexión DynamoDB Local ----------
 beforeAll(() =>
   connect({
     region: "local",
@@ -22,13 +21,12 @@ beforeAll(() =>
   })
 );
 
-// ---------- Modelo de prueba ----------
 @Name("users")
 class User extends Table {
   @PrimaryKey()
   declare id: string;
 
-  @NotNull() // ← registra la columna en el wrapper
+  @NotNull()
   declare email: string;
 
   @CreatedAt()
@@ -40,34 +38,31 @@ class User extends Table {
 
 describe("CRUD Dinamite ORM – instancia", () => {
   it("where() antes de existir la tabla → []", async () => {
-    const rows = await User.where();
+    const rows = await User.where({ id: "x" }); // usamos filtro inexistente
     expect(rows).toEqual([]);
   });
 
   it("save() → crea, update() → modifica, destroy() → elimina", async () => {
-    /* ---------- save (create) ---------- */
     const u = new User({ id: "u1", email: "a@b.com" });
     await u.save();
 
-    let rows = await User.where();
+    let rows = await User.where("id", "u1");
     expect(rows).toHaveLength(1);
     expect(rows[0].email).toBe("a@b.com");
 
     const firstCreated = rows[0].created;
     const firstUpdated = rows[0].updated;
 
-    /* ---------- update ---------- */
     await u.update({ email: "c@d.com" });
 
-    rows = await User.where();
+    rows = await User.where("id", "u1");
     expect(rows[0].email).toBe("c@d.com");
     expect(rows[0].updated).not.toBe(firstUpdated);
     expect(rows[0].created).toBe(firstCreated);
 
-    /* ---------- destroy ---------- */
     await u.destroy();
 
-    rows = await User.where();
+    rows = await User.where("id", "u1");
     expect(rows).toEqual([]);
   });
 
@@ -75,12 +70,12 @@ describe("CRUD Dinamite ORM – instancia", () => {
     const u = new User({ id: "u2", email: "real@test.com" });
     await u.save();
 
-    let rows = await User.where();
+    let rows = await User.where("id", "u2");
     expect(rows.map((x) => x.id)).toContain("u2");
 
     await u.destroy();
 
-    rows = await User.where();
+    rows = await User.where("id", "u2");
     expect(rows.map((x) => x.id)).not.toContain("u2");
   });
 });

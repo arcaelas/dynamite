@@ -11,13 +11,18 @@ import {
   DynamoDBClient,
   DynamoDBClientConfig,
   PutItemCommand,
+  QueryCommand,
   ScanCommand,
 } from "@aws-sdk/client-dynamodb";
 import { marshall, unmarshall } from "@aws-sdk/util-dynamodb";
 import wrapper, { InferAttributes, STORE, WrapperEntry } from "./wrapper";
 
+/* -------------------------------------------------------------------------- */
+/* Utils internos                                                             */
+/* -------------------------------------------------------------------------- */
 async function createTable(ctor: Function): Promise<void> {
   if (!client) throw new Error("connect() no llamado");
+
   const meta = wrapper.get(ctor);
   if (!meta) throw new Error(`Clase ${ctor.name} no registrada en wrapper`);
 
@@ -48,38 +53,50 @@ async function createTable(ctor: Function): Promise<void> {
     })
   );
 }
+
 function requireClient(): void {
   if (!client) throw new Error("connect() debe llamarse antes de usar Table");
 }
+
 function mustMeta(ctor: Function): WrapperEntry {
   const meta = wrapper.get(ctor);
   if (!meta) throw new Error(`Metadata no encontrada para ${ctor.name}`);
   return meta;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Configuración de cliente DynamoDB                                          */
+/* -------------------------------------------------------------------------- */
 let client: DynamoDBClient | undefined;
 export function connect(cfg: DynamoDBClientConfig): void {
   client = new DynamoDBClient(cfg);
 }
 
+/* -------------------------------------------------------------------------- */
+/* Clase base Table                                                           */
+/* -------------------------------------------------------------------------- */
 export default class Table<T extends {} = any> {
   protected [STORE]!: { [K in keyof T]?: T[K] };
 
+  /* ------------------------------ constructor ----------------------------- */
   constructor(data: InferAttributes<T>) {
     requireClient();
     const meta = mustMeta(Object.getPrototypeOf(this).constructor);
+    /* crear todas las props declaradas como undefined si no vienen en data */
     meta.columns.forEach((c) => {
       if (!(c.name in data)) (this as any)[c.name] = undefined;
     });
     Object.assign(this, data);
   }
 
+  /* --------------------------------- save -------------------------------- */
   async save(): Promise<this> {
     const id: unknown = this["id"];
     const Ctor = this.constructor as typeof Table<any>;
     const record = this.toJSON();
+
     if (id === undefined || id === null) {
-      delete (record as any).id;
+      delete (record as any).id; // permitir que Dynamo genere el id, si procede
       const fresh = await (Ctor as any).create(record);
       Object.assign(this, fresh);
     } else {
@@ -88,30 +105,36 @@ export default class Table<T extends {} = any> {
     return this;
   }
 
+  /* -------------------------------- update ------------------------------- */
   async update(patch: InferAttributes<T>): Promise<this> {
     const id: unknown = this["id"];
     if (id === undefined || id === null)
       throw new Error("update() requiere id");
+
     Object.assign(this, patch);
     const Ctor = this.constructor as typeof Table<any>;
     await (Ctor as any).update(String(id), this.toJSON());
     return this;
   }
 
+  /* ------------------------------- destroy ------------------------------- */
   async destroy(): Promise<void> {
     const id: unknown = this["id"];
     if (id === undefined || id === null)
       throw new Error("destroy() requiere id");
+
     const Ctor = this.constructor as typeof Table<any>;
     await (Ctor as any).destroy(String(id));
   }
 
+  /* ------------------------------- static CRUD --------------------------- */
   static async create<M extends Table>(
     this: { new (data: InferAttributes<M>): M; prototype: M },
     data: InferAttributes<M>
   ): Promise<M> {
     const meta = mustMeta(this);
     const payload = new this(data).toJSON();
+
     const put = () =>
       client!.send(
         new PutItemCommand({
@@ -119,6 +142,7 @@ export default class Table<T extends {} = any> {
           Item: marshall(payload, { removeUndefinedValues: true }),
         })
       );
+
     try {
       await put();
     } catch (err: any) {
@@ -134,17 +158,19 @@ export default class Table<T extends {} = any> {
   static async update<M extends Table>(
     this: { new (data: InferAttributes<M>): M; prototype: M },
     id: string,
-    record: InferAttributes<M>
+    record: InferAttributes<M>,
   ): Promise<void> {
-    const meta = mustMeta(this);
+    const meta    = mustMeta(this);
     const payload = { ...record, id };
+
     const put = () =>
       client!.send(
         new PutItemCommand({
           TableName: meta.name,
           Item: marshall(payload, { removeUndefinedValues: true }),
-        })
+        }),
       );
+
     try {
       await put();
     } catch (err: any) {
@@ -157,8 +183,8 @@ export default class Table<T extends {} = any> {
 
   // prettier-ignore
   static async destroy<M extends Table>(
-    this: { new (dara: InferAttributes<M>): M; prototype: M },
-    id: string
+    this: { new (data: InferAttributes<M>): M; prototype: M },
+    id: string,
   ): Promise<null> {
     requireClient();
     try {
@@ -166,7 +192,7 @@ export default class Table<T extends {} = any> {
         new DeleteItemCommand({
           TableName: mustMeta(this).name,
           Key: marshall({ id }),
-        })
+        }),
       );
     } catch (err: any) {
       if (err.name === "ResourceNotFoundException") return null;
@@ -175,28 +201,106 @@ export default class Table<T extends {} = any> {
     return null;
   }
 
-  static async where<M extends Table>(this: {
-    new (data: InferAttributes<M>): M;
-    prototype: M;
-  }): Promise<M[]> {
+  /* ------------------------------ WHERE (query | scan) ------------------- */
+  static async where<M extends Table, K extends keyof InferAttributes<M>>(
+    this: { new (data: InferAttributes<M>): M; prototype: M },
+    key: K,
+    value: InferAttributes<M>[K]
+  ): Promise<M[]>;
+  static async where<M extends Table, K extends keyof InferAttributes<M>>(
+    this: { new (data: InferAttributes<M>): M; prototype: M },
+    key: K,
+    op: "=" | "!=" | "<" | "<=" | ">" | ">=",
+    value: InferAttributes<M>[K]
+  ): Promise<M[]>;
+  static async where<M extends Table>(
+    this: { new (data: InferAttributes<M>): M; prototype: M },
+    filters: Partial<InferAttributes<M>>
+  ): Promise<M[]>;
+  static async where<M extends Table>(
+    this: { new (data: InferAttributes<M>): M; prototype: M },
+    ...args: any[]
+  ): Promise<M[]> {
     requireClient();
-    try {
+    const meta = mustMeta(this);
+
+    /* --- Parseo de argumentos -> lista de condiciones -------------------- */
+    type Entry = { key: string; op: string; value: unknown };
+    const conditions: Entry[] = [];
+
+    if (
+      args.length === 1 &&
+      typeof args[0] === "object" &&
+      !Array.isArray(args[0])
+    ) {
+      for (const [key, value] of Object.entries(args[0])) {
+        conditions.push({ key, op: "=", value });
+      }
+    } else if (args.length === 2) {
+      const [key, value] = args;
+      conditions.push({ key, op: "=", value });
+    } else if (args.length === 3) {
+      const [key, op, value] = args;
+      conditions.push({ key, op, value });
+    } else {
+      throw new Error("Argumentos inválidos en .where()");
+    }
+
+    /* --- Query optimizado si usa PK/SK y op === "=" ---------------------- */
+    const column = meta.columns.get(conditions[0].key);
+    const isIndex = column?.index || column?.indexSort;
+
+    if (conditions.length === 1 && isIndex && conditions[0].op === "=") {
+      const { key, value } = conditions[0];
+
       const res = await client!.send(
-        new ScanCommand({ TableName: mustMeta(this).name })
+        new QueryCommand({
+          TableName: meta.name,
+          KeyConditionExpression: `#K = :v`,
+          ExpressionAttributeNames: { "#K": key },
+          ExpressionAttributeValues: marshall({ ":v": value }),
+        })
       );
       return (res.Items ?? []).map(
         (i) => new this(unmarshall(i) as InferAttributes<M>)
       );
-    } catch (err: any) {
-      if (err.name === "ResourceNotFoundException") return [];
-      throw err;
     }
+
+    /* --- Fallback: Scan + FilterExpression ------------------------------ */
+    const normalize = (op: string) => (op === "!=" ? "<>" : op);
+
+    const exprParts: string[] = [];
+    const names: Record<string, string> = {};
+    const vals: Record<string, any> = {};
+
+    conditions.forEach((c, i) => {
+      const nk = `#k${i}`;
+      const nv = `:v${i}`;
+      exprParts.push(`${nk} ${normalize(c.op)} ${nv}`);
+      names[nk] = c.key;
+      vals[nv] = c.value;
+    });
+
+    const res = await client!.send(
+      new ScanCommand({
+        TableName: meta.name,
+        FilterExpression: exprParts.join(" AND "),
+        ExpressionAttributeNames: names,
+        ExpressionAttributeValues: marshall(vals),
+      })
+    );
+
+    return (res.Items ?? []).map(
+      (i) => new this(unmarshall(i) as InferAttributes<M>)
+    );
   }
 
+  /* --------------------------- helpers de instancia ---------------------- */
   toJSON(): Record<string, unknown> {
     const meta = mustMeta(Object.getPrototypeOf(this).constructor);
     const buf = (this as any)[STORE] ?? {};
     const out: Record<string, unknown> = {};
+
     for (const [prop, col] of meta.columns) {
       if (prop in buf) out[col.name] = buf[prop];
       else if (prop in this) out[col.name] = (this as any)[prop];
