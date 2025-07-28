@@ -391,6 +391,86 @@ export default class Table<T extends {} = any> {
     return items.slice(skip, skip + limit);
   }
 
+  /**
+   * Obtiene el primer elemento que coincida con la condición especificada.
+   * Equivalente a where() con { limit: 1, skip: 0, order: "ASC" }.
+   * 
+   * @template M Instancia de la clase Table.
+   * @template K Clave de atributos inferida.
+   * 
+   * @param key   - Clave a filtrar (ej. "id").
+   * @param value - Valor a comparar (equivalente a '=' implícito).
+   * 
+   * @example
+   *   const user = await User.first('id', 'u1');
+   *   const firstActive = await User.first('status', '=', 'active');
+   *   const firstMatch = await User.first({ email: 'test@example.com' });
+   * 
+   * @returns - El primer elemento encontrado o undefined si no hay coincidencias.
+   */
+  static async first<M extends Table, K extends keyof InferAttributes<M>>(
+    this: { new (data: InferAttributes<M>): M; prototype: M },
+    key: K,
+    value: InferAttributes<M>[K]
+  ): Promise<M | undefined>;
+  static async first<M extends Table, K extends keyof InferAttributes<M>>(
+    this: { new (data: InferAttributes<M>): M; prototype: M },
+    key: K,
+    op: "=" | "!=" | "<" | "<=" | ">" | ">=",
+    value: InferAttributes<M>[K]
+  ): Promise<M | undefined>;
+  static async first<M extends Table>(
+    this: { new (data: InferAttributes<M>): M; prototype: M },
+    filters: Partial<InferAttributes<M>>
+  ): Promise<M | undefined>;
+  static async first<M extends Table>(
+    this: { new (data: InferAttributes<M>): M; prototype: M },
+    ...args: any[]
+  ): Promise<M | undefined> {
+    const results = await (this as any).where(...args, { limit: 1, skip: 0, order: "ASC" });
+    return results[0] || undefined;
+  }
+
+  /**
+   * Obtiene el último elemento que coincida con la condición especificada.
+   * Equivalente a where() con { limit: 1, skip: 0, order: "DESC" }.
+   * 
+   * @template M Instancia de la clase Table.
+   * @template K Clave de atributos inferida.
+   * 
+   * @param key   - Clave a filtrar (ej. "id").
+   * @param value - Valor a comparar (equivalente a '=' implícito).
+   * 
+   * @example
+   *   const user = await User.last('id', 'u1');
+   *   const lastActive = await User.last('status', '=', 'active');
+   *   const lastMatch = await User.last({ email: 'test@example.com' });
+   * 
+   * @returns - El último elemento encontrado o undefined si no hay coincidencias.
+   */
+  static async last<M extends Table, K extends keyof InferAttributes<M>>(
+    this: { new (data: InferAttributes<M>): M; prototype: M },
+    key: K,
+    value: InferAttributes<M>[K]
+  ): Promise<M | undefined>;
+  static async last<M extends Table, K extends keyof InferAttributes<M>>(
+    this: { new (data: InferAttributes<M>): M; prototype: M },
+    key: K,
+    op: "=" | "!=" | "<" | "<=" | ">" | ">=",
+    value: InferAttributes<M>[K]
+  ): Promise<M | undefined>;
+  static async last<M extends Table>(
+    this: { new (data: InferAttributes<M>): M; prototype: M },
+    filters: Partial<InferAttributes<M>>
+  ): Promise<M | undefined>;
+  static async last<M extends Table>(
+    this: { new (data: InferAttributes<M>): M; prototype: M },
+    ...args: any[]
+  ): Promise<M | undefined> {
+    const results = await (this as any).where(...args, { limit: 1, skip: 0, order: "DESC" });
+    return results[0] || undefined;
+  }
+
   /* --------------------------- helpers de instancia ---------------------- */
   toJSON(): Record<string, unknown> {
     const meta = mustMeta(Object.getPrototypeOf(this).constructor);

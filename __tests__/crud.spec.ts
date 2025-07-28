@@ -276,4 +276,125 @@ describe("Dinamite ORM – CRUD & where()", () => {
 
     expect(await U.where("noField" as any, "!=", "x")).toEqual([]);
   });
+
+  it("first() - obtiene el primer elemento", async () => {
+    @Name("crud_first_test")
+    class Score extends Table {
+      @PrimaryKey() declare id: CreationOptional<string>;
+      @NotNull() declare points: number;
+      @NotNull() declare player: string;
+    }
+
+    // Crear datos de prueba ordenados
+    await Promise.all([
+      Score.create({ id: "s1", points: 100, player: "Alice" }),
+      Score.create({ id: "s2", points: 200, player: "Bob" }),
+      Score.create({ id: "s3", points: 150, player: "Charlie" }),
+      Score.create({ id: "s4", points: 50, player: "Dave" }),
+    ]);
+
+    // first() con clave y valor (= implícito)
+    const firstById = await Score.first("id", "s2");
+    expect(firstById?.player).toBe("Bob");
+    expect(firstById?.points).toBe(200);
+
+    // first() con operador explícito
+    const firstHighScore = await Score.first("points", ">=", 150);
+    expect(firstHighScore?.points).toBeGreaterThanOrEqual(150);
+    expect(["Bob", "Charlie"]).toContain(firstHighScore?.player);
+
+    // first() con filtro objeto
+    const firstAlice = await Score.first({ player: "Alice" });
+    expect(firstAlice?.id).toBe("s1");
+    expect(firstAlice?.points).toBe(100);
+
+    // first() con condición que no existe
+    const firstNonExistent = await Score.first("points", ">", 500);
+    expect(firstNonExistent).toBeUndefined();
+
+    // first() devuelve el primer elemento (ASC por defecto)
+    const firstByPoints = await Score.first("points", ">=", 0);
+    expect(firstByPoints?.points).toBe(50); // El menor (Dave)
+  });
+
+  it("last() - obtiene el último elemento", async () => {
+    @Name("crud_last_test")
+    class Review extends Table {
+      @PrimaryKey() declare id: CreationOptional<string>;
+      @NotNull() declare rating: number;
+      @NotNull() declare comment: string;
+    }
+
+    // Crear datos de prueba
+    await Promise.all([
+      Review.create({ id: "r1", rating: 3, comment: "Average" }),
+      Review.create({ id: "r2", rating: 5, comment: "Excellent" }),
+      Review.create({ id: "r3", rating: 4, comment: "Good" }),
+      Review.create({ id: "r4", rating: 2, comment: "Poor" }),
+    ]);
+
+    // last() con clave y valor (= implícito)
+    const lastById = await Review.last("id", "r3");
+    expect(lastById?.comment).toBe("Good");
+    expect(lastById?.rating).toBe(4);
+
+    // last() con operador explícito
+    const lastGoodRating = await Review.last("rating", ">=", 4);
+    expect(lastGoodRating?.rating).toBeGreaterThanOrEqual(4);
+    expect(["Excellent", "Good"]).toContain(lastGoodRating?.comment);
+
+    // last() con filtro objeto
+    const lastExcellent = await Review.last({ comment: "Excellent" });
+    expect(lastExcellent?.id).toBe("r2");
+    expect(lastExcellent?.rating).toBe(5);
+
+    // last() con condición que no existe
+    const lastNonExistent = await Review.last("rating", ">", 10);
+    expect(lastNonExistent).toBeUndefined();
+
+    // last() devuelve el último elemento (DESC por defecto)
+    const lastByRating = await Review.last("rating", ">=", 0);
+    expect(lastByRating?.rating).toBe(5); // El mayor (Excellent)
+  });
+
+  it("first() y last() - comparación de comportamiento", async () => {
+    @Name("crud_first_last_compare")
+    class Item extends Table {
+      @PrimaryKey() declare id: CreationOptional<string>;
+      @NotNull() declare value: number;
+    }
+
+    // Crear secuencia ordenada
+    await Promise.all([
+      Item.create({ id: "i1", value: 10 }),
+      Item.create({ id: "i2", value: 20 }),
+      Item.create({ id: "i3", value: 30 }),
+      Item.create({ id: "i4", value: 40 }),
+    ]);
+
+    // Comparar first() vs last() para la misma condición
+    const firstItem = await Item.first("value", ">=", 15);
+    const lastItem = await Item.last("value", ">=", 15);
+
+    expect(firstItem?.value).toBe(20); // Primero que cumple (ASC)
+    expect(lastItem?.value).toBe(40);  // Último que cumple (DESC)
+
+    // Verificar que son diferentes instancias
+    expect(firstItem?.id).not.toBe(lastItem?.id);
+
+    // Caso donde first() y last() devuelven el mismo resultado
+    const onlyFirst = await Item.first("value", "=", 25); // No existe
+    const onlyLast = await Item.last("value", "=", 25);   // No existe
+
+    expect(onlyFirst).toBeUndefined();
+    expect(onlyLast).toBeUndefined();
+
+    // Caso con un solo resultado
+    const singleFirst = await Item.first("value", "=", 30);
+    const singleLast = await Item.last("value", "=", 30);
+
+    expect(singleFirst?.id).toBe("i3");
+    expect(singleLast?.id).toBe("i3");
+    expect(singleFirst?.value).toBe(singleLast?.value);
+  });
 });
