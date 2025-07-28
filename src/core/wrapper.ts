@@ -1,82 +1,54 @@
-/* src/core/wrapper.ts
- * -------------------------------------------------
- * Registro central (in-memory) de la configuración
- * declarativa de cada modelo.  Agnóstico: no depende
- * de DynamoDB ni de otros módulos de la librería.
- *
- * © 2025 Miguel Alejandro
- */
-
-/* ------------------------------------------------------------------ */
-/* 1.  Tipos utilitarios                                              */
-/* ------------------------------------------------------------------ */
-export type Inmutable = string | number | boolean | null | object;
+declare const NonAttributeBrand: unique symbol;
+// prettier-ignore
+export type NonAttribute<T> = T  & { [NonAttributeBrand]?: true };
+declare const CreationOptionalBrand: unique symbol;
+// prettier-ignore
+export type CreationOptional<T> = T & { [CreationOptionalBrand]?: true };
+// prettier-ignore
+type IsBranded< T, Brand extends symbol > = keyof NonNullable<T> extends keyof Omit<NonNullable<T>, Brand> ? false : true;
+type RemoveNullish<T> = Omit<T, keyof KeepNullish<T>>;
+type RemoveFunction<T> = Omit<T, keyof KeepFunction<T>>;
+// prettier-ignore
+type RemoveBranded<T, Brand extends symbol> = Omit<T, keyof KeepBranded<T, Brand>>;
+// prettier-ignore
+type KeepNullish<T> = { [K in keyof T as undefined extends T[K] ? K : never]: T[K]; };
+// prettier-ignore
+type KeepFunction<T> = { [K in keyof T as T[K] extends (...args: any[]) => any ? K : never]: T[K]; };
+// prettier-ignore
+type KeepBranded<T, Brand extends symbol> = { [K in keyof T as IsBranded<T[K], Brand> extends true ? K : never]: T[K]; };
+// prettier-ignore
+export type InferAttributes<T> = RemoveFunction<
+  RemoveNullish<
+    RemoveBranded<
+      RemoveBranded<T,
+        typeof CreationOptionalBrand
+      >, typeof NonAttributeBrand
+    >
+  >
+> & Partial<KeepBranded<T, typeof CreationOptionalBrand>>;
 
 export type Mutate = (value: any) => Inmutable;
 export type Default = Inmutable | (() => Inmutable);
 export type Validate = (value: any) => true | string;
-
-/* ------------------------------------------------------------------ */
-/* 2.  Descripción de columna y tabla                                 */
-/* ------------------------------------------------------------------ */
+export type Inmutable = string | number | boolean | null | object;
 export interface Column {
-  /** nombre físico en la tabla (DynamoDB) */
   name: string;
-
-  /* Decoradores básicos */
   default?: Default;
   mutate?: Mutate[];
   validate?: Validate[];
-
-  /* Metadatos de índice / unicidad */
-  index?: true; // Partition Key
-  indexSort?: true; // Sort Key
-  unique?: true; // constraint lógico (no se valida en Dynamo)
+  index?: true;
+  indexSort?: true;
+  unique?: true;
 }
-
-/**
- * Configuración completa por tabla
- */
 export interface WrapperEntry {
-  /** Nombre físico de la tabla (snake_plural o @Name) */
   name: string;
-
-  /** Columnas asociadas a la clase. key = propiedad (string|symbol) */
   columns: Map<string | symbol, Column>;
 }
 
-/* ------------------------------------------------------------------ */
-/* 3.  Contenedor global                                              */
-/* ------------------------------------------------------------------ */
-export type Wrapper = Map<Function, WrapperEntry>;
-
-/**
- * Mapa singleton (clase → configuración)
- * Exportado como default para uso interno de la librería.
- */
-const wrapper: Wrapper = new Map();
+const wrapper = new Map<Function, WrapperEntry>();
+export const STORE: unique symbol = Symbol("dynamite:values");
 export default wrapper;
 
-/* ------------------------------------------------------------------ */
-/* 4.  Símbolo de almacenamiento de valores reales                    */
-/* ------------------------------------------------------------------ */
-/**
- * Buffer privado en cada instancia de Table donde se guardan
- * los valores procesados por los setters virtuales.
- *
- * Se exporta para que los decoradores puedan leer/escribir,
- * pero **NO** se vuelve a exportar desde la raíz del paquete.
- */
-export const STORE: unique symbol = Symbol("dynamite:values");
-
-/* ------------------------------------------------------------------ */
-/* 5.  Pequeños helpers opcionales                                    */
-/* ------------------------------------------------------------------ */
-
-/**
- * Asegura que exista la entrada en el wrapper para la clase dada.
- * Devuelve la entrada (recién creada o existente).
- */
 export function ensureConfig(ctor: Function, tableName: string): WrapperEntry {
   let entry = wrapper.get(ctor);
   if (!entry) {
@@ -86,14 +58,8 @@ export function ensureConfig(ctor: Function, tableName: string): WrapperEntry {
   return entry;
 }
 
-/**
- * Obtiene (o crea) el objeto Column para una propiedad concreta.
- */
-export function ensureColumn(
-  entry: WrapperEntry,
-  prop: string | symbol,
-  columnName: string
-): Column {
+// prettier-ignore
+export function ensureColumn(entry: WrapperEntry, prop: string | symbol, columnName: string): Column {
   let col = entry.columns.get(prop);
   if (!col) {
     col = { name: columnName, mutate: [], validate: [] };

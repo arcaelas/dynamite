@@ -14,15 +14,8 @@ import {
   ScanCommand,
 } from "@aws-sdk/client-dynamodb";
 import { marshall, unmarshall } from "@aws-sdk/util-dynamodb";
-import wrapper, { STORE, WrapperEntry } from "./wrapper";
+import wrapper, { InferAttributes, STORE, WrapperEntry } from "./wrapper";
 
-/* ────────────────────────── Conexión global ────────────────────────── */
-let client: DynamoDBClient | undefined;
-export function connect(cfg: DynamoDBClientConfig): void {
-  client = new DynamoDBClient(cfg);
-}
-
-/* ─────────── Creación automática de tablas a partir del wrapper ────── */
 async function createTable(ctor: Function): Promise<void> {
   if (!client) throw new Error("connect() no llamado");
   const meta = wrapper.get(ctor);
@@ -55,44 +48,36 @@ async function createTable(ctor: Function): Promise<void> {
     })
   );
 }
+function requireClient(): void {
+  if (!client) throw new Error("connect() debe llamarse antes de usar Table");
+}
+function mustMeta(ctor: Function): WrapperEntry {
+  const meta = wrapper.get(ctor);
+  if (!meta) throw new Error(`Metadata no encontrada para ${ctor.name}`);
+  return meta;
+}
 
-/* ────────────────────────────── Table ──────────────────────────────── */
-export default class Table<T extends object = object> {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  private [STORE]!: { [K in keyof T]?: T[K] };
+let client: DynamoDBClient | undefined;
+export function connect(cfg: DynamoDBClientConfig): void {
+  client = new DynamoDBClient(cfg);
+}
 
-  constructor(data: Partial<T> = {}) {
+export default class Table<T extends {} = any> {
+  protected [STORE]!: { [K in keyof T]?: T[K] };
+
+  constructor(data: InferAttributes<T>) {
     requireClient();
     const meta = mustMeta(Object.getPrototypeOf(this).constructor);
-
-    /* defaults via setters */
     meta.columns.forEach((c) => {
       if (!(c.name in data)) (this as any)[c.name] = undefined;
     });
-
     Object.assign(this, data);
   }
 
-  /* -------- serializa SOLO columnas válidas -------- */
-  toJSON(): Record<string, unknown> {
-    const meta = mustMeta(Object.getPrototypeOf(this).constructor);
-    const buf = (this as any)[STORE] ?? {};
-    const out: Record<string, unknown> = {};
-
-    for (const [prop, col] of meta.columns) {
-      if (prop in buf) out[col.name] = buf[prop];
-      else if (prop in this) out[col.name] = (this as any)[prop];
-    }
-    return out;
-  }
-
-  /* ────────────── Métodos de instancia ────────────── */
   async save(): Promise<this> {
-    // @ts-ignore
-    const id: unknown = this.id;
+    const id: unknown = this["id"];
     const Ctor = this.constructor as typeof Table<any>;
     const record = this.toJSON();
-
     if (id === undefined || id === null) {
       delete (record as any).id;
       const fresh = await (Ctor as any).create(record);
@@ -103,12 +88,10 @@ export default class Table<T extends object = object> {
     return this;
   }
 
-  async update(patch: Partial<T>): Promise<this> {
-    // @ts-ignore
-    const id: unknown = this.id;
+  async update(patch: InferAttributes<T>): Promise<this> {
+    const id: unknown = this["id"];
     if (id === undefined || id === null)
       throw new Error("update() requiere id");
-
     Object.assign(this, patch);
     const Ctor = this.constructor as typeof Table<any>;
     await (Ctor as any).update(String(id), this.toJSON());
@@ -116,23 +99,19 @@ export default class Table<T extends object = object> {
   }
 
   async destroy(): Promise<void> {
-    // @ts-ignore
-    const id: unknown = this.id;
+    const id: unknown = this["id"];
     if (id === undefined || id === null)
       throw new Error("destroy() requiere id");
     const Ctor = this.constructor as typeof Table<any>;
     await (Ctor as any).destroy(String(id));
   }
 
-  /* ─────────────── CRUD estáticos ──────────────── */
-
   static async create<M extends Table>(
-    this: new (d?: Partial<M>) => M,
-    data: Partial<M>
+    this: { new (data: InferAttributes<M>): M; prototype: M },
+    data: InferAttributes<M>
   ): Promise<M> {
     const meta = mustMeta(this);
-    const payload = new this(data).toJSON(); // filtrado
-
+    const payload = new this(data).toJSON();
     const put = () =>
       client!.send(
         new PutItemCommand({
@@ -140,7 +119,6 @@ export default class Table<T extends object = object> {
           Item: marshall(payload, { removeUndefinedValues: true }),
         })
       );
-
     try {
       await put();
     } catch (err: any) {
@@ -152,14 +130,14 @@ export default class Table<T extends object = object> {
     return new this(data);
   }
 
+  // prettier-ignore
   static async update<M extends Table>(
-    this: new (d?: Partial<M>) => M,
+    this: { new (data: InferAttributes<M>): M; prototype: M },
     id: string,
-    record: Partial<M> // ← ya es JSON completo desde instancia
+    record: InferAttributes<M>
   ): Promise<void> {
     const meta = mustMeta(this);
     const payload = { ...record, id };
-
     const put = () =>
       client!.send(
         new PutItemCommand({
@@ -167,7 +145,6 @@ export default class Table<T extends object = object> {
           Item: marshall(payload, { removeUndefinedValues: true }),
         })
       );
-
     try {
       await put();
     } catch (err: any) {
@@ -178,10 +155,8 @@ export default class Table<T extends object = object> {
     }
   }
 
-  static async destroy<M extends Table>(
-    this: new () => M,
-    id: string
-  ): Promise<null> {
+  // prettier-ignore
+  static async destroy<M extends Table>(this: new () => M, id: string): Promise<null> {
     requireClient();
     try {
       await client!.send(
@@ -197,7 +172,7 @@ export default class Table<T extends object = object> {
     return null;
   }
 
-  static async where<M extends Table>(this: new (d?: any) => M): Promise<M[]> {
+  static async where<M extends Table>(this: new (d: any) => M): Promise<M[]> {
     requireClient();
     try {
       const res = await client!.send(
@@ -209,18 +184,22 @@ export default class Table<T extends object = object> {
       throw err;
     }
   }
+
+  toJSON(): Record<string, unknown> {
+    const meta = mustMeta(Object.getPrototypeOf(this).constructor);
+    const buf = (this as any)[STORE] ?? {};
+    const out: Record<string, unknown> = {};
+    for (const [prop, col] of meta.columns) {
+      if (prop in buf) out[col.name] = buf[prop];
+      else if (prop in this) out[col.name] = (this as any)[prop];
+    }
+    return out;
+  }
+
+  toString(): string {
+    return JSON.stringify(this.toJSON());
+  }
 }
 
-/* ─────────────────── Utilidades internas ─────────────────── */
-function requireClient(): void {
-  if (!client) throw new Error("connect() debe llamarse antes de usar Table");
-}
-function mustMeta(ctor: Function): WrapperEntry {
-  const meta = wrapper.get(ctor);
-  if (!meta) throw new Error(`Metadata no encontrada para ${ctor.name}`);
-  return meta;
-}
-
-/* ─────────────────── Exportaciones internas ───────────────── */
 export { STORE };
 export type { WrapperEntry };
