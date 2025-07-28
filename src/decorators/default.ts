@@ -8,20 +8,16 @@
 import { Column, STORE, ensureColumn, ensureConfig } from "../core/wrapper";
 import { toSnakePlural } from "../utils/naming";
 
-export default function Default(factory: () => unknown): PropertyDecorator {
-  if (typeof factory !== "function") {
-    throw new TypeError("@Default requiere una función factory");
-  }
-
+export default function Default(value: unknown): PropertyDecorator;
+export default function Default(func: () => unknown): PropertyDecorator;
+export default function Default(factory: any): PropertyDecorator {
   return (target: object, prop: string | symbol): void => {
     const ctor = (target as any).constructor;
     const entry = ensureConfig(ctor, toSnakePlural(ctor.name));
     const column = ensureColumn(entry, prop, String(prop));
-
     if (column.default)
       throw new Error(`@Default duplicado en '${String(prop)}'`);
-    column.default = factory;
-
+    column.default = typeof factory === "function" ? factory : () => factory;
     if (!Object.getOwnPropertyDescriptor(ctor.prototype, prop)?.set) {
       defineVirtual(ctor.prototype, column, prop);
     }
