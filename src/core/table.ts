@@ -156,7 +156,10 @@ export default class Table<T extends {} = any> {
   }
 
   // prettier-ignore
-  static async destroy<M extends Table>(this: new () => M, id: string): Promise<null> {
+  static async destroy<M extends Table>(
+    this: { new (dara: InferAttributes<M>): M; prototype: M },
+    id: string
+  ): Promise<null> {
     requireClient();
     try {
       await client!.send(
@@ -172,13 +175,18 @@ export default class Table<T extends {} = any> {
     return null;
   }
 
-  static async where<M extends Table>(this: new (d: any) => M): Promise<M[]> {
+  static async where<M extends Table>(this: {
+    new (data: InferAttributes<M>): M;
+    prototype: M;
+  }): Promise<M[]> {
     requireClient();
     try {
       const res = await client!.send(
         new ScanCommand({ TableName: mustMeta(this).name })
       );
-      return (res.Items ?? []).map((i) => new this(unmarshall(i)));
+      return (res.Items ?? []).map(
+        (i) => new this(unmarshall(i) as InferAttributes<M>)
+      );
     } catch (err: any) {
       if (err.name === "ResourceNotFoundException") return [];
       throw err;

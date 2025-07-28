@@ -6,7 +6,7 @@
 import { DeleteTableCommand, DynamoDBClient } from "@aws-sdk/client-dynamodb";
 
 import { connect, default as Table } from "../src/core/table";
-import wrapper from "../src/core/wrapper";
+import wrapper, { CreationOptional, NonAttribute } from "../src/core/wrapper";
 
 import Default from "../src/decorators/default";
 import Name from "../src/decorators/name";
@@ -41,13 +41,13 @@ describe("CRUD Dinamite ORM (DynamoDB Local)", () => {
     @Name("crud_users1")
     class User extends Table {
       @PrimaryKey()
-      declare id: string;
+      declare id: CreationOptional<string>;
 
       @NotNull()
       declare email: string;
 
       @Default(() => new Date().toISOString())
-      declare created_at: string;
+      declare created_at: NonAttribute<string>;
     }
 
     /* ---------- create (auto-crea tabla) ---------- */
@@ -68,7 +68,7 @@ describe("CRUD Dinamite ORM (DynamoDB Local)", () => {
     @Name("ghosts")
     class Ghost extends Table {
       @PrimaryKey()
-      declare id: string;
+      declare id: CreationOptional<string>;
     }
 
     const rows = await Ghost.where();
