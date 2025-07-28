@@ -45,11 +45,11 @@
     "url": "https://github.com/arcaelas/dynamite.git"
   },
   "scripts": {
-    "build": "tsc && tsc-alias && node esbuild.js",
+    "test": "jest",
+    "build": "tsc && tsc-alias",
+    "prepublishOnly": "yarn test && yarn build && npm version patch",
     "commit": "npm publish --access=public",
-    "postpublish": "rm -rf build",
-    "prepublishOnly": "yarn test && npm version patch",
-    "test": "jest && yarn build"
+    "postpublish": "rm -rf build"
   },
   "version": "1.0.3"
 }
