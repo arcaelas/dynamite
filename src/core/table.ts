@@ -41,17 +41,26 @@ async function createTable(ctor: Function): Promise<void> {
   if (sk && sk.name !== pk.name)
     schema.push({ AttributeName: sk.name, KeyType: "RANGE" });
 
-  await client.send(
-    new CreateTableCommand({
-      TableName: meta.name,
-      BillingMode: "PAY_PER_REQUEST",
-      AttributeDefinitions: [...attr].map(([AttributeName, AttributeType]) => ({
-        AttributeName,
-        AttributeType,
-      })),
-      KeySchema: schema,
-    })
-  );
+  try {
+    await client.send(
+      new CreateTableCommand({
+        TableName: meta.name,
+        BillingMode: "PAY_PER_REQUEST",
+        AttributeDefinitions: [...attr].map(
+          ([AttributeName, AttributeType]) => ({
+            AttributeName,
+            AttributeType,
+          })
+        ),
+        KeySchema: schema,
+      })
+    );
+  } catch (error: any) {
+    // Ignorar error si la tabla ya existe
+    if (error.name !== "ResourceInUseException") {
+      throw error;
+    }
+  }
 }
 
 function requireClient(): void {
@@ -201,21 +210,45 @@ export default class Table<T extends {} = any> {
     return null;
   }
 
-  /* ------------------------------ WHERE (query | scan) ------------------- */
+  /**
+   * Realiza una consulta sobre la tabla, devolviendo una lista de resultados
+   * según condiciones y opciones de paginación/orden. Utiliza `QueryCommand`
+   * si la condición es por PK/SK con igualdad, o `ScanCommand` como fallback.
+   *
+   * @template M Instancia de la clase Table.
+   * @template K Clave de atributos inferida.
+   *
+   * @param key     - Clave a filtrar (ej. "id").
+   * @param value   - Valor a comparar (equivalente a '=' implícito).
+   * @param options - (Opcional) Opciones de paginación: { limit, skip, order }.
+   *
+   * @example
+   *   await User.where('id', 'u1');
+   *   await User.where('email', '=', 'a@b.com', { limit: 5, order: 'DESC' });
+   *   await User.where({ email: 'x@y.com' }, { skip: 10, limit: 1 });
+   *
+   * @param filters - Objeto con pares clave/valor para consulta tipo AND.
+   * @param options - (Opcional) Opciones de paginación: { limit, skip, order }.
+   *
+   * @returns       - Array de instancias de la tabla que cumplen la condición.
+   */
   static async where<M extends Table, K extends keyof InferAttributes<M>>(
     this: { new (data: InferAttributes<M>): M; prototype: M },
     key: K,
-    value: InferAttributes<M>[K]
+    value: InferAttributes<M>[K],
+    options?: { limit?: number; skip?: number; order?: "ASC" | "DESC" }
   ): Promise<M[]>;
   static async where<M extends Table, K extends keyof InferAttributes<M>>(
     this: { new (data: InferAttributes<M>): M; prototype: M },
     key: K,
     op: "=" | "!=" | "<" | "<=" | ">" | ">=",
-    value: InferAttributes<M>[K]
+    value: InferAttributes<M>[K],
+    options?: { limit?: number; skip?: number; order?: "ASC" | "DESC" }
   ): Promise<M[]>;
   static async where<M extends Table>(
     this: { new (data: InferAttributes<M>): M; prototype: M },
-    filters: Partial<InferAttributes<M>>
+    filters: Partial<InferAttributes<M>>,
+    options?: { limit?: number; skip?: number; order?: "ASC" | "DESC" }
   ): Promise<M[]>;
   static async where<M extends Table>(
     this: { new (data: InferAttributes<M>): M; prototype: M },
@@ -224,51 +257,95 @@ export default class Table<T extends {} = any> {
     requireClient();
     const meta = mustMeta(this);
 
-    /* --- Parseo de argumentos -> lista de condiciones -------------------- */
     type Entry = { key: string; op: string; value: unknown };
     const conditions: Entry[] = [];
 
+    // Detección y extracción de opciones
+    const last = args.at(-1);
+    const hasOptions =
+      typeof last === "object" &&
+      last !== null &&
+      ("limit" in last || "skip" in last || "order" in last);
+    const options = hasOptions ? args.pop() : {};
+
+    // Validar opciones
+    if (options.limit !== undefined && options.limit < 0) {
+      throw new Error("Argumentos inválidos");
+    }
+    if (options.skip !== undefined && options.skip < 0) {
+      throw new Error("Argumentos inválidos");
+    }
+    if (
+      options.order !== undefined &&
+      !["ASC", "DESC"].includes(options.order)
+    ) {
+      throw new Error("Argumentos inválidos");
+    }
+
+    const limit = options.limit ?? 100;
+    const skip = options.skip ?? 0;
+    const order = (options.order ?? "ASC") as "ASC" | "DESC";
+
+    // Parseo de condiciones según variante
     if (
       args.length === 1 &&
       typeof args[0] === "object" &&
       !Array.isArray(args[0])
     ) {
       for (const [key, value] of Object.entries(args[0])) {
+        // Validar que el campo existe en el modelo
+        if (!meta.columns.has(key)) {
+          return [];
+        }
         conditions.push({ key, op: "=", value });
       }
     } else if (args.length === 2) {
       const [key, value] = args;
+      // Validar que el campo existe en el modelo
+      if (!meta.columns.has(key)) {
+        return [];
+      }
       conditions.push({ key, op: "=", value });
     } else if (args.length === 3) {
       const [key, op, value] = args;
+      // Validar operador
+      const validOps = ["=", "!=", "<", "<=", ">", ">="];
+      if (!validOps.includes(op)) {
+        throw new Error("Argumentos inválidos");
+      }
+      // Validar que el campo existe en el modelo
+      if (!meta.columns.has(key)) {
+        return [];
+      }
       conditions.push({ key, op, value });
     } else {
-      throw new Error("Argumentos inválidos en .where()");
+      throw new Error("Argumentos inválidos");
     }
 
-    /* --- Query optimizado si usa PK/SK y op === "=" ---------------------- */
+    // Query optimizado si es por PK/SK e igualdad
     const column = meta.columns.get(conditions[0].key);
     const isIndex = column?.index || column?.indexSort;
 
     if (conditions.length === 1 && isIndex && conditions[0].op === "=") {
       const { key, value } = conditions[0];
-
       const res = await client!.send(
         new QueryCommand({
           TableName: meta.name,
           KeyConditionExpression: `#K = :v`,
           ExpressionAttributeNames: { "#K": key },
           ExpressionAttributeValues: marshall({ ":v": value }),
+          Limit: limit,
+          ScanIndexForward: order === "ASC",
         })
       );
-      return (res.Items ?? []).map(
+      let items = (res.Items ?? []).map(
         (i) => new this(unmarshall(i) as InferAttributes<M>)
       );
+      return skip > 0 ? items.slice(skip, skip + limit) : items;
     }
 
-    /* --- Fallback: Scan + FilterExpression ------------------------------ */
+    // Fallback: Scan + FilterExpression
     const normalize = (op: string) => (op === "!=" ? "<>" : op);
-
     const exprParts: string[] = [];
     const names: Record<string, string> = {};
     const vals: Record<string, any> = {};
@@ -290,9 +367,28 @@ export default class Table<T extends {} = any> {
       })
     );
 
-    return (res.Items ?? []).map(
+    let items = (res.Items ?? []).map(
       (i) => new this(unmarshall(i) as InferAttributes<M>)
     );
+    
+    // Ordenar items según el primer campo de condición
+    if (conditions.length > 0) {
+      const sortKey = conditions[0].key;
+      items.sort((a: any, b: any) => {
+        const aVal = a[sortKey];
+        const bVal = b[sortKey];
+        
+        // Ordenamiento numérico o string
+        if (typeof aVal === 'number' && typeof bVal === 'number') {
+          return order === 'ASC' ? aVal - bVal : bVal - aVal;
+        } else {
+          const comparison = String(aVal).localeCompare(String(bVal));
+          return order === 'ASC' ? comparison : -comparison;
+        }
+      });
+    }
+    
+    return items.slice(skip, skip + limit);
   }
 
   /* --------------------------- helpers de instancia ---------------------- */
