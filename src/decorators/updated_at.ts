@@ -1,18 +1,13 @@
-/*
- * Dinamite ORM — @UpdatedAt Decorator (wrapper)
- * --------------------------------------------
- * Actualiza la fecha/hora cada vez que la propiedad recibe un nuevo valor
- * (incluyendo actualizaciones mediante Model.save()).
- * Internamente aplica @Mutate con una factory de timestamp ISO.
- *
- * © 2025 Miguel Alejandro
+/**
+ * @file updated_at.ts
+ * @descripcion Decorador @UpdatedAt para timestamp de actualización
+ * @autor Miguel Alejandro
+ * @fecha 2025-01-27
  */
 
 import Mutate from "./mutate";
 
-/**
- * Actualiza automáticamente la marca temporal en cada asignación.
- */
+/** Decorador para establecer timestamp automático de actualización */
 export default function UpdatedAt(): PropertyDecorator {
   return Mutate(() => new Date().toISOString());
 }

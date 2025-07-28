@@ -1,21 +1,18 @@
-/*
- * Dinamite ORM — @NotNull Decorator (wrapper)
- * ------------------------------------------
- * Valida que el valor no sea null, undefined ni cadena vacía.
- * Internamente aplica @Validate con una función sincrónica.
- *
- * © 2025 Miguel Alejandro
+/**
+ * @file not_null.ts
+ * @descripcion Decorador @NotNull para validación no-null
+ * @autor Miguel Alejandro
+ * @fecha 2025-01-27
  */
 
 import Validate from "./validate";
 
-/**
- * Decorador wrapper que asegura no-null / no-empty.
- */
+/** Decorador para validar que el valor no sea nulo, indefinido o string vacío */
 export default function NotNull(): PropertyDecorator {
-  return (Validate as any)((value, key) => {
-    if (value === null || value === undefined) return false;
-    if (typeof value === "string" && value.trim() === "") return false;
-    return true;
-  });
+  return (Validate as any)(
+    (value: any) =>
+      value !== null &&
+      value !== undefined &&
+      (typeof value !== "string" || value.trim() !== "")
+  );
 }

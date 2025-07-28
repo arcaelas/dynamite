@@ -1,15 +1,14 @@
-/*
- * Dinamite ORM — @Default
- * -----------------------
- * Registra un valor por defecto y crea (si falta) el
- * getter/setter virtual de la propiedad.
+/**
+ * @file default.ts
+ * @descripcion Decorador @Default para valores por defecto
+ * @autor Miguel Alejandro
+ * @fecha 2025-01-27
  */
 
 import { Column, STORE, ensureColumn, ensureConfig } from "../core/wrapper";
 import { toSnakePlural } from "../utils/naming";
 
-export default function Default(value: unknown): PropertyDecorator;
-export default function Default(func: () => unknown): PropertyDecorator;
+/** Decorador para establecer valores por defecto en propiedades */
 export default function Default(factory: any): PropertyDecorator {
   return (target: object, prop: string | symbol): void => {
     const ctor = (target as any).constructor;
@@ -18,13 +17,12 @@ export default function Default(factory: any): PropertyDecorator {
     if (column.default)
       throw new Error(`@Default duplicado en '${String(prop)}'`);
     column.default = typeof factory === "function" ? factory : () => factory;
-    if (!Object.getOwnPropertyDescriptor(ctor.prototype, prop)?.set) {
+    !Object.getOwnPropertyDescriptor(ctor.prototype, prop)?.set &&
       defineVirtual(ctor.prototype, column, prop);
-    }
   };
 }
 
-/* ------------------------------------------------------------------ */
+/** Define propiedad virtual con getter/setter para manejo de defaults */
 function defineVirtual(proto: any, col: Column, prop: string | symbol): void {
   Object.defineProperty(proto, prop, {
     get() {
@@ -32,16 +30,20 @@ function defineVirtual(proto: any, col: Column, prop: string | symbol): void {
     },
     set(val: unknown) {
       const buf = (this[STORE] ??= {});
-
-      if (val === undefined && col.default !== undefined) {
-        val = typeof col.default === "function" ? col.default() : col.default;
-      }
+      val =
+        val === undefined && col.default !== undefined
+          ? typeof col.default === "function"
+            ? col.default()
+            : col.default
+          : val;
       if (col.mutate) for (const m of col.mutate) val = m(val);
       if (col.validate) {
         for (const v of col.validate) {
           const r = v(val);
-          if (r !== true)
-            throw new Error(typeof r === "string" ? r : "Validación fallida");
+          r !== true &&
+            (() => {
+              throw new Error(typeof r === "string" ? r : "Validación fallida");
+            })();
         }
       }
       buf[prop] = val;

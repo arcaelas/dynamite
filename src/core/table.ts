@@ -1,111 +1,50 @@
-/* src/core/table.ts
- * Dinamite ORM — runtime
- * --------------------------------------------------
- * CRUD + autocreación de tablas (DynamoDB v3)
- * Serialización estricta mediante toJSON()
- * © 2025 Miguel Alejandro
- */
 import {
-  CreateTableCommand,
   DeleteItemCommand,
-  DynamoDBClient,
-  DynamoDBClientConfig,
   PutItemCommand,
   QueryCommand,
   ScanCommand,
 } from "@aws-sdk/client-dynamodb";
 import { marshall, unmarshall } from "@aws-sdk/util-dynamodb";
+import {
+  clearRelationCache,
+  processIncludes,
+  separateQueryOptions,
+} from "../utils/relations";
+import { getGlobalClient } from "./client";
 import wrapper, { InferAttributes, STORE, WrapperEntry } from "./wrapper";
 
-/* -------------------------------------------------------------------------- */
-/* Utils internos                                                             */
-/* -------------------------------------------------------------------------- */
-async function createTable(ctor: Function): Promise<void> {
-  if (!client) throw new Error("connect() no llamado");
+/** Get required DynamoDB client */
+const requireClient = () => getGlobalClient();
 
+/** Get metadata for constructor or throw error */
+const mustMeta = (ctor: Function): WrapperEntry => {
   const meta = wrapper.get(ctor);
-  if (!meta) throw new Error(`Clase ${ctor.name} no registrada en wrapper`);
-
-  const cols = [...meta.columns.values()];
-  const pk = cols.find((c) => c.index);
-  if (!pk) throw new Error(`PartitionKey faltante en ${ctor.name}`);
-
-  const sk = cols.find((c) => c.indexSort);
-
-  const attr = new Map<string, "S" | "N" | "B">();
-  attr.set(pk.name, "S");
-  if (sk) attr.set(sk.name, "S");
-
-  type KS = { AttributeName: string; KeyType: "HASH" | "RANGE" };
-  const schema: KS[] = [{ AttributeName: pk.name, KeyType: "HASH" }];
-  if (sk && sk.name !== pk.name)
-    schema.push({ AttributeName: sk.name, KeyType: "RANGE" });
-
-  try {
-    await client.send(
-      new CreateTableCommand({
-        TableName: meta.name,
-        BillingMode: "PAY_PER_REQUEST",
-        AttributeDefinitions: [...attr].map(
-          ([AttributeName, AttributeType]) => ({
-            AttributeName,
-            AttributeType,
-          })
-        ),
-        KeySchema: schema,
-      })
-    );
-  } catch (error: any) {
-    // Ignorar error si la tabla ya existe
-    if (error.name !== "ResourceInUseException") {
-      throw error;
-    }
-  }
-}
-
-function requireClient(): void {
-  if (!client) throw new Error("connect() debe llamarse antes de usar Table");
-}
-
-function mustMeta(ctor: Function): WrapperEntry {
-  const meta = wrapper.get(ctor);
-  if (!meta) throw new Error(`Metadata no encontrada para ${ctor.name}`);
+  if (!meta) throw new Error(`Class ${ctor.name} not registered in wrapper`);
   return meta;
-}
+};
 
-/* -------------------------------------------------------------------------- */
-/* Configuración de cliente DynamoDB                                          */
-/* -------------------------------------------------------------------------- */
-let client: DynamoDBClient | undefined;
-export function connect(cfg: DynamoDBClientConfig): void {
-  client = new DynamoDBClient(cfg);
-}
-
-/* -------------------------------------------------------------------------- */
-/* Clase base Table                                                           */
-/* -------------------------------------------------------------------------- */
+/** Base Table class for DynamoDB ORM with CRUD operations */
 export default class Table<T extends {} = any> {
   protected [STORE]!: { [K in keyof T]?: T[K] };
 
-  /* ------------------------------ constructor ----------------------------- */
+  /** Initialize table instance with data */
   constructor(data: InferAttributes<T>) {
     requireClient();
     const meta = mustMeta(Object.getPrototypeOf(this).constructor);
-    /* crear todas las props declaradas como undefined si no vienen en data */
     meta.columns.forEach((c) => {
       if (!(c.name in data)) (this as any)[c.name] = undefined;
     });
     Object.assign(this, data);
   }
 
-  /* --------------------------------- save -------------------------------- */
+  /** Save instance to database (create or update) */
   async save(): Promise<this> {
     const id: unknown = this["id"];
     const Ctor = this.constructor as typeof Table<any>;
     const record = this.toJSON();
 
     if (id === undefined || id === null) {
-      delete (record as any).id; // permitir que Dynamo genere el id, si procede
+      delete (record as any).id;
       const fresh = await (Ctor as any).create(record);
       Object.assign(this, fresh);
     } else {
@@ -114,8 +53,8 @@ export default class Table<T extends {} = any> {
     return this;
   }
 
-  /* -------------------------------- update ------------------------------- */
-  async update(patch: InferAttributes<T>): Promise<this> {
+  /** Update instance with partial data */
+  async update(patch: Partial<InferAttributes<T>>): Promise<this> {
     const id: unknown = this["id"];
     if (id === undefined || id === null)
       throw new Error("update() requiere id");
@@ -126,7 +65,7 @@ export default class Table<T extends {} = any> {
     return this;
   }
 
-  /* ------------------------------- destroy ------------------------------- */
+  /** Delete instance from database */
   async destroy(): Promise<void> {
     const id: unknown = this["id"];
     if (id === undefined || id === null)
@@ -141,25 +80,17 @@ export default class Table<T extends {} = any> {
     this: { new (data: InferAttributes<M>): M; prototype: M },
     data: InferAttributes<M>
   ): Promise<M> {
+    const client = requireClient();
     const meta = mustMeta(this);
     const payload = new this(data).toJSON();
 
-    const put = () =>
-      client!.send(
-        new PutItemCommand({
-          TableName: meta.name,
-          Item: marshall(payload, { removeUndefinedValues: true }),
-        })
-      );
+    await client.send(
+      new PutItemCommand({
+        TableName: meta.name,
+        Item: marshall(payload, { removeUndefinedValues: true }),
+      })
+    );
 
-    try {
-      await put();
-    } catch (err: any) {
-      if (err?.name === "ResourceNotFoundException") {
-        await createTable(this);
-        await put();
-      } else throw err;
-    }
     return new this(data);
   }
 
@@ -169,25 +100,46 @@ export default class Table<T extends {} = any> {
     id: string,
     record: InferAttributes<M>,
   ): Promise<void> {
-    const meta    = mustMeta(this);
+    const client = requireClient();
+    const meta = mustMeta(this);
     const payload = { ...record, id };
 
-    const put = () =>
-      client!.send(
-        new PutItemCommand({
-          TableName: meta.name,
-          Item: marshall(payload, { removeUndefinedValues: true }),
-        }),
-      );
+    await client.send(
+      new PutItemCommand({
+        TableName: meta.name,
+        Item: marshall(payload, { removeUndefinedValues: true }),
+      })
+    );
+  }
 
-    try {
-      await put();
-    } catch (err: any) {
-      if (err?.name === "ResourceNotFoundException") {
-        await createTable(this);
-        await put();
-      } else throw err;
+  /**
+   * Actualiza múltiples registros que coincidan con los filtros especificados
+   * @param updates - Objeto con los valores a actualizar
+   * @param filters - Filtros para seleccionar qué registros actualizar
+   * @returns Número de registros actualizados
+   */
+  // prettier-ignore
+  static async updateWhere<M extends Table>(
+    this: { new (data: InferAttributes<M>): M; prototype: M },
+    updates: Partial<InferAttributes<M>>,
+    filters: Partial<InferAttributes<M>>
+  ): Promise<number> {
+    // Buscar todos los registros que coincidan con los filtros
+    const records = await (this as any).where(filters);
+    
+    // Actualizar cada registro individualmente
+    let updatedCount = 0;
+    for (const record of records) {
+      try {
+        await (this as any).update(record.id, { ...record.toJSON(), ...updates } as InferAttributes<M>);
+        updatedCount++;
+      } catch (error) {
+        // Continuar con el siguiente registro si hay un error
+        console.warn(`Error actualizando registro ${record.id}:`, error);
+      }
     }
+    
+    return updatedCount;
   }
 
   // prettier-ignore
@@ -195,11 +147,13 @@ export default class Table<T extends {} = any> {
     this: { new (data: InferAttributes<M>): M; prototype: M },
     id: string,
   ): Promise<null> {
-    requireClient();
+    const client = requireClient();
+    const meta = mustMeta(this);
+
     try {
-      await client!.send(
+      await client.send(
         new DeleteItemCommand({
-          TableName: mustMeta(this).name,
+          TableName: meta.name,
           Key: marshall({ id }),
         }),
       );
@@ -236,14 +190,24 @@ export default class Table<T extends {} = any> {
     this: { new (data: InferAttributes<M>): M; prototype: M },
     key: K,
     value: InferAttributes<M>[K],
-    options?: { limit?: number; skip?: number; order?: "ASC" | "DESC" }
+    options?: {
+      limit?: number;
+      skip?: number;
+      order?: "ASC" | "DESC";
+      include?: Record<string, any>;
+    }
   ): Promise<M[]>;
   static async where<M extends Table, K extends keyof InferAttributes<M>>(
     this: { new (data: InferAttributes<M>): M; prototype: M },
     key: K,
     op: "=" | "!=" | "<" | "<=" | ">" | ">=" | "in" | "not-in",
     value: InferAttributes<M>[K] | InferAttributes<M>[K][],
-    options?: { limit?: number; skip?: number; order?: "ASC" | "DESC" }
+    options?: {
+      limit?: number;
+      skip?: number;
+      order?: "ASC" | "DESC";
+      include?: Record<string, any>;
+    }
   ): Promise<M[]>;
   static async where<M extends Table>(
     this: { new (data: InferAttributes<M>): M; prototype: M },
@@ -252,190 +216,276 @@ export default class Table<T extends {} = any> {
         | InferAttributes<M>[K]
         | InferAttributes<M>[K][];
     }>,
-    options?: { limit?: number; skip?: number; order?: "ASC" | "DESC" }
+    options?: {
+      limit?: number;
+      skip?: number;
+      order?: "ASC" | "DESC";
+      include?: Record<string, any>;
+    }
   ): Promise<M[]>;
   static async where<M extends Table>(
     this: { new (data: InferAttributes<M>): M; prototype: M },
     ...args: any[]
   ): Promise<M[]> {
-    requireClient();
-    const meta = mustMeta(this);
+    try {
+      requireClient();
+      const meta = mustMeta(this);
 
-    type Entry = { key: string; op: string; value: unknown };
-    const conditions: Entry[] = [];
+      type Entry = { key: string; op: string; value: unknown };
+      const conditions: Entry[] = [];
 
-    // Detección y extracción de opciones
-    const last = args.at(-1);
-    const hasOptions =
-      typeof last === "object" &&
-      last !== null &&
-      ("limit" in last || "skip" in last || "order" in last);
-    const options = hasOptions ? args.pop() : {};
+      // Detección y extracción de opciones
+      const last = args.at(-1);
+      const hasOptions =
+        typeof last === "object" &&
+        last !== null &&
+        ("limit" in last ||
+          "skip" in last ||
+          "order" in last ||
+          "include" in last);
+      const options = hasOptions ? args.pop() : {};
 
-    // Validar opciones
-    if (options.limit !== undefined && options.limit < 0) {
-      throw new Error("Argumentos inválidos");
-    }
-    if (options.skip !== undefined && options.skip < 0) {
-      throw new Error("Argumentos inválidos");
-    }
-    if (
-      options.order !== undefined &&
-      !["ASC", "DESC"].includes(options.order)
-    ) {
-      throw new Error("Argumentos inválidos");
-    }
+      // Separar opciones de query e include
+      const { queryOptions, includeOptions } = separateQueryOptions(options);
 
-    const limit = options.limit ?? 100;
-    const skip = options.skip ?? 0;
-    const order = (options.order ?? "ASC") as "ASC" | "DESC";
+      // Validar opciones de query
+      if (queryOptions.limit !== undefined && queryOptions.limit < 0) {
+        throw new Error("Argumentos inválidos");
+      }
+      if (queryOptions.skip !== undefined && queryOptions.skip < 0) {
+        throw new Error("Argumentos inválidos");
+      }
+      if (
+        queryOptions.order !== undefined &&
+        !["ASC", "DESC"].includes(queryOptions.order)
+      ) {
+        throw new Error("Argumentos inválidos");
+      }
 
-    // Parseo de condiciones según variante
-    if (
-      args.length === 1 &&
-      typeof args[0] === "object" &&
-      !Array.isArray(args[0])
-    ) {
-      for (const [key, value] of Object.entries(args[0])) {
+      const limit = queryOptions.limit ?? 100;
+      const skip = queryOptions.skip ?? 0;
+      const order = (queryOptions.order ?? "ASC") as "ASC" | "DESC";
+
+      // Parseo de condiciones según variante
+      if (
+        args.length === 1 &&
+        typeof args[0] === "object" &&
+        !Array.isArray(args[0])
+      ) {
+        for (const [key, value] of Object.entries(args[0])) {
+          // Validar que el campo existe en el modelo
+          if (!meta.columns.has(key)) {
+            return [];
+          }
+          // Detectar arrays y convertir a operador 'in'
+          if (Array.isArray(value)) {
+            if (value.length === 0) {
+              throw new Error("Array vacío no permitido en filtros");
+            }
+            if (value.length > 100) {
+              throw new Error("Operador 'in' limitado a 100 valores máximo");
+            }
+            conditions.push({ key, op: "in", value });
+          } else {
+            conditions.push({ key, op: "=", value });
+          }
+        }
+      } else if (args.length === 2) {
+        const [key, value] = args;
         // Validar que el campo existe en el modelo
         if (!meta.columns.has(key)) {
           return [];
         }
-        // Detectar arrays y convertir a operador 'in'
-        if (Array.isArray(value)) {
+        conditions.push({ key, op: "=", value });
+      } else if (args.length === 3) {
+        const [key, op, value] = args;
+        // Validar operador
+        const validOps = ["=", "!=", "<", "<=", ">", ">=", "in", "not-in"];
+        if (!validOps.includes(op)) {
+          throw new Error("Argumentos inválidos");
+        }
+        // Validar arrays para operadores in/not-in
+        if (op === "in" || op === "not-in") {
+          if (!Array.isArray(value)) {
+            throw new Error(`Operador '${op}' requiere un array`);
+          }
           if (value.length === 0) {
-            throw new Error("Array vacío no permitido en filtros");
+            throw new Error(`Operador '${op}' requiere array no vacío`);
           }
           if (value.length > 100) {
-            throw new Error("Operador 'in' limitado a 100 valores máximo");
+            throw new Error(`Operador '${op}' limitado a 100 valores máximo`);
           }
-          conditions.push({ key, op: "in", value });
-        } else {
-          conditions.push({ key, op: "=", value });
+        } else if (Array.isArray(value)) {
+          throw new Error(`Operador '${op}' no acepta arrays`);
         }
-      }
-    } else if (args.length === 2) {
-      const [key, value] = args;
-      // Validar que el campo existe en el modelo
-      if (!meta.columns.has(key)) {
-        return [];
-      }
-      conditions.push({ key, op: "=", value });
-    } else if (args.length === 3) {
-      const [key, op, value] = args;
-      // Validar operador
-      const validOps = ["=", "!=", "<", "<=", ">", ">=", "in", "not-in"];
-      if (!validOps.includes(op)) {
+        // Validar que el campo existe en el modelo
+        if (!meta.columns.has(key)) {
+          return [];
+        }
+        conditions.push({ key, op, value });
+      } else {
         throw new Error("Argumentos inválidos");
       }
-      // Validar arrays para operadores in/not-in
-      if (op === "in" || op === "not-in") {
-        if (!Array.isArray(value)) {
-          throw new Error(`Operador '${op}' requiere un array`);
-        }
-        if (value.length === 0) {
-          throw new Error(`Operador '${op}' requiere array no vacío`);
-        }
-        if (value.length > 100) {
-          throw new Error(`Operador '${op}' limitado a 100 valores máximo`);
-        }
-      } else if (Array.isArray(value)) {
-        throw new Error(`Operador '${op}' no acepta arrays`);
-      }
-      // Validar que el campo existe en el modelo
-      if (!meta.columns.has(key)) {
-        return [];
-      }
-      conditions.push({ key, op, value });
-    } else {
-      throw new Error("Argumentos inválidos");
-    }
 
-    // Query optimizado si es por PK/SK e igualdad
-    const column = meta.columns.get(conditions[0].key);
-    const isIndex = column?.index || column?.indexSort;
+      // Si no hay condiciones, hacer scan completo
+      if (conditions.length === 0) {
+        const client = requireClient();
+        const res = await client.send(
+          new ScanCommand({
+            TableName: meta.name,
+          })
+        );
+        let items = (res.Items ?? []).map(
+          (i) => new this(unmarshall(i) as InferAttributes<M>)
+        );
 
-    if (conditions.length === 1 && isIndex && conditions[0].op === "=") {
-      const { key, value } = conditions[0];
-      const res = await client!.send(
-        new QueryCommand({
+        const paginatedItems = items.slice(skip, skip + limit);
+
+        // Procesar includes si están presentes
+        if (includeOptions && Object.keys(includeOptions).length > 0) {
+          console.log("DEBUG: processIncludes called with:", includeOptions);
+          const result = await processIncludes(
+            this,
+            [...paginatedItems],
+            includeOptions
+          );
+          console.log("DEBUG: processIncludes result:", result.length, "items");
+          return result;
+        }
+
+        return paginatedItems;
+      }
+
+      // Query optimizado si es por PK/SK e igualdad
+      const column = meta.columns.get(conditions[0].key);
+      const isIndex = column?.index || column?.indexSort;
+
+      if (conditions.length === 1 && isIndex && conditions[0].op === "=") {
+        const client = requireClient();
+        const { key, value } = conditions[0];
+        const res = await client.send(
+          new QueryCommand({
+            TableName: meta.name,
+            KeyConditionExpression: `#K = :v`,
+            ExpressionAttributeNames: { "#K": key },
+            ExpressionAttributeValues: marshall({ ":v": value }),
+            Limit: limit,
+            ScanIndexForward: order === "ASC",
+          })
+        );
+        let items = (res.Items ?? []).map(
+          (i) => new this(unmarshall(i) as InferAttributes<M>)
+        );
+
+        const paginatedItems =
+          skip > 0 ? items.slice(skip, skip + limit) : items;
+
+        // Procesar includes si están presentes
+        if (includeOptions && Object.keys(includeOptions).length > 0) {
+          console.log(
+            "DEBUG: processIncludes called with (optimized path):",
+            includeOptions
+          );
+          const result = await processIncludes(
+            this,
+            [...paginatedItems],
+            includeOptions
+          );
+          console.log(
+            "DEBUG: processIncludes result (optimized path):",
+            result.length,
+            "items"
+          );
+          return result;
+        }
+
+        return paginatedItems;
+      }
+
+      // Fallback: Scan + FilterExpression
+      const normalize = (op: string) => (op === "!=" ? "<>" : op);
+      const exprParts: string[] = [];
+      const names: Record<string, string> = {};
+      const vals: Record<string, any> = {};
+
+      conditions.forEach((c, i) => {
+        const nk = `#k${i}`;
+        names[nk] = c.key;
+
+        if (c.op === "in" || c.op === "not-in") {
+          // Manejar arrays para operadores IN/NOT-IN
+          const values = c.value as any[];
+          const placeholders = values
+            .map((_, idx) => `:v${i}_${idx}`)
+            .join(", ");
+          const expression =
+            c.op === "in"
+              ? `${nk} IN (${placeholders})`
+              : `NOT (${nk} IN (${placeholders}))`;
+          exprParts.push(expression);
+
+          // Agregar cada valor del array
+          values.forEach((val, idx) => {
+            vals[`:v${i}_${idx}`] = val;
+          });
+        } else {
+          // Operadores simples
+          const nv = `:v${i}`;
+          exprParts.push(`${nk} ${normalize(c.op)} ${nv}`);
+          vals[nv] = c.value;
+        }
+      });
+
+      const client = requireClient();
+      const res = await client.send(
+        new ScanCommand({
           TableName: meta.name,
-          KeyConditionExpression: `#K = :v`,
-          ExpressionAttributeNames: { "#K": key },
-          ExpressionAttributeValues: marshall({ ":v": value }),
-          Limit: limit,
-          ScanIndexForward: order === "ASC",
+          FilterExpression: exprParts.join(" AND "),
+          ExpressionAttributeNames: names,
+          ExpressionAttributeValues: marshall(vals),
         })
       );
+
       let items = (res.Items ?? []).map(
         (i) => new this(unmarshall(i) as InferAttributes<M>)
       );
-      return skip > 0 ? items.slice(skip, skip + limit) : items;
-    }
 
-    // Fallback: Scan + FilterExpression
-    const normalize = (op: string) => (op === "!=" ? "<>" : op);
-    const exprParts: string[] = [];
-    const names: Record<string, string> = {};
-    const vals: Record<string, any> = {};
+      // Ordenar items según el primer campo de condición
+      if (conditions.length > 0) {
+        const sortKey = conditions[0].key;
+        items.sort((a: any, b: any) => {
+          const aVal = a[sortKey];
+          const bVal = b[sortKey];
 
-    conditions.forEach((c, i) => {
-      const nk = `#k${i}`;
-      names[nk] = c.key;
-
-      if (c.op === "in" || c.op === "not-in") {
-        // Manejar arrays para operadores IN/NOT-IN
-        const values = c.value as any[];
-        const placeholders = values.map((_, idx) => `:v${i}_${idx}`).join(", ");
-        const expression =
-          c.op === "in"
-            ? `${nk} IN (${placeholders})`
-            : `NOT (${nk} IN (${placeholders}))`;
-        exprParts.push(expression);
-
-        // Agregar cada valor del array
-        values.forEach((val, idx) => {
-          vals[`:v${i}_${idx}`] = val;
+          // Ordenamiento numérico o string
+          if (typeof aVal === "number" && typeof bVal === "number") {
+            return order === "ASC" ? aVal - bVal : bVal - aVal;
+          } else {
+            const comparison = String(aVal).localeCompare(String(bVal));
+            return order === "ASC" ? comparison : -comparison;
+          }
         });
-      } else {
-        // Operadores simples
-        const nv = `:v${i}`;
-        exprParts.push(`${nk} ${normalize(c.op)} ${nv}`);
-        vals[nv] = c.value;
       }
-    });
 
-    const res = await client!.send(
-      new ScanCommand({
-        TableName: meta.name,
-        FilterExpression: exprParts.join(" AND "),
-        ExpressionAttributeNames: names,
-        ExpressionAttributeValues: marshall(vals),
-      })
-    );
+      const paginatedItems = items.slice(skip, skip + limit);
 
-    let items = (res.Items ?? []).map(
-      (i) => new this(unmarshall(i) as InferAttributes<M>)
-    );
+      // Procesar includes si están presentes
+      if (includeOptions && Object.keys(includeOptions).length > 0) {
+        console.log("DEBUG: processIncludes called with:", includeOptions);
+        const result = await processIncludes(
+          this,
+          [...paginatedItems],
+          includeOptions
+        );
+        console.log("DEBUG: processIncludes result:", result.length, "items");
+        return result;
+      }
 
-    // Ordenar items según el primer campo de condición
-    if (conditions.length > 0) {
-      const sortKey = conditions[0].key;
-      items.sort((a: any, b: any) => {
-        const aVal = a[sortKey];
-        const bVal = b[sortKey];
-
-        // Ordenamiento numérico o string
-        if (typeof aVal === "number" && typeof bVal === "number") {
-          return order === "ASC" ? aVal - bVal : bVal - aVal;
-        } else {
-          const comparison = String(aVal).localeCompare(String(bVal));
-          return order === "ASC" ? comparison : -comparison;
-        }
-      });
+      return paginatedItems;
+    } finally {
+      // Limpiar cache de relaciones al finalizar
+      clearRelationCache(this);
     }
-
-    return items.slice(skip, skip + limit);
   }
 
   /**
@@ -532,6 +582,19 @@ export default class Table<T extends {} = any> {
       order: "DESC",
     });
     return results[0] || undefined;
+  }
+
+  /**
+   * Obtiene los metadatos del modelo para uso interno del sistema de relaciones.
+   *
+   * @template M Instancia de la clase Table.
+   * @returns Los metadatos del wrapper del modelo.
+   */
+  static getMeta<M extends Table>(this: {
+    new (data: InferAttributes<M>): M;
+    prototype: M;
+  }): WrapperEntry {
+    return mustMeta(this);
   }
 
   /* --------------------------- helpers de instancia ---------------------- */
