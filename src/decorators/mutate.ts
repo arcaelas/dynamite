@@ -1,20 +1,9 @@
-/**
- * @file mutate.ts
- * @descripcion Decorador @Mutate para transformaciones
- * @autor Miguel Alejandro
- * @fecha 2025-01-27
- */
-
 import type { Column, Mutate } from "../core/wrapper";
 import { STORE, ensureColumn, ensureConfig } from "../core/wrapper";
 import { toSnakePlural } from "../utils/naming";
 
-/** Decorador para aplicar transformaciones automáticas a propiedades */
 export default function Mutate(fn: Mutate): PropertyDecorator {
-  typeof fn !== "function" &&
-    (() => {
-      throw new TypeError("@Mutate requiere función");
-    })();
+  if (typeof fn !== "function") throw new TypeError("@Mutate requiere función");
   return (target: object, prop: string | symbol): void => {
     const ctor = (target as any).constructor;
     const entry = ensureConfig(ctor, toSnakePlural(ctor.name));

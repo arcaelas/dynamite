@@ -168,4 +168,18 @@ export const getGlobalClient = (): DynamoDBClient => {
 /**
  * Check if global client is available
  */
-export const hasGlobalClient = (): boolean => globalClient !== undefined;
+export const hasGlobalClient = (): boolean => {
+  return globalClient !== undefined;
+};
+
+/**
+ * Require global client for Table operations (throws if not available)
+ */
+export const requireClient = (): DynamoDBClient => {
+  if (!globalClient) {
+    throw new Error(
+      "DynamoDB client no configurado. Use Dynamite.connect() primero."
+    );
+  }
+  return globalClient;
+};

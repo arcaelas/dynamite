@@ -1,14 +1,6 @@
-/**
- * @file validate.ts
- * @descripcion Decorador @Validate para validaciones
- * @autor Miguel Alejandro
- * @fecha 2025-01-27
- */
-
 import { Column, STORE, ensureColumn, ensureConfig } from "../core/wrapper";
 import { toSnakePlural } from "../utils/naming";
 
-/** Decorador para aplicar validaciones a propiedades */
 export default function Validate(
   validators:
     | ((v: unknown) => true | string)

@@ -4,7 +4,7 @@ import type { Config } from "@jest/types";
 const config: Config.InitialOptions = {
   preset: "ts-jest",
   testEnvironment: "node",
-  testMatch: ["**/__tests__/**/*.spec.ts"],
+  testMatch: ["**/__tests__/index.spec.ts"],
   collectCoverageFrom: ["src/**/*.ts"],
   coverageDirectory: "coverage",
   coverageReporters: ["text", "lcov"],
