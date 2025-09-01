@@ -50,7 +50,7 @@
     "build": "tsc && tsc-alias",
     "prepublishOnly": "yarn test && yarn build && npm version patch",
     "commit": "npm publish --access=public",
-    "postpublish": "find src -name \"*.js\" -name \"*.d.ts\" -delete"
+    "postpublish": "find src -type f -name '*.js' -o -name '*.d.ts' -o -name '*.map' | xargs rm"
   },
   "version": "1.0.11"
 }
