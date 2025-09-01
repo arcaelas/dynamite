@@ -27,14 +27,15 @@
     "typescript": "^5.8.3"
   },
   "files": [
-    "build/",
     "*.md",
     "*.json",
+    "src/**/*.js",
+    "src/**/*.d.ts",
     "!tsconfig.json"
   ],
   "homepage": "https://github.com/arcaelas/dynamite",
   "license": "ISC",
-  "main": "build/src/index.js",
+  "main": "src/index.js",
   "name": "@arcaelas/dynamite",
   "publishConfig": {
     "access": "public",
@@ -49,7 +50,7 @@
     "build": "tsc && tsc-alias",
     "prepublishOnly": "yarn test && yarn build && npm version patch",
     "commit": "npm publish --access=public",
-    "postpublish": "rm -rf build"
+    "postpublish": "find src -name \"*.js\" -name \"*.d.ts\" -delete"
   },
   "version": "1.0.10"
 }
