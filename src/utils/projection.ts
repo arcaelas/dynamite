@@ -5,6 +5,8 @@
  * @fecha 2025-01-27
  */
 
+import { mustMeta } from "../core/wrapper";
+
 /** Build DynamoDB ProjectionExpression */
 export const buildProjection = (
   attributes?: string[],
@@ -46,14 +48,14 @@ export const getSmartAttributes = (
   Model: any,
   scenario: "list" | "detail" | "minimal"
 ): string[] => {
-  const meta = Model.getMeta();
+  const meta = mustMeta(Model);
   const columns = Array.from(meta.columns.keys()) as string[];
 
   switch (scenario) {
     case "minimal":
       return columns.filter(
         (col: string) =>
-          meta.columns.get(col)?.isKey ||
+          meta.columns.get(col)?.primaryKey ||
           ["id", "name", "title", "email"].includes(col)
       );
 

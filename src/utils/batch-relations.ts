@@ -5,6 +5,8 @@
  * @fecha 2025-01-27
  */
 
+import { mustMeta } from "../core/wrapper";
+
 /** Cache multi-nivel con TTL */
 const relCache = new Map<string, Map<string, { data: any; expires: number }>>();
 
@@ -95,7 +97,7 @@ export const processIncludesBatch = async (
 ): Promise<any[]> => {
   if (!include || depth > 10 || !items.length) return items;
 
-  const meta = Model.getMeta();
+  const meta = mustMeta(Model);
 
   // Process all relations in parallel
   const relationPromises = Object.entries(include).map(
@@ -114,7 +116,7 @@ export const processIncludesBatch = async (
 
       // Assign relations to items
       items.forEach((item) => {
-        const key = item[relation.localKey];
+        const key = item[relation.localKey!];
         const related = relatedData.get(key);
 
         if (relation.type === "hasMany") {

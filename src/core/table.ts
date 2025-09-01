@@ -89,6 +89,10 @@ function buildConditionExpression(
     } else if (operator === "begins-with") {
       values[valueKey] = value;
       expressions.push(`begins_with(${nameKey}, ${valueKey})`);
+    } else if (operator === "!=") {
+      // DynamoDB uses <> for not equal
+      values[valueKey] = value;
+      expressions.push(`${nameKey} <> ${valueKey}`);
     } else {
       values[valueKey] = value;
       expressions.push(`${nameKey} ${operator} ${valueKey}`);
@@ -401,8 +405,12 @@ export default class Table<T = any> {
     // Parsear argumentos según la sobrecarga utilizada
     if (args.length === 2) {
       if (typeof args[0] === "string") {
-        // where(field, value)
-        filters = { [args[0]]: args[1] } as Partial<InferAttributes<M>>;
+        // where(field, value) - check if value is array for IN operation
+        const value = args[1];
+        if (Array.isArray(value)) {
+          operator = "in";
+        }
+        filters = { [args[0]]: value } as Partial<InferAttributes<M>>;
       } else {
         // where(filters, options)
         filters = args[0];
@@ -441,14 +449,27 @@ export default class Table<T = any> {
       TableName: meta.name,
     };
 
+    // Initialize ExpressionAttributeNames to avoid conflicts
+    if (!scanParams.ExpressionAttributeNames) {
+      scanParams.ExpressionAttributeNames = {};
+    }
+
     if (expression) {
       scanParams.FilterExpression = expression;
-      scanParams.ExpressionAttributeNames = names;
+      // Merge filter attribute names
+      Object.assign(scanParams.ExpressionAttributeNames, names);
       scanParams.ExpressionAttributeValues = marshall(values);
     }
 
     if (options.attributes) {
-      scanParams.ProjectionExpression = options.attributes.join(", ");
+      // Handle projection attributes with proper aliases
+      const projectionExpressions = options.attributes.map((attr, index) => {
+        const aliasKey = `#proj${index}`;
+        scanParams.ExpressionAttributeNames[aliasKey] = attr;
+        return aliasKey;
+      });
+      
+      scanParams.ProjectionExpression = projectionExpressions.join(", ");
     }
 
     // Ejecutar consulta con paginación
@@ -500,7 +521,18 @@ export default class Table<T = any> {
     }
 
     // Convertir a instancias del modelo
-    const instances = allItems.map((item) => new this(item));
+    const instances = allItems.map((item) => {
+      if (options.attributes) {
+        // When using attribute selection, create minimal instances
+        // only with the requested fields to avoid default value population
+        const instance = Object.create(this.prototype);
+        Object.assign(instance, item);
+        return instance;
+      } else {
+        // Normal instantiation with all defaults
+        return new this(item);
+      }
+    });
 
     // Procesar includes si están presentes
     if (options.include) {
