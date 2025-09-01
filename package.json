@@ -52,5 +52,5 @@
     "commit": "npm publish --access=public",
     "postpublish": "find src -name \"*.js\" -name \"*.d.ts\" -delete"
   },
-  "version": "1.0.10"
+  "version": "1.0.11"
 }
