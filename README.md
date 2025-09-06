@@ -401,26 +401,26 @@ Dynamite provides essential TypeScript types that are fundamental for proper mod
 
 #### `CreationOptional<T>`
 
-Marks a field as optional during creation but required in the actual model instance. Perfect for auto-generated fields like IDs, timestamps, or fields with default values.
+Marks a field as optional during creation but required in the actual model instance. **Always use for auto-generated fields**: `id` (with @PrimaryKey), `createdAt` (@CreatedAt), `updatedAt` (@UpdatedAt), and any field with @Default decorator.
 
 ```typescript
-import { Table, PrimaryKey, Default, CreatedAt, CreationOptional } from "@arcaelas/dynamite";
+import { Table, PrimaryKey, Default, CreatedAt, UpdatedAt, CreationOptional } from "@arcaelas/dynamite";
 
 class User extends Table<User> {
-  // Optional during creation (auto-generated)
+  // Always CreationOptional - auto-generated ID
   @PrimaryKey()
   @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
-  // Required field
+  // Required fields during creation
   declare name: string;
   declare email: string;
 
-  // Optional during creation (has default)
+  // Always CreationOptional - has default value
   @Default(() => "customer")
   declare role: CreationOptional<string>;
 
-  // Optional during creation (auto-set)
+  // Always CreationOptional - auto-set timestamps
   @CreatedAt()
   declare createdAt: CreationOptional<string>;
 
@@ -428,13 +428,19 @@ class User extends Table<User> {
   declare updatedAt: CreationOptional<string>;
 }
 
-// Usage - TypeScript knows these are optional
+// Usage - TypeScript knows exactly what's required
 const user = await User.create({
-  name: "John Doe",
-  email: "john@example.com"
-  // id, role, createdAt, updatedAt are optional
+  name: "John Doe",      // Required
+  email: "john@test.com" // Required
+  // id, role, createdAt, updatedAt are automatically optional
 });
 ```
+
+**Rule of thumb**: Use `CreationOptional<T>` for:
+- `@PrimaryKey()` with `@Default()` → Always optional
+- `@CreatedAt()` → Always optional  
+- `@UpdatedAt()` → Always optional
+- Any field with `@Default()` → Always optional
 
 #### `NonAttribute<T>`
 
@@ -640,24 +646,24 @@ import {
 } from "@arcaelas/dynamite";
 
 class User extends Table<User> {
-  // Auto-generated primary key
+  // Always CreationOptional - auto-generated primary key
   @PrimaryKey()
   @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
-  // Required fields
+  // Required fields during creation
   declare firstName: string;
   declare lastName: string;
   declare email: string;
 
-  // Optional fields with defaults
+  // Always CreationOptional - has default values
   @Default(() => "customer")
   declare role: CreationOptional<string>;
 
   @Default(() => true)
   declare active: CreationOptional<boolean>;
 
-  // Timestamps
+  // Always CreationOptional - auto-set timestamps
   @CreatedAt()
   declare createdAt: CreationOptional<string>;
 
@@ -692,18 +698,20 @@ class User extends Table<User> {
 }
 
 class Order extends Table<Order> {
+  // Always CreationOptional - auto-generated ID
   @PrimaryKey()
   @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
-  // Foreign key (required)
+  // Required field during creation
   declare user_id: string;
-
   declare total: number;
   
+  // Always CreationOptional - has default value
   @Default(() => "pending")
   declare status: CreationOptional<string>;
 
+  // Always CreationOptional - auto-set timestamp
   @CreatedAt()
   declare createdAt: CreationOptional<string>;
 
@@ -770,27 +778,31 @@ const getUserWithOrders = async (userId: string) => {
 ```typescript
 // TypeScript will infer all the correct types
 type UserCreationAttributes = {
-  firstName: string;
-  lastName: string; 
-  email: string;
-  role?: string;        // CreationOptional
-  active?: boolean;     // CreationOptional
-  // id, createdAt, updatedAt are automatically optional
+  firstName: string;    // Required
+  lastName: string;     // Required
+  email: string;        // Required
+  // All these are automatically optional (CreationOptional):
+  id?: string;          // @PrimaryKey + @Default
+  role?: string;        // @Default
+  active?: boolean;     // @Default  
+  createdAt?: string;   // @CreatedAt (always optional)
+  updatedAt?: string;   // @UpdatedAt (always optional)
 };
 
 type UserAttributes = {
-  id: string;
+  // All these exist in the instance (required after creation)
+  id: string;           // CreationOptional but exists after creation
   firstName: string;
   lastName: string;
   email: string;
-  role: string;
-  active: boolean;
-  createdAt: string;
-  updatedAt: string;
+  role: string;         // CreationOptional but exists after creation
+  active: boolean;      // CreationOptional but exists after creation
+  createdAt: string;    // CreationOptional but exists after creation  
+  updatedAt: string;    // CreationOptional but exists after creation
   fullName: string;     // NonAttribute computed property
   displayRole: string;  // NonAttribute computed property
-  orders: Order[];      // HasMany relationship
-  reviews: Review[];    // HasMany relationship
+  orders: Order[];      // HasMany relationship (NonAttribute)
+  reviews: Review[];    // HasMany relationship (NonAttribute)
 };
 
 // Perfect type safety
@@ -1041,6 +1053,7 @@ type InferAttributes<T> = {
 
 type CreationOptional<T> = T
 // Marks fields as optional during creation but required in instances
+// ALWAYS use for: @PrimaryKey + @Default, @CreatedAt, @UpdatedAt, any @Default
 // Example: @CreatedAt() declare createdAt: CreationOptional<string>
 
 type NonAttribute<T> = T  
