@@ -161,6 +161,7 @@ plugins:
           default: true
           name: English
           build: true
+          site_name: "Arcaelas Dynamite"
         - locale: es
           name: Español
           build: true
