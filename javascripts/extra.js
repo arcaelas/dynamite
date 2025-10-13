@@ -1,7 +1,9 @@
 // Language persistence
 document.addEventListener('DOMContentLoaded', function() {
   const saved_lang = localStorage.getItem('docs_language');
-  if (saved_lang && window.location.pathname.indexOf(`/${saved_lang}/`) === -1) {
+
+  // Don't redirect for default language (en)
+  if (saved_lang && saved_lang !== 'en' && window.location.pathname.indexOf(`/${saved_lang}/`) === -1) {
     const current_path = window.location.pathname;
     const base = current_path.split('/').slice(0, 2).join('/');
     window.location.href = `${base}/${saved_lang}/`;
