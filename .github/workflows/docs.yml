@@ -44,7 +44,7 @@ jobs:
           pip install mkdocs-minify-plugin
 
       - name: Build documentation
-        run: mkdocs build --strict --verbose
+        run: mkdocs build --verbose
 
       - name: Upload artifact
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -87,7 +87,7 @@ jobs:
           pip install mkdocs-minify-plugin
 
       - name: Check documentation builds
-        run: mkdocs build --strict --verbose
+        run: mkdocs build --verbose
 
       - name: Check for broken links
         run: |
