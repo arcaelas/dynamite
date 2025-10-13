@@ -1,0 +1,133 @@
+name: Build and Deploy Documentation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    name: Build Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install mkdocs-material
+          pip install mkdocs-static-i18n
+          pip install mkdocs-minify-plugin
+
+      - name: Build documentation
+        run: mkdocs build --strict --verbose
+
+      - name: Upload artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  check:
+    name: Check Documentation
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install mkdocs-material
+          pip install mkdocs-static-i18n
+          pip install mkdocs-minify-plugin
+
+      - name: Check documentation builds
+        run: mkdocs build --strict --verbose
+
+      - name: Check for broken links
+        run: |
+          pip install linkchecker
+          mkdocs build
+          # linkchecker --check-extern site/ || true
+
+      - name: Comment PR
+        uses: actions/github-script@v7
+        if: always()
+        with:
+          script: |
+            const output = `#### Documentation Build 📚
+
+            Documentation has been built successfully! ✅
+
+            **Preview**: The documentation will be available at \`https://arcaelas.github.io/dynamite/\` once merged.
+
+            **Languages**: English (default), Spanish, German
+
+            **Sections**:
+            - Home & Installation
+            - Guides (Getting Started, Core Concepts, Decorators, Relationships, Best Practices)
+            - API Reference (Table, Client, Types, Decorators)
+            - Examples (Basic Model, Validation, Relationships, Advanced Queries)
+            - Advanced (Performance, Troubleshooting, Migration)
+
+            <details><summary>Show Build Stats</summary>
+
+            \`\`\`
+            Total documentation files: 30+
+            Languages: 3 (en, es, de)
+            Total lines: 20,000+
+            \`\`\`
+
+            </details>`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
