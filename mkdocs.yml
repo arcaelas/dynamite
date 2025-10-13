@@ -1,0 +1,276 @@
+site_name: Arcaelas Dynamite
+site_description: Modern decorator-first ORM for DynamoDB with TypeScript support
+site_author: Arcaelas Insiders
+site_url: https://arcaelas.github.io/dynamite/
+
+repo_name: arcaelas/dynamite
+repo_url: https://github.com/arcaelas/dynamite
+edit_uri: edit/main/docs/
+
+copyright: Copyright &copy; 2025 Arcaelas Insiders
+
+theme:
+  name: material
+  language: en
+  palette:
+    # Light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+  font:
+    text: Roboto
+    code: Roboto Mono
+
+  icon:
+    repo: fontawesome/brands/github
+    edit: material/pencil
+    view: material/eye
+
+  features:
+    # Navigation
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.indexes
+    - navigation.top
+
+    # Search
+    - search.suggest
+    - search.highlight
+    - search.share
+
+    # Content
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - content.tooltips
+
+    # Table of contents
+    - toc.follow
+    - toc.integrate
+
+nav:
+  - Home:
+    - Welcome: index.md
+    - Installation: installation.md
+    - Changelog: CHANGELOG.md
+
+  - Guides:
+    - Getting Started: guides/getting-started.md
+    - Core Concepts: guides/core-concepts.md
+    - Decorators: guides/decorators.md
+    - Relationships: guides/relationships.md
+    - Best Practices: guides/best-practices.md
+
+  - API Reference:
+    - Table: api/table.md
+    - Client: api/client.md
+    - Types: api/types.md
+    - Decorators:
+      - Primary Key: api/decorators/primary-key.md
+      - Index Sort: api/decorators/index-sort.md
+      - Default: api/decorators/default.md
+      - Validate: api/decorators/validate.md
+      - Mutate: api/decorators/mutate.md
+      - Timestamps: api/decorators/timestamps.md
+      - Relationships: api/decorators/relationships.md
+
+  - Examples:
+    - Basic Model: examples/basic-model.md
+    - Validation: examples/validation.md
+    - Relationships: examples/relationships.md
+    - Advanced Queries: examples/advanced-queries.md
+
+  - Advanced:
+    - Performance: advanced/performance.md
+    - Troubleshooting: advanced/troubleshooting.md
+    - Migration Guide: advanced/migration.md
+
+markdown_extensions:
+  # Python Markdown
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 3
+
+  # Python Markdown Extensions
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+plugins:
+  - search:
+      lang:
+        - en
+        - es
+        - de
+      separator: '[\s\-\.]+'
+  - i18n:
+      docs_structure: suffix
+      fallback_to_default: true
+      reconfigure_material: true
+      reconfigure_search: true
+      languages:
+        - locale: en
+          default: true
+          name: English
+          build: true
+        - locale: es
+          name: Español
+          build: true
+          nav_translations:
+            Home: Inicio
+            Welcome: Bienvenida
+            Installation: Instalación
+            Changelog: Registro de Cambios
+            Guides: Guías
+            Getting Started: Comenzando
+            Core Concepts: Conceptos Básicos
+            Decorators: Decoradores
+            Relationships: Relaciones
+            Best Practices: Mejores Prácticas
+            API Reference: Referencia API
+            Table: Tabla
+            Client: Cliente
+            Types: Tipos
+            Primary Key: Llave Primaria
+            Index Sort: Índice de Ordenamiento
+            Default: Valor Predeterminado
+            Validate: Validación
+            Mutate: Mutación
+            Timestamps: Marcas de Tiempo
+            Examples: Ejemplos
+            Basic Model: Modelo Básico
+            Validation: Validación
+            Advanced Queries: Consultas Avanzadas
+            Advanced: Avanzado
+            Performance: Rendimiento
+            Troubleshooting: Solución de Problemas
+            Migration Guide: Guía de Migración
+        - locale: de
+          name: Deutsch
+          build: true
+          nav_translations:
+            Home: Startseite
+            Welcome: Willkommen
+            Installation: Installation
+            Changelog: Änderungsprotokoll
+            Guides: Anleitungen
+            Getting Started: Erste Schritte
+            Core Concepts: Kernkonzepte
+            Decorators: Dekoratoren
+            Relationships: Beziehungen
+            Best Practices: Best Practices
+            API Reference: API-Referenz
+            Table: Tabelle
+            Client: Client
+            Types: Typen
+            Primary Key: Primärschlüssel
+            Index Sort: Indexsortierung
+            Default: Standardwert
+            Validate: Validierung
+            Mutate: Mutation
+            Timestamps: Zeitstempel
+            Examples: Beispiele
+            Basic Model: Grundlegendes Modell
+            Validation: Validierung
+            Advanced Queries: Erweiterte Abfragen
+            Advanced: Erweitert
+            Performance: Leistung
+            Troubleshooting: Fehlerbehebung
+            Migration Guide: Migrationsanleitung
+  - minify:
+      minify_html: true
+      minify_js: true
+      minify_css: true
+      htmlmin_opts:
+        remove_comments: true
+
+extra:
+  alternate:
+    - name: English
+      link: /dynamite/
+      lang: en
+    - name: Español
+      link: /dynamite/es/
+      lang: es
+    - name: Deutsch
+      link: /dynamite/de/
+      lang: de
+
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/arcaelas/dynamite
+    - icon: fontawesome/brands/npm
+      link: https://www.npmjs.com/package/@arcaelas/dynamite
+
+  version:
+    provider: mike
+
+  analytics:
+    feedback:
+      title: Was this page helpful?
+      ratings:
+        - icon: material/emoticon-happy-outline
+          name: Very helpful
+          data: 1
+          note: >-
+            Thanks for your feedback!
+        - icon: material/emoticon-sad-outline
+          name: Could be better
+          data: 0
+          note: >-
+            Thanks for your feedback. Help us improve this page by
+            <a href="https://github.com/arcaelas/dynamite/issues/new" target="_blank" rel="noopener">opening an issue</a>.
+
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/extra.js
