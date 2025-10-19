@@ -43,9 +43,9 @@
     "url": "https://github.com/arcaelas/dynamite.git"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc-alias",
     "docs": "mkdocs gh-deploy --force",
-    "deploy": "npm publish --access=public",
+    "deploy": "npm version patch && npm publish --access=public",
     "prepublishOnly": "yarn build",
     "postpublish": "find src -type f \\( -name '*.js' -o -name '*.d.ts' -o -name '*.map' \\) -delete"
   },
