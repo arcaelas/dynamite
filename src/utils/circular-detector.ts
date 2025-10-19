@@ -50,13 +50,13 @@ class CircularReferenceDetector {
 
     // Detectar referencia circular directa
     if (visitedModels.has(modelName)) {
-      const path = Array.from(visitedModels).join(' -> ') + ` -> ${modelName}`;
+      const path = Array.from(visitedModels).join(" -> ") + ` -> ${modelName}`;
       throw new CircularReferenceError(
         `Circular reference detected in include path: ${path}`
       );
     }
 
-    if (!includeOptions || typeof includeOptions !== 'object') {
+    if (!includeOptions || typeof includeOptions !== "object") {
       return;
     }
 
@@ -64,7 +64,9 @@ class CircularReferenceDetector {
     newVisited.add(modelName);
 
     // Validar cada relación incluida
-    for (const [relationKey, relationOptions] of Object.entries(includeOptions)) {
+    for (const [relationKey, relationOptions] of Object.entries(
+      includeOptions
+    )) {
       if (this.config.trackingEnabled) {
         this.pathHistory.push({
           modelName,
@@ -74,11 +76,15 @@ class CircularReferenceDetector {
       }
 
       // Si la relación tiene sus propios includes, validar recursivamente
-      if (relationOptions && typeof relationOptions === 'object' && 'include' in relationOptions) {
+      if (
+        relationOptions &&
+        typeof relationOptions === "object" &&
+        "include" in relationOptions
+      ) {
         // Aquí necesitaríamos obtener el modelo target de la relación
         // Por simplicidad, usamos el relationKey como modelo (esto debería mejorar)
         const targetModelName = this.inferTargetModelName(relationKey);
-        
+
         this.validateIncludePath(
           targetModelName,
           (relationOptions as any).include,
@@ -114,7 +120,7 @@ class CircularReferenceDetector {
 
     for (const [modelName, model] of models.entries()) {
       const relations: string[] = [];
-      
+
       // Esto necesitaría acceso a los metadatos del modelo
       // Por ahora simulamos la extracción de relaciones
       const meta = model.getMeta?.();
@@ -186,14 +192,16 @@ class CircularReferenceDetector {
         );
       } else {
         suggestions.push(
-          `Complex circular reference detected: ${cycle.join(' -> ')}. Consider breaking the cycle at the weakest relationship.`
+          `Complex circular reference detected: ${cycle.join(
+            " -> "
+          )}. Consider breaking the cycle at the weakest relationship.`
         );
       }
     }
 
     if (cycles.length > 0) {
       suggestions.push(
-        'General: Use @NonAttribute for computed relationships or implement lazy loading to break cycles.'
+        "General: Use @NonAttribute for computed relationships or implement lazy loading to break cycles."
       );
     }
 
@@ -205,7 +213,10 @@ class CircularReferenceDetector {
    */
   private inferTargetModelName(relationKey: string): string {
     // Conversión simple: posts -> Post, user -> User
-    return relationKey.charAt(0).toUpperCase() + relationKey.slice(1).replace(/s$/, '');
+    return (
+      relationKey.charAt(0).toUpperCase() +
+      relationKey.slice(1).replace(/s$/, "")
+    );
   }
 
   /**
@@ -251,7 +262,7 @@ class CircularTracker {
     }
 
     if (this.visitedModels.has(modelName)) {
-      const cyclePath = this.currentPath.join(' -> ') + ` -> ${modelName}`;
+      const cyclePath = this.currentPath.join(" -> ") + ` -> ${modelName}`;
       throw new CircularReferenceError(
         `Circular reference detected: ${cyclePath}`
       );
@@ -280,18 +291,18 @@ interface ValidationResult {
 class CircularReferenceError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'CircularReferenceError';
+    this.name = "CircularReferenceError";
   }
 }
 
 // Instancia singleton
 const circularDetector = new CircularReferenceDetector();
 
-export { 
-  CircularReferenceDetector, 
-  CircularTracker, 
-  CircularReferenceError, 
+export {
+  CircularReferenceDetector,
+  CircularReferenceError,
+  CircularTracker,
   ValidationResult,
-  circularDetector 
+  circularDetector,
 };
 export default circularDetector;

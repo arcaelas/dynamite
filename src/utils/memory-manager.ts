@@ -32,7 +32,7 @@ class MemoryManager {
     this.unregisterCleanup(id);
 
     const task: CleanupTask = { id, cleanup };
-    
+
     if (intervalMs) {
       task.interval = setInterval(() => {
         try {
@@ -68,19 +68,20 @@ class MemoryManager {
     maxSize: number = this.maxCacheSize
   ): void {
     const now = Date.now();
-    
+
     // Remover entradas expiradas
     for (const [key, entry] of cache.entries()) {
-      if (entry.expires <= now || (now - entry.created) > this.maxCacheAge) {
+      if (entry.expires <= now || now - entry.created > this.maxCacheAge) {
         cache.delete(key);
       }
     }
 
     // Si aún excede el tamaño, remover las más antiguas
     if (cache.size > maxSize) {
-      const entries = Array.from(cache.entries())
-        .sort((a, b) => a[1].created - b[1].created);
-      
+      const entries = Array.from(cache.entries()).sort(
+        (a, b) => a[1].created - b[1].created
+      );
+
       const toRemove = entries.slice(0, cache.size - maxSize);
       toRemove.forEach(([key]) => cache.delete(key));
     }
@@ -106,8 +107,8 @@ class MemoryManager {
    * Cleanup completo al shutdown
    */
   shutdown(): void {
-    console.log('MemoryManager: Iniciando cleanup completo...');
-    
+    console.log("MemoryManager: Iniciando cleanup completo...");
+
     for (const [id, task] of this.cleanupTasks.entries()) {
       try {
         this.unregisterCleanup(id);
@@ -115,15 +116,15 @@ class MemoryManager {
         console.warn(`Error cleaning up task ${id}:`, error);
       }
     }
-    
+
     this.cleanupTasks.clear();
     this.forceGC();
   }
 }
 
 // Cleanup automático en shutdown
-process.on('SIGTERM', () => MemoryManager.getInstance().shutdown());
-process.on('SIGINT', () => MemoryManager.getInstance().shutdown());
-process.on('uncaughtException', () => MemoryManager.getInstance().shutdown());
+process.on("SIGTERM", () => MemoryManager.getInstance().shutdown());
+process.on("SIGINT", () => MemoryManager.getInstance().shutdown());
+process.on("uncaughtException", () => MemoryManager.getInstance().shutdown());
 
 export default MemoryManager;

@@ -18,27 +18,49 @@ export type NonAttribute<T> = T & { [NonAttributeBrand]?: true };
 export type CreationOptional<T> = T & { [CreationOptionalBrand]?: true };
 
 // Utilidades internas de tipos
-type IsBranded<T, Brand extends symbol> = keyof NonNullable<T> extends keyof Omit<NonNullable<T>, Brand> ? false : true;
+type IsBranded<
+  T,
+  Brand extends symbol
+> = keyof NonNullable<T> extends keyof Omit<NonNullable<T>, Brand>
+  ? false
+  : true;
 
-type KeepNullish<T> = { [K in keyof T as undefined extends T[K] ? K : never]: T[K] };
+type KeepNullish<T> = {
+  [K in keyof T as undefined extends T[K] ? K : never]: T[K];
+};
 
-type KeepFunction<T> = { [K in keyof T as T[K] extends (...args: any[]) => any ? K : never]: T[K] };
+type KeepFunction<T> = {
+  [K in keyof T as T[K] extends (...args: any[]) => any ? K : never]: T[K];
+};
 
-type KeepBranded<T, Brand extends symbol> = { [K in keyof T as IsBranded<T[K], Brand> extends true ? K : never]: T[K] };
+type KeepBranded<T, Brand extends symbol> = {
+  [K in keyof T as IsBranded<T[K], Brand> extends true ? K : never]: T[K];
+};
 
 // Detectores de relaciones
-type KeepHasMany<T> = { [K in keyof T as T[K] extends HasMany<any> ? K : never]: T[K] };
+type KeepHasMany<T> = {
+  [K in keyof T as T[K] extends HasMany<any> ? K : never]: T[K];
+};
 
-type KeepBelongsTo<T> = { [K in keyof T as T[K] extends BelongsTo<any> ? K : never]: T[K] };
+type KeepBelongsTo<T> = {
+  [K in keyof T as T[K] extends BelongsTo<any> ? K : never]: T[K];
+};
 
-type KeepRelation<T> = { [K in keyof T as T[K] extends HasMany<any> | BelongsTo<any> ? K : never]: T[K] };
+type KeepRelation<T> = {
+  [K in keyof T as T[K] extends HasMany<any> | BelongsTo<any>
+    ? K
+    : never]: T[K];
+};
 
 // Limpieza de tipos
 type RemoveNullish<T> = Omit<T, keyof KeepNullish<T>>;
 
 type RemoveFunction<T> = Omit<T, keyof KeepFunction<T>>;
 
-type RemoveBranded<T, Brand extends symbol> = Omit<T, keyof KeepBranded<T, Brand>>;
+type RemoveBranded<T, Brand extends symbol> = Omit<
+  T,
+  keyof KeepBranded<T, Brand>
+>;
 
 type RemoveHasMany<T> = Omit<T, keyof KeepHasMany<T>>;
 
@@ -47,17 +69,21 @@ type RemoveBelongsTo<T> = Omit<T, keyof KeepBelongsTo<T>>;
 type RemoveRelation<T> = Omit<T, keyof KeepRelation<T>>;
 
 // Atributos inferidos (excluye relaciones, non-attributes y funciones)
-export type InferAttributes<T> = { [K in keyof T as T[K] extends (...args: any[]) => any
-  ? never
-  : T[K] extends { [HasManyBrand]?: true }
-  ? never
-  : T[K] extends { [BelongsToBrand]?: true }
-  ? never
-  : T[K] extends { [NonAttributeBrand]?: true }
-  ? never
-  : K]: T[K] };
+export type InferAttributes<T> = {
+  [K in keyof T as T[K] extends (...args: any[]) => any
+    ? never
+    : T[K] extends { [HasManyBrand]?: true }
+    ? never
+    : T[K] extends { [BelongsToBrand]?: true }
+    ? never
+    : T[K] extends { [NonAttributeBrand]?: true }
+    ? never
+    : K]: T[K];
+};
 
-export type FilterableAttributes<T> = { [K in keyof InferAttributes<T>]: InferAttributes<T>[K] };
+export type FilterableAttributes<T> = {
+  [K in keyof InferAttributes<T>]: InferAttributes<T>[K];
+};
 
 // Resultados y opciones de include
 type SelectResult<T, A extends keyof T> = Pick<T, A>;
@@ -76,7 +102,11 @@ export type IncludeOptions = {
   order?: "ASC" | "DESC";
 };
 
-export type QueryResult<T, A extends keyof T = keyof T, I extends Record<string, any> = {}> = SelectResult<
+export type QueryResult<
+  T,
+  A extends keyof T = keyof T,
+  I extends Record<string, any> = {}
+> = SelectResult<
   T & { [K in keyof I]: K extends keyof T ? ResolveIncludeType<T, K> : never },
   A
 >;
@@ -88,7 +118,9 @@ export type WhereOptions<T> = {
   order?: "ASC" | "DESC";
   attributes?: (keyof FilterableAttributes<T>)[];
   include?: {
-    [K in keyof T]?: T[K] extends HasMany<any> | BelongsTo<any> ? IncludeOptions | {} : never;
+    [K in keyof T]?: T[K] extends HasMany<any> | BelongsTo<any>
+      ? IncludeOptions | {}
+      : never;
   };
 };
 
@@ -150,7 +182,9 @@ export type WhereQueryOptions<T> = {
   limit?: number;
   attributes?: (keyof InferAttributes<T>)[];
   include?: {
-    [K in keyof T]?: T[K] extends HasMany<any> | BelongsTo<any> ? IncludeRelationOptions | true : never;
+    [K in keyof T]?: T[K] extends HasMany<any> | BelongsTo<any>
+      ? IncludeRelationOptions | true
+      : never;
   };
 };
 

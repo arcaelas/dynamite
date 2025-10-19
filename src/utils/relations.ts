@@ -8,9 +8,9 @@
 // =============================================================================
 // IMPORTS
 // =============================================================================
+import { RelationMetadata } from "@type/index";
 import { ensureConfig, mustMeta } from "../core/wrapper";
 import { toSnakePlural } from "./naming";
-import { RelationMetadata } from "@type/index";
 
 // =============================================================================
 // TYPES
@@ -93,36 +93,38 @@ const batchLoadHasMany = async (
 ): Promise<BatchLoadResult> => {
   const { targetModel, foreignKey, localKey = "id" } = relation;
   const parent_keys = items.map((item) => item[localKey]).filter(Boolean);
-  
+
   if (!parent_keys.length) return new Map();
 
   // Build query with relation options
   let query = targetModel().where(foreignKey, "in", parent_keys);
-  
+
   // Apply additional filters if specified
   if (options.where) {
     const additionalFilters = Object.entries(options.where);
     for (const [key, value] of additionalFilters) {
       const currentResults = await query;
-      query = Promise.resolve(currentResults.filter((item: any) => item[key] === value));
+      query = Promise.resolve(
+        currentResults.filter((item: any) => item[key] === value)
+      );
     }
   }
-  
+
   const related_items = await query;
-  
-  // TODO: Apply attributes selection 
+
+  // TODO: Apply attributes selection
   // For now, skip attributes filtering to ensure basic relations work
   let processedItems = related_items;
-  
+
   // Apply other options like limit, order
   let filteredItems = processedItems;
-  
+
   if (options.order === "DESC") {
     filteredItems.sort((a: any, b: any) => b.id.localeCompare(a.id));
   } else if (options.order === "ASC") {
     filteredItems.sort((a: any, b: any) => a.id.localeCompare(b.id));
   }
-  
+
   if (options.limit) {
     filteredItems = filteredItems.slice(0, options.limit);
   }
@@ -145,15 +147,17 @@ const batchLoadBelongsTo = async (
 ): Promise<BatchLoadResult> => {
   const { targetModel, localKey, foreignKey = "id" } = relation;
   // Para BelongsTo: obtener valores de localKey (ej: category_id) de los items
-  const keys = items.map((item) => localKey ? item[localKey] : null).filter(Boolean);
+  const keys = items
+    .map((item) => (localKey ? item[localKey] : null))
+    .filter(Boolean);
 
   if (!keys.length) return new Map();
 
   // Buscar en targetModel donde foreignKey (ej: id) esté en los keys
   const fetched_items = await targetModel().where(foreignKey, "in", keys);
-  
+
   // TODO: Apply attributes selection
-  // For now, skip attributes filtering to ensure basic relations work  
+  // For now, skip attributes filtering to ensure basic relations work
   let processedItems = fetched_items;
 
   const results = new Map<string, any>();
@@ -198,7 +202,7 @@ export const processIncludes = async (
           value: relation.type === "hasMany" ? related || [] : related || null,
           writable: true,
           enumerable: true,
-          configurable: true
+          configurable: true,
         });
       });
 

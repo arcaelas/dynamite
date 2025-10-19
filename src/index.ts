@@ -29,11 +29,11 @@ export { belongsTo, hasMany } from "./utils/relations";
 // Tipos avanzados (reexportados desde @types)
 export type {
   BelongsTo as BelongsToType,
-  HasMany as HasManyType,
-  NonAttribute,
   CreationOptional,
-  InferAttributes,
   FilterableAttributes,
+  HasMany as HasManyType,
+  InferAttributes,
+  NonAttribute,
   QueryOperator,
   QueryResult,
   WhereOptions,

@@ -5,13 +5,17 @@
  * @fecha 2025-08-31
  */
 
-import { DynamoDBClient, TransactWriteItemsCommand, TransactGetItemsCommand } from '@aws-sdk/client-dynamodb';
-import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
-import throttleManager from './throttle-manager';
-import securityValidator from './security-validator';
+import {
+  DynamoDBClient,
+  TransactGetItemsCommand,
+  TransactWriteItemsCommand,
+} from "@aws-sdk/client-dynamodb";
+import { marshall, unmarshall } from "@aws-sdk/util-dynamodb";
+import securityValidator from "./security-validator";
+import throttleManager from "./throttle-manager";
 
 interface TransactionOperation {
-  type: 'create' | 'update' | 'delete';
+  type: "create" | "update" | "delete";
   tableName: string;
   key: Record<string, any>;
   item?: Record<string, any>;
@@ -23,7 +27,7 @@ interface TransactionSnapshot {
   id: string;
   operations: TransactionOperation[];
   timestamp: number;
-  status: 'pending' | 'committed' | 'rolled_back' | 'failed';
+  status: "pending" | "committed" | "rolled_back" | "failed";
 }
 
 interface TransactionConfig {
@@ -49,7 +53,7 @@ class TransactionManager {
   constructor(client: DynamoDBClient, config?: Partial<TransactionConfig>) {
     this.client = client;
     this.config = { ...TransactionManager.DEFAULT_CONFIG, ...config };
-    
+
     // Cleanup expired snapshots
     setInterval(() => this.cleanupExpiredSnapshots(), 300000); // 5 minutes
   }
@@ -59,16 +63,16 @@ class TransactionManager {
    */
   async beginTransaction(operations: TransactionOperation[]): Promise<string> {
     const transactionId = this.generateTransactionId();
-    
+
     // Validar operaciones
     this.validateOperations(operations);
-    
+
     // Crear snapshot del estado actual para rollback
     const snapshot = await this.createSnapshot(transactionId, operations);
-    
+
     this.activeTransactions.set(transactionId, snapshot);
     this.snapshots.set(transactionId, snapshot);
-    
+
     return transactionId;
   }
 
@@ -82,28 +86,27 @@ class TransactionManager {
     }
 
     try {
-      snapshot.status = 'pending';
-      
+      snapshot.status = "pending";
+
       // Agrupar operaciones en lotes de 25 (límite DynamoDB)
       const batches = this.splitIntoBatches(snapshot.operations);
-      
+
       for (const batch of batches) {
         await this.executeBatch(batch);
       }
-      
-      snapshot.status = 'committed';
+
+      snapshot.status = "committed";
       this.activeTransactions.delete(transactionId);
-      
     } catch (error: any) {
-      snapshot.status = 'failed';
-      
+      snapshot.status = "failed";
+
       // Intentar rollback automático
       try {
         await this.rollbackTransaction(transactionId);
       } catch (rollbackError) {
-        console.error('Rollback failed after commit error:', rollbackError);
+        console.error("Rollback failed after commit error:", rollbackError);
       }
-      
+
       throw new TransactionError(`Transaction commit failed: ${error.message}`);
     }
   }
@@ -114,24 +117,25 @@ class TransactionManager {
   async rollbackTransaction(transactionId: string): Promise<void> {
     const snapshot = this.snapshots.get(transactionId);
     if (!snapshot) {
-      throw new TransactionError(`Transaction snapshot ${transactionId} not found`);
+      throw new TransactionError(
+        `Transaction snapshot ${transactionId} not found`
+      );
     }
 
     try {
       // Crear operaciones inversas para rollback
       const rollbackOps = this.createRollbackOperations(snapshot.operations);
-      
+
       if (rollbackOps.length > 0) {
         const batches = this.splitIntoBatches(rollbackOps);
-        
+
         for (const batch of batches) {
           await this.executeBatch(batch);
         }
       }
-      
-      snapshot.status = 'rolled_back';
+
+      snapshot.status = "rolled_back";
       this.activeTransactions.delete(transactionId);
-      
     } catch (error: any) {
       throw new TransactionError(`Rollback failed: ${error.message}`);
     }
@@ -141,30 +145,32 @@ class TransactionManager {
    * Crear snapshot del estado actual para rollback
    */
   private async createSnapshot(
-    transactionId: string, 
+    transactionId: string,
     operations: TransactionOperation[]
   ): Promise<TransactionSnapshot> {
     const snapshot: TransactionSnapshot = {
       id: transactionId,
       operations: [],
       timestamp: Date.now(),
-      status: 'pending',
+      status: "pending",
     };
 
     // Para cada operación, guardar el estado actual del item
     for (const op of operations) {
       try {
-        const currentItem = await this.getCurrentItemState(op.tableName, op.key);
-        
+        const currentItem = await this.getCurrentItemState(
+          op.tableName,
+          op.key
+        );
+
         const snapshotOp: TransactionOperation = {
           ...op,
           rollbackData: currentItem || undefined, // Estado actual para rollback
         };
-        
+
         snapshot.operations.push(snapshotOp);
-        
       } catch (error: any) {
-        if (error.name !== 'ResourceNotFoundException') {
+        if (error.name !== "ResourceNotFoundException") {
           throw error;
         }
         // Item no existe, sin datos de rollback necesarios
@@ -179,16 +185,18 @@ class TransactionManager {
    * Obtener estado actual de un item
    */
   private async getCurrentItemState(
-    tableName: string, 
+    tableName: string,
     key: Record<string, any>
   ): Promise<Record<string, any> | null> {
     const params = {
-      TransactItems: [{
-        Get: {
-          TableName: tableName,
-          Key: marshall(key),
-        }
-      }]
+      TransactItems: [
+        {
+          Get: {
+            TableName: tableName,
+            Key: marshall(key),
+          },
+        },
+      ],
     };
 
     const result = await throttleManager.executeWithRetry(
@@ -196,48 +204,50 @@ class TransactionManager {
       `GetItem-${tableName}`
     );
 
-    return result.Responses?.[0]?.Item 
-      ? unmarshall(result.Responses[0].Item) 
+    return result.Responses?.[0]?.Item
+      ? unmarshall(result.Responses[0].Item)
       : null;
   }
 
   /**
    * Crear operaciones inversas para rollback
    */
-  private createRollbackOperations(operations: TransactionOperation[]): TransactionOperation[] {
+  private createRollbackOperations(
+    operations: TransactionOperation[]
+  ): TransactionOperation[] {
     const rollbackOps: TransactionOperation[] = [];
 
     // Procesar en orden inverso
     for (let i = operations.length - 1; i >= 0; i--) {
       const op = operations[i];
-      
+
       switch (op.type) {
-        case 'create':
+        case "create":
           // Para rollback de create: delete el item
           rollbackOps.push({
-            type: 'delete',
+            type: "delete",
             tableName: op.tableName,
             key: op.key,
           });
           break;
-          
-        case 'update':
+
+        case "update":
           if (op.rollbackData) {
             // Para rollback de update: restore estado anterior
             rollbackOps.push({
-              type: 'update',
+              type: "update",
               tableName: op.tableName,
               key: op.key,
               item: op.rollbackData,
             });
           }
           break;
-          
-        case 'delete':
+
+        case "delete":
           if (op.rollbackData) {
             // Para rollback de delete: recrear el item
             rollbackOps.push({
-              type: 'create',
+              type: "create",
               tableName: op.tableName,
               key: op.key,
               item: op.rollbackData,
@@ -253,30 +263,32 @@ class TransactionManager {
   /**
    * Ejecutar lote de operaciones usando TransactWrite
    */
-  private async executeBatch(operations: TransactionOperation[]): Promise<void> {
-    const transactItems = operations.map(op => {
+  private async executeBatch(
+    operations: TransactionOperation[]
+  ): Promise<void> {
+    const transactItems = operations.map((op) => {
       securityValidator.validateItemSize(op.item || op.key);
-      
+
       switch (op.type) {
-        case 'create':
-        case 'update':
+        case "create":
+        case "update":
           return {
             Put: {
               TableName: op.tableName,
               Item: marshall(op.item!, { removeUndefinedValues: true }),
               ConditionExpression: op.conditionExpression,
-            }
+            },
           };
-          
-        case 'delete':
+
+        case "delete":
           return {
             Delete: {
               TableName: op.tableName,
               Key: marshall(op.key),
               ConditionExpression: op.conditionExpression,
-            }
+            },
           };
-          
+
         default:
           throw new TransactionError(`Unknown operation type: ${op.type}`);
       }
@@ -288,21 +300,23 @@ class TransactionManager {
 
     await throttleManager.executeWithRetry(
       () => this.client.send(command),
-      'TransactWrite'
+      "TransactWrite"
     );
   }
 
   /**
    * Dividir operaciones en lotes según límites DynamoDB
    */
-  private splitIntoBatches(operations: TransactionOperation[]): TransactionOperation[][] {
+  private splitIntoBatches(
+    operations: TransactionOperation[]
+  ): TransactionOperation[][] {
     const batches: TransactionOperation[][] = [];
     const batchSize = this.config.maxOperationsPerTransaction;
-    
+
     for (let i = 0; i < operations.length; i += batchSize) {
       batches.push(operations.slice(i, i + batchSize));
     }
-    
+
     return batches;
   }
 
@@ -311,7 +325,9 @@ class TransactionManager {
    */
   private validateOperations(operations: TransactionOperation[]): void {
     if (operations.length === 0) {
-      throw new TransactionError('Transaction must contain at least one operation');
+      throw new TransactionError(
+        "Transaction must contain at least one operation"
+      );
     }
 
     if (operations.length > this.config.maxOperationsPerTransaction * 10) {
@@ -321,12 +337,14 @@ class TransactionManager {
     for (const op of operations) {
       // Validar estructura de la operación
       if (!op.tableName || !op.key) {
-        throw new TransactionError('Invalid operation: missing tableName or key');
+        throw new TransactionError(
+          "Invalid operation: missing tableName or key"
+        );
       }
 
       // Validar datos de seguridad
       securityValidator.validateQueryFilters(op.key);
-      
+
       if (op.item) {
         securityValidator.validateValue(op.item);
       }
@@ -339,18 +357,18 @@ class TransactionManager {
   private cleanupExpiredSnapshots(): void {
     const now = Date.now();
     const expired: string[] = [];
-    
+
     for (const [id, snapshot] of this.snapshots.entries()) {
       if (now - snapshot.timestamp > this.config.snapshotTTL) {
         expired.push(id);
       }
     }
-    
-    expired.forEach(id => {
+
+    expired.forEach((id) => {
       this.snapshots.delete(id);
       this.activeTransactions.delete(id);
     });
-    
+
     if (expired.length > 0) {
       console.log(`Cleaned up ${expired.length} expired transaction snapshots`);
     }
@@ -378,14 +396,14 @@ class TransactionManager {
 class TransactionError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'TransactionError';
+    this.name = "TransactionError";
   }
 }
 
-export { 
-  TransactionManager, 
-  TransactionOperation, 
-  TransactionSnapshot, 
+export {
+  TransactionConfig,
   TransactionError,
-  TransactionConfig 
+  TransactionManager,
+  TransactionOperation,
+  TransactionSnapshot,
 };

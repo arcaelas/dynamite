@@ -20,18 +20,29 @@ class SecurityValidator {
     maxStringLength: 10000,
     maxArrayLength: 1000,
     maxNestedDepth: 10,
-    allowedOperators: ["=", "!=", "<", "<=", ">", ">=", "in", "not-in", "contains", "begins-with"],
+    allowedOperators: [
+      "=",
+      "!=",
+      "<",
+      "<=",
+      ">",
+      ">=",
+      "in",
+      "not-in",
+      "contains",
+      "begins-with",
+    ],
     blockedPatterns: [
-      /\$\w+/g,                    // MongoDB operators
-      /javascript:/gi,              // JavaScript injection
+      /\$\w+/g, // MongoDB operators
+      /javascript:/gi, // JavaScript injection
       /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, // Script tags
-      /eval\s*\(/gi,               // eval() calls
-      /function\s*\(/gi,           // function declarations
-      /\{\s*\$\w+/g,               // NoSQL operators
-      /\.\.\//g,                   // Path traversal
-      /union\s+select/gi,          // SQL injection patterns
-      /drop\s+table/gi,            // Destructive SQL
-    ]
+      /eval\s*\(/gi, // eval() calls
+      /function\s*\(/gi, // function declarations
+      /\{\s*\$\w+/g, // NoSQL operators
+      /\.\.\//g, // Path traversal
+      /union\s+select/gi, // SQL injection patterns
+      /drop\s+table/gi, // Destructive SQL
+    ],
   };
 
   private config: SecurityConfig;
@@ -44,23 +55,27 @@ class SecurityValidator {
    * Validar nombre de atributo/tabla
    */
   validateAttributeName(name: string): void {
-    if (!name || typeof name !== 'string') {
-      throw new SecurityError('Nombre de atributo inválido');
+    if (!name || typeof name !== "string") {
+      throw new SecurityError("Nombre de atributo inválido");
     }
 
     if (name.length > 255) {
-      throw new SecurityError('Nombre de atributo muy largo');
+      throw new SecurityError("Nombre de atributo muy largo");
     }
 
     // Solo permitir caracteres alfanuméricos, guiones y guiones bajos
     if (!/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(name)) {
-      throw new SecurityError('Nombre de atributo contiene caracteres inválidos');
+      throw new SecurityError(
+        "Nombre de atributo contiene caracteres inválidos"
+      );
     }
 
     // Verificar patrones bloqueados
     for (const pattern of this.config.blockedPatterns) {
       if (pattern.test(name)) {
-        throw new SecurityError('Nombre de atributo contiene patrones peligrosos');
+        throw new SecurityError(
+          "Nombre de atributo contiene patrones peligrosos"
+        );
       }
     }
   }
@@ -80,7 +95,7 @@ class SecurityValidator {
    */
   validateValue(value: any, depth = 0): any {
     if (depth > this.config.maxNestedDepth) {
-      throw new SecurityError('Estructura de datos anidada muy profunda');
+      throw new SecurityError("Estructura de datos anidada muy profunda");
     }
 
     // Valores null/undefined son válidos
@@ -89,14 +104,14 @@ class SecurityValidator {
     }
 
     // Validar strings
-    if (typeof value === 'string') {
+    if (typeof value === "string") {
       if (value.length > this.config.maxStringLength) {
-        throw new SecurityError('String muy largo');
+        throw new SecurityError("String muy largo");
       }
-      
+
       for (const pattern of this.config.blockedPatterns) {
         if (pattern.test(value)) {
-          throw new SecurityError('Valor contiene patrones peligrosos');
+          throw new SecurityError("Valor contiene patrones peligrosos");
         }
       }
       return value;
@@ -105,14 +120,14 @@ class SecurityValidator {
     // Validar arrays
     if (Array.isArray(value)) {
       if (value.length > this.config.maxArrayLength) {
-        throw new SecurityError('Array muy largo');
+        throw new SecurityError("Array muy largo");
       }
-      
-      return value.map(item => this.validateValue(item, depth + 1));
+
+      return value.map((item) => this.validateValue(item, depth + 1));
     }
 
     // Validar objetos
-    if (typeof value === 'object') {
+    if (typeof value === "object") {
       const validated: any = {};
       for (const [key, val] of Object.entries(value)) {
         this.validateAttributeName(key);
@@ -122,7 +137,7 @@ class SecurityValidator {
     }
 
     // Números, booleans son válidos
-    if (typeof value === 'number' || typeof value === 'boolean') {
+    if (typeof value === "number" || typeof value === "boolean") {
       return value;
     }
 
@@ -134,7 +149,7 @@ class SecurityValidator {
    */
   validateQueryFilters(filters: Record<string, any>): Record<string, any> {
     const validated: Record<string, any> = {};
-    
+
     for (const [key, value] of Object.entries(filters)) {
       this.validateAttributeName(key);
       validated[key] = this.validateValue(value);
@@ -147,12 +162,12 @@ class SecurityValidator {
    * Sanitizar string para DynamoDB
    */
   sanitizeString(input: string): string {
-    if (typeof input !== 'string') {
+    if (typeof input !== "string") {
       return String(input);
     }
 
     return input
-      .replace(/[\x00-\x1F\x7F]/g, '') // Remover caracteres de control
+      .replace(/[\x00-\x1F\x7F]/g, "") // Remover caracteres de control
       .trim()
       .slice(0, this.config.maxStringLength);
   }
@@ -163,9 +178,11 @@ class SecurityValidator {
   validateItemSize(item: any): void {
     const size = JSON.stringify(item).length;
     const maxSize = 400 * 1024; // 400KB en bytes
-    
+
     if (size > maxSize) {
-      throw new SecurityError(`Item muy grande: ${size} bytes (máximo: ${maxSize} bytes)`);
+      throw new SecurityError(
+        `Item muy grande: ${size} bytes (máximo: ${maxSize} bytes)`
+      );
     }
   }
 }
@@ -173,12 +190,12 @@ class SecurityValidator {
 class SecurityError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'SecurityError';
+    this.name = "SecurityError";
   }
 }
 
 // Instancia singleton
 const securityValidator = new SecurityValidator();
 
-export { SecurityValidator, SecurityError, securityValidator };
+export { SecurityError, SecurityValidator, securityValidator };
 export default securityValidator;
