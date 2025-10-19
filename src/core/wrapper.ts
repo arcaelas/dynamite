@@ -7,23 +7,23 @@
 
 import type { Column, WrapperEntry } from "@type/index";
 export type {
-  Column,
-  WrapperEntry,
-  HasMany,
   BelongsTo,
-  NonAttribute,
+  Column,
   CreationOptional,
-  InferAttributes,
   FilterableAttributes,
-  QueryResult,
-  WhereOptions,
-  WhereOptionsWithoutWhere,
-  QueryOperator,
+  HasMany,
   IncludeOptions,
   IncludeRelationOptions,
-  WhereQueryOptions,
+  InferAttributes,
   Mutate,
+  NonAttribute,
+  QueryOperator,
+  QueryResult,
   Validate,
+  WhereOptions,
+  WhereOptionsWithoutWhere,
+  WhereQueryOptions,
+  WrapperEntry,
 } from "@type/index";
 export const STORE: unique symbol = Symbol("dynamite:values");
 const wrapper = new Map<Function, WrapperEntry>();

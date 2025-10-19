@@ -11,17 +11,14 @@ import {
   ScanCommand,
 } from "@aws-sdk/client-dynamodb";
 import { marshall, unmarshall } from "@aws-sdk/util-dynamodb";
-import { processIncludes } from "../utils/relations";
-import { requireClient } from "./client";
 import type {
-  BelongsTo,
-  HasMany,
   InferAttributes,
   QueryOperator,
-  WrapperEntry,
-  IncludeRelationOptions,
   WhereQueryOptions,
+  WrapperEntry,
 } from "@type/index";
+import { processIncludes } from "../utils/relations";
+import { requireClient } from "./client";
 import { mustMeta, STORE } from "./wrapper";
 
 /** Tipos importados desde @types */
@@ -468,7 +465,7 @@ export default class Table<T = any> {
         scanParams.ExpressionAttributeNames[aliasKey] = attr;
         return aliasKey;
       });
-      
+
       scanParams.ProjectionExpression = projectionExpressions.join(", ");
     }
 

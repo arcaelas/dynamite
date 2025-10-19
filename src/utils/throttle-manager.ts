@@ -23,10 +23,10 @@ interface ThrottleStats {
 class ThrottleManager {
   private static readonly DEFAULT_CONFIG: RetryConfig = {
     maxRetries: 10,
-    baseDelay: 100,        // 100ms base delay
-    maxDelay: 30000,       // 30s max delay
-    backoffMultiplier: 2,  // Exponential backoff
-    jitterFactor: 0.1,     // 10% jitter
+    baseDelay: 100, // 100ms base delay
+    maxDelay: 30000, // 30s max delay
+    backoffMultiplier: 2, // Exponential backoff
+    jitterFactor: 0.1, // 10% jitter
   };
 
   private config: RetryConfig;
@@ -51,7 +51,7 @@ class ThrottleManager {
    */
   async executeWithRetry<T>(
     operation: () => Promise<T>,
-    operationName: string = 'DynamoDB Operation'
+    operationName: string = "DynamoDB Operation"
   ): Promise<T> {
     const startTime = Date.now();
     let lastError: Error | null = null;
@@ -64,16 +64,15 @@ class ThrottleManager {
         await this.acquireConcurrencySlot();
 
         const result = await operation();
-        
+
         this.releaseConcurrencySlot();
         this.updateLatencyStats(Date.now() - startTime);
-        
+
         if (attempt > 0) {
           console.log(`✅ ${operationName} succeeded after ${attempt} retries`);
         }
-        
-        return result;
 
+        return result;
       } catch (error: any) {
         this.releaseConcurrencySlot();
         lastError = error;
@@ -86,14 +85,23 @@ class ThrottleManager {
         this.stats.throttledRequests++;
 
         if (attempt === this.config.maxRetries) {
-          console.error(`❌ ${operationName} failed after ${this.config.maxRetries} retries:`, error.message);
-          throw new Error(`Max retries exceeded for ${operationName}: ${error.message}`);
+          console.error(
+            `❌ ${operationName} failed after ${this.config.maxRetries} retries:`,
+            error.message
+          );
+          throw new Error(
+            `Max retries exceeded for ${operationName}: ${error.message}`
+          );
         }
 
         this.stats.retriedRequests++;
         const delay = this.calculateDelay(attempt);
-        
-        console.warn(`⚠️  ${operationName} throttled, retrying in ${delay}ms (attempt ${attempt + 1}/${this.config.maxRetries})`);
+
+        console.warn(
+          `⚠️  ${operationName} throttled, retrying in ${delay}ms (attempt ${
+            attempt + 1
+          }/${this.config.maxRetries})`
+        );
         await this.sleep(delay);
       }
     }
@@ -108,13 +116,13 @@ class ThrottleManager {
     if (!error.name) return false;
 
     const retryableErrors = [
-      'ProvisionedThroughputExceededException',
-      'ThrottlingException',
-      'RequestLimitExceeded',
-      'ServiceUnavailableException',
-      'InternalServerError',
-      'NetworkingError',
-      'TimeoutError',
+      "ProvisionedThroughputExceededException",
+      "ThrottlingException",
+      "RequestLimitExceeded",
+      "ServiceUnavailableException",
+      "InternalServerError",
+      "NetworkingError",
+      "TimeoutError",
     ];
 
     return retryableErrors.includes(error.name) || error.retryable === true;
@@ -124,12 +132,13 @@ class ThrottleManager {
    * Calcular delay con exponential backoff + jitter
    */
   private calculateDelay(attempt: number): number {
-    const exponentialDelay = this.config.baseDelay * Math.pow(this.config.backoffMultiplier, attempt);
+    const exponentialDelay =
+      this.config.baseDelay * Math.pow(this.config.backoffMultiplier, attempt);
     const cappedDelay = Math.min(exponentialDelay, this.config.maxDelay);
-    
+
     // Agregar jitter para evitar "thundering herd"
     const jitter = cappedDelay * this.config.jitterFactor * Math.random();
-    
+
     return Math.floor(cappedDelay + jitter);
   }
 
@@ -174,11 +183,11 @@ class ThrottleManager {
 
     while (this.requestQueue.length > 0) {
       const operation = this.requestQueue.shift()!;
-      
+
       try {
         await operation();
       } catch (error) {
-        console.error('Queue operation failed:', error);
+        console.error("Queue operation failed:", error);
       }
 
       // Rate limiting: pequeña pausa entre operaciones
@@ -211,12 +220,13 @@ class ThrottleManager {
 
   private updateLatencyStats(latency: number): void {
     const totalRequests = this.stats.totalRequests;
-    this.stats.averageLatency = 
-      ((this.stats.averageLatency * (totalRequests - 1)) + latency) / totalRequests;
+    this.stats.averageLatency =
+      (this.stats.averageLatency * (totalRequests - 1) + latency) /
+      totalRequests;
   }
 
   private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /**
@@ -238,8 +248,14 @@ class ThrottleManager {
   } {
     const stats = this.getStats();
     return {
-      throttleRate: stats.totalRequests > 0 ? stats.throttledRequests / stats.totalRequests : 0,
-      retryRate: stats.totalRequests > 0 ? stats.retriedRequests / stats.totalRequests : 0,
+      throttleRate:
+        stats.totalRequests > 0
+          ? stats.throttledRequests / stats.totalRequests
+          : 0,
+      retryRate:
+        stats.totalRequests > 0
+          ? stats.retriedRequests / stats.totalRequests
+          : 0,
       avgLatency: stats.averageLatency,
       concurrentRequests: this.concurrentRequests,
       queueSize: this.requestQueue.length,
@@ -250,5 +266,5 @@ class ThrottleManager {
 // Instancia singleton
 const throttleManager = new ThrottleManager();
 
-export { ThrottleManager, RetryConfig, ThrottleStats, throttleManager };
+export { RetryConfig, ThrottleManager, ThrottleStats, throttleManager };
 export default throttleManager;
