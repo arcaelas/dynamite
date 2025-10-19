@@ -1,19 +1,19 @@
 {
-  "include": ["src/**/*"],
+  "include": ["src"],
   "compilerOptions": {
     "target": "ES2022",
     "module": "commonjs",
     "moduleResolution": "node",
-    "baseUrl": ".",
+    "baseUrl": "./",
     "paths": {
-      "~/*": ["src/*"],
-      "@type/*": ["src/@types/*"],
+      "~/*": ["src/*"]
     },
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "noImplicitAny": false,
     "skipLibCheck": true,
+    "outDir": "./src",
     "declaration": true,
     "sourceMap": true,
     "resolveJsonModule": true,
