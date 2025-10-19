@@ -27,11 +27,8 @@
     "typescript": "^5.8.3"
   },
   "files": [
-    "*.md",
-    "*.json",
     "src/**/*.js",
-    "src/**/*.d.ts",
-    "!tsconfig.json"
+    "src/**/*.d.ts"
   ],
   "homepage": "https://github.com/arcaelas/dynamite",
   "license": "ISC",
@@ -46,11 +43,10 @@
     "url": "https://github.com/arcaelas/dynamite.git"
   },
   "scripts": {
-    "test": "jest",
-    "build": "tsc && tsc-alias",
-    "prepublishOnly": "yarn test && yarn build && npm version patch",
-    "commit": "npm publish --access=public",
-    "postpublish": "find src __tests__ -type f -name '*.js' -o -name '*.d.ts' -o -name '*.map' | xargs rm"
+    "build": "tsc",
+    "docs": "mkdocs gh-deploy --force",
+    "deploy": "npm publish --access=public",
+    "postpublish": "find src -type f \\( -name '*.js' -o -name '*.d.ts' -o -name '*.map' \\) -delete"
   },
   "version": "1.0.13"
 }

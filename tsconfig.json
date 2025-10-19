@@ -1,15 +1,13 @@
 {
-  "include": ["src/**/*", "__tests__/**/*"],
+  "include": ["src/**/*"],
   "compilerOptions": {
     "target": "ES2022",
     "module": "commonjs",
     "moduleResolution": "node",
-    "baseUrl": "./",
+    "baseUrl": ".",
     "paths": {
+      "~/*": ["src/*"],
       "@type/*": ["src/@types/*"],
-      "@controller/*": ["src/app/controllers/*"],
-      "@provider/*": ["src/app/providers/*"],
-      "@resource/*": ["src/resources/*"]
     },
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
