@@ -46,6 +46,7 @@
     "build": "tsc",
     "docs": "mkdocs gh-deploy --force",
     "deploy": "npm publish --access=public",
+    "prepublishOnly": "yarn build",
     "postpublish": "find src -type f \\( -name '*.js' -o -name '*.d.ts' -o -name '*.map' \\) -delete"
   },
   "version": "1.0.13"
