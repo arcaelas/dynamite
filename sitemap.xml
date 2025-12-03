@@ -33,22 +33,6 @@
         <xhtml:link rel="alternate" hreflang="es" href="https://arcaelas.github.io/dynamite/es/advanced/migration/"/>
     </url>
     <url>
-        <loc>https://arcaelas.github.io/dynamite/advanced/performance/</loc>
-        <lastmod>2025-12-03</lastmod>
-        <changefreq>daily</changefreq>
-        <xhtml:link rel="alternate" hreflang="en" href="https://arcaelas.github.io/dynamite/advanced/performance/"/>
-        <xhtml:link rel="alternate" hreflang="de" href="https://arcaelas.github.io/dynamite/de/advanced/performance/"/>
-        <xhtml:link rel="alternate" hreflang="es" href="https://arcaelas.github.io/dynamite/es/advanced/performance/"/>
-    </url>
-    <url>
-        <loc>https://arcaelas.github.io/dynamite/advanced/troubleshooting/</loc>
-        <lastmod>2025-12-03</lastmod>
-        <changefreq>daily</changefreq>
-        <xhtml:link rel="alternate" hreflang="en" href="https://arcaelas.github.io/dynamite/advanced/troubleshooting/"/>
-        <xhtml:link rel="alternate" hreflang="de" href="https://arcaelas.github.io/dynamite/de/advanced/troubleshooting/"/>
-        <xhtml:link rel="alternate" hreflang="es" href="https://arcaelas.github.io/dynamite/es/advanced/troubleshooting/"/>
-    </url>
-    <url>
         <loc>https://arcaelas.github.io/dynamite/api/client/</loc>
         <lastmod>2025-12-03</lastmod>
         <changefreq>daily</changefreq>
@@ -103,14 +87,6 @@
         <xhtml:link rel="alternate" hreflang="en" href="https://arcaelas.github.io/dynamite/examples/validation/"/>
         <xhtml:link rel="alternate" hreflang="de" href="https://arcaelas.github.io/dynamite/de/examples/validation/"/>
         <xhtml:link rel="alternate" hreflang="es" href="https://arcaelas.github.io/dynamite/es/examples/validation/"/>
-    </url>
-    <url>
-        <loc>https://arcaelas.github.io/dynamite/guides/best-practices/</loc>
-        <lastmod>2025-12-03</lastmod>
-        <changefreq>daily</changefreq>
-        <xhtml:link rel="alternate" hreflang="en" href="https://arcaelas.github.io/dynamite/guides/best-practices/"/>
-        <xhtml:link rel="alternate" hreflang="de" href="https://arcaelas.github.io/dynamite/de/guides/best-practices/"/>
-        <xhtml:link rel="alternate" hreflang="es" href="https://arcaelas.github.io/dynamite/es/guides/best-practices/"/>
     </url>
     <url>
         <loc>https://arcaelas.github.io/dynamite/guides/core-concepts/</loc>
@@ -177,22 +153,6 @@
         <xhtml:link rel="alternate" hreflang="en" href="https://arcaelas.github.io/dynamite/advanced/migration/"/>
     </url>
     <url>
-        <loc>https://arcaelas.github.io/dynamite/es/advanced/performance/</loc>
-        <lastmod>2025-12-03</lastmod>
-        <changefreq>daily</changefreq>
-        <xhtml:link rel="alternate" hreflang="es" href="https://arcaelas.github.io/dynamite/es/advanced/performance/"/>
-        <xhtml:link rel="alternate" hreflang="de" href="https://arcaelas.github.io/dynamite/de/advanced/performance/"/>
-        <xhtml:link rel="alternate" hreflang="en" href="https://arcaelas.github.io/dynamite/advanced/performance/"/>
-    </url>
-    <url>
-        <loc>https://arcaelas.github.io/dynamite/es/advanced/troubleshooting/</loc>
-        <lastmod>2025-12-03</lastmod>
-        <changefreq>daily</changefreq>
-        <xhtml:link rel="alternate" hreflang="es" href="https://arcaelas.github.io/dynamite/es/advanced/troubleshooting/"/>
-        <xhtml:link rel="alternate" hreflang="de" href="https://arcaelas.github.io/dynamite/de/advanced/troubleshooting/"/>
-        <xhtml:link rel="alternate" hreflang="en" href="https://arcaelas.github.io/dynamite/advanced/troubleshooting/"/>
-    </url>
-    <url>
         <loc>https://arcaelas.github.io/dynamite/es/api/client/</loc>
         <lastmod>2025-12-03</lastmod>
         <changefreq>daily</changefreq>
@@ -247,14 +207,6 @@
         <xhtml:link rel="alternate" hreflang="es" href="https://arcaelas.github.io/dynamite/es/examples/validation/"/>
         <xhtml:link rel="alternate" hreflang="de" href="https://arcaelas.github.io/dynamite/de/examples/validation/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://arcaelas.github.io/dynamite/examples/validation/"/>
-    </url>
-    <url>
-        <loc>https://arcaelas.github.io/dynamite/es/guides/best-practices/</loc>
-        <lastmod>2025-12-03</lastmod>
-        <changefreq>daily</changefreq>
-        <xhtml:link rel="alternate" hreflang="es" href="https://arcaelas.github.io/dynamite/es/guides/best-practices/"/>
-        <xhtml:link rel="alternate" hreflang="de" href="https://arcaelas.github.io/dynamite/de/guides/best-practices/"/>
-        <xhtml:link rel="alternate" hreflang="en" href="https://arcaelas.github.io/dynamite/guides/best-practices/"/>
     </url>
     <url>
         <loc>https://arcaelas.github.io/dynamite/es/guides/core-concepts/</loc>
@@ -321,22 +273,6 @@
         <xhtml:link rel="alternate" hreflang="es" href="https://arcaelas.github.io/dynamite/es/advanced/migration/"/>
     </url>
     <url>
-        <loc>https://arcaelas.github.io/dynamite/de/advanced/performance/</loc>
-        <lastmod>2025-12-03</lastmod>
-        <changefreq>daily</changefreq>
-        <xhtml:link rel="alternate" hreflang="de" href="https://arcaelas.github.io/dynamite/de/advanced/performance/"/>
-        <xhtml:link rel="alternate" hreflang="en" href="https://arcaelas.github.io/dynamite/advanced/performance/"/>
-        <xhtml:link rel="alternate" hreflang="es" href="https://arcaelas.github.io/dynamite/es/advanced/performance/"/>
-    </url>
-    <url>
-        <loc>https://arcaelas.github.io/dynamite/de/advanced/troubleshooting/</loc>
-        <lastmod>2025-12-03</lastmod>
-        <changefreq>daily</changefreq>
-        <xhtml:link rel="alternate" hreflang="de" href="https://arcaelas.github.io/dynamite/de/advanced/troubleshooting/"/>
-        <xhtml:link rel="alternate" hreflang="en" href="https://arcaelas.github.io/dynamite/advanced/troubleshooting/"/>
-        <xhtml:link rel="alternate" hreflang="es" href="https://arcaelas.github.io/dynamite/es/advanced/troubleshooting/"/>
-    </url>
-    <url>
         <loc>https://arcaelas.github.io/dynamite/de/api/client/</loc>
         <lastmod>2025-12-03</lastmod>
         <changefreq>daily</changefreq>
@@ -391,14 +327,6 @@
         <xhtml:link rel="alternate" hreflang="de" href="https://arcaelas.github.io/dynamite/de/examples/validation/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://arcaelas.github.io/dynamite/examples/validation/"/>
         <xhtml:link rel="alternate" hreflang="es" href="https://arcaelas.github.io/dynamite/es/examples/validation/"/>
-    </url>
-    <url>
-        <loc>https://arcaelas.github.io/dynamite/de/guides/best-practices/</loc>
-        <lastmod>2025-12-03</lastmod>
-        <changefreq>daily</changefreq>
-        <xhtml:link rel="alternate" hreflang="de" href="https://arcaelas.github.io/dynamite/de/guides/best-practices/"/>
-        <xhtml:link rel="alternate" hreflang="en" href="https://arcaelas.github.io/dynamite/guides/best-practices/"/>
-        <xhtml:link rel="alternate" hreflang="es" href="https://arcaelas.github.io/dynamite/es/guides/best-practices/"/>
     </url>
     <url>
         <loc>https://arcaelas.github.io/dynamite/de/guides/core-concepts/</loc>
