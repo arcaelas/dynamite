@@ -1,25 +1,25 @@
-# Referencia de API: Client
+# API-Referenz: Client
 
-## Descripción General
+## Allgemeine Beschreibung
 
-El cliente Dynamite es el administrador central de configuración para las conexiones DynamoDB. Maneja la inicialización del cliente, la sincronización de tablas y la gestión del ciclo de vida de la conexión. La clase `Dynamite` proporciona una API limpia para configurar clientes DynamoDB del SDK de AWS y crear automáticamente tablas con sus Índices Secundarios Globales (GSI).
+Der Dynamite-Client ist der zentrale Konfigurationsverwalter für DynamoDB-Verbindungen. Er verwaltet die Client-Initialisierung, Tabellensynchronisierung und das Verbindungs-Lifecycle-Management. Die `Dynamite`-Klasse bietet eine saubere API zur Konfiguration von AWS SDK DynamoDB-Clients und zur automatischen Erstellung von Tabellen mit ihren Globalen Sekundärindizes (GSI).
 
-## Clase: Dynamite
+## Klasse: Dynamite
 
-La clase de cliente principal que administra las conexiones DynamoDB y las operaciones de tabla.
+Die Hauptclient-Klasse, die DynamoDB-Verbindungen und Tabellenoperationen verwaltet.
 
-### Constructor
+### Konstruktor
 
 ```typescript
 constructor(config: DynamiteConfig)
 ```
 
-Crea una nueva instancia de cliente Dynamite con la configuración proporcionada.
+Erstellt eine neue Dynamite-Client-Instanz mit der bereitgestellten Konfiguration.
 
-**Parámetros:**
-- `config` (DynamiteConfig): Objeto de configuración que contiene ajustes del cliente DynamoDB y definiciones de tablas
+**Parameter:**
+- `config` (DynamiteConfig): Konfigurationsobjekt mit DynamoDB-Client-Einstellungen und Tabellendefinitionen
 
-**Ejemplo:**
+**Beispiel:**
 ```typescript
 import { Dynamite } from "@arcaelas/dynamite";
 import { User, Order, Product } from "./models";
@@ -35,9 +35,9 @@ const client = new Dynamite({
 });
 ```
 
-## Configuración
+## Konfiguration
 
-### Interfaz DynamiteConfig
+### Interface DynamiteConfig
 
 ```typescript
 interface DynamiteConfig extends DynamoDBClientConfig {
@@ -45,20 +45,20 @@ interface DynamiteConfig extends DynamoDBClientConfig {
 }
 ```
 
-La interfaz de configuración extiende `DynamoDBClientConfig` del SDK de AWS y añade definiciones de tablas.
+Das Konfigurationsinterface erweitert `DynamoDBClientConfig` vom AWS SDK und fügt Tabellendefinitionen hinzu.
 
-**Propiedades:**
+**Eigenschaften:**
 
-| Propiedad | Tipo | Requerido | Descripción |
-|-----------|------|-----------|-------------|
-| `tables` | `Array<Class>` | Sí | Array de constructores de clase Table a registrar |
-| `region` | `string` | Sí | Región de AWS (ej. "us-east-1") |
-| `endpoint` | `string` | No | URL de endpoint personalizado (para DynamoDB Local) |
-| `credentials` | `AwsCredentials` | No | Objeto de credenciales de AWS |
-| `maxAttempts` | `number` | No | Máximo número de intentos de reintento |
-| `requestTimeout` | `number` | No | Tiempo de espera de solicitud en milisegundos |
+| Eigenschaft | Typ | Erforderlich | Beschreibung |
+|-------------|-----|--------------|--------------|
+| `tables` | `Array<Class>` | Ja | Array von Table-Klassenkonstruktoren zur Registrierung |
+| `region` | `string` | Ja | AWS-Region (z.B. "us-east-1") |
+| `endpoint` | `string` | Nein | Benutzerdefinierte Endpoint-URL (für DynamoDB Local) |
+| `credentials` | `AwsCredentials` | Nein | AWS-Anmeldeinformationsobjekt |
+| `maxAttempts` | `number` | Nein | Maximale Anzahl von Wiederholungsversuchen |
+| `requestTimeout` | `number` | Nein | Anfrage-Timeout in Millisekunden |
 
-### Credenciales de AWS
+### AWS-Anmeldeinformationen
 
 ```typescript
 interface AwsCredentials {
@@ -68,7 +68,7 @@ interface AwsCredentials {
 }
 ```
 
-## Métodos de Instancia
+## Instanzmethoden
 
 ### connect()
 
@@ -76,9 +76,9 @@ interface AwsCredentials {
 connect(): void
 ```
 
-Conecta el cliente y lo establece como el cliente DynamoDB global para las operaciones de Table. Este método debe ser llamado antes de realizar cualquier operación de Table.
+Verbindet den Client und legt ihn als globalen DynamoDB-Client für Table-Operationen fest. Diese Methode muss vor der Ausführung von Table-Operationen aufgerufen werden.
 
-**Ejemplo:**
+**Beispiel:**
 ```typescript
 const client = new Dynamite({
   region: "us-east-1",
@@ -92,14 +92,14 @@ const client = new Dynamite({
 
 client.connect();
 
-// Ahora las operaciones de Table están disponibles
+// Jetzt sind Table-Operationen verfügbar
 const user = await User.create({ name: "John" });
 ```
 
-**Notas:**
-- Operación idempotente - llamar múltiples veces no tiene efecto
-- Establece el cliente interno como el cliente global para todas las instancias de Table
-- Debe ser llamado antes de cualquier Table.create(), Table.where(), etc.
+**Hinweise:**
+- Idempotente Operation - mehrfaches Aufrufen hat keine Auswirkung
+- Legt den internen Client als globalen Client für alle Table-Instanzen fest
+- Muss vor Table.create(), Table.where() usw. aufgerufen werden
 
 ### sync()
 
@@ -107,32 +107,32 @@ const user = await User.create({ name: "John" });
 async sync(): Promise<void>
 ```
 
-Sincroniza todas las tablas declaradas con DynamoDB. Este método crea tablas si no existen, incluyendo sus Índices Secundarios Globales (GSI) para relaciones `@HasMany`.
+Synchronisiert alle deklarierten Tabellen mit DynamoDB. Diese Methode erstellt Tabellen, wenn sie nicht existieren, einschließlich ihrer Globalen Sekundärindizes (GSI) für `@HasMany`-Beziehungen.
 
-**Retorna:**
-- `Promise<void>`: Se resuelve cuando todas las tablas están sincronizadas
+**Rückgabe:**
+- `Promise<void>`: Wird aufgelöst, wenn alle Tabellen synchronisiert sind
 
-**Ejemplo:**
+**Beispiel:**
 ```typescript
 await client.sync();
 
-// Todas las tablas definidas en config.tables ahora están creadas en DynamoDB
-// con sus claves primarias, claves de ordenamiento e índices GSI
+// Alle in config.tables definierten Tabellen sind jetzt in DynamoDB erstellt
+// mit ihren Primärschlüsseln, Sortierschlüsseln und GSI-Indizes
 ```
 
-**Comportamiento:**
-- Crea tablas con modo de facturación `PAY_PER_REQUEST`
-- Detecta y crea automáticamente GSI para relaciones `@HasMany`
-- Idempotente - seguro de llamar múltiples veces
-- Ignora `ResourceInUseException` (la tabla ya existe)
-- Lanza errores para otros fallos
+**Verhalten:**
+- Erstellt Tabellen mit Abrechnungsmodus `PAY_PER_REQUEST`
+- Erkennt und erstellt automatisch GSI für `@HasMany`-Beziehungen
+- Idempotent - sicher mehrfach aufzurufen
+- Ignoriert `ResourceInUseException` (Tabelle existiert bereits)
+- Wirft Fehler bei anderen Fehlschlägen
 
-**Detalles de Creación de Tabla:**
-- **Partition Key**: Detectada desde el decorador `@PrimaryKey()` o `@Index()`
-- **Sort Key**: Detectada desde el decorador `@IndexSort()` (opcional)
-- **GSI**: Creado automáticamente para cada relación `@HasMany` con patrón de nomenclatura `GSI{N}_{foreignKey}`
-- **Modo de Facturación**: `PAY_PER_REQUEST` (bajo demanda)
-- **Definiciones de Atributos**: Inferidas automáticamente (todas las claves por defecto son tipo String)
+**Details zur Tabellenerstellung:**
+- **Partition Key**: Erkannt aus dem Decorator `@PrimaryKey()` oder `@Index()`
+- **Sort Key**: Erkannt aus dem Decorator `@IndexSort()` (optional)
+- **GSI**: Automatisch erstellt für jede `@HasMany`-Beziehung mit Benennungsmuster `GSI{N}_{foreignKey}`
+- **Abrechnungsmodus**: `PAY_PER_REQUEST` (On-Demand)
+- **Attributdefinitionen**: Automatisch abgeleitet (alle Schlüssel standardmäßig vom Typ String)
 
 ### getClient()
 
@@ -140,27 +140,27 @@ await client.sync();
 getClient(): DynamoDBClient
 ```
 
-Retorna la instancia de cliente DynamoDB del SDK de AWS subyacente.
+Gibt die zugrundeliegende AWS SDK DynamoDB-Client-Instanz zurück.
 
-**Retorna:**
-- `DynamoDBClient`: El cliente DynamoDB del SDK de AWS
+**Rückgabe:**
+- `DynamoDBClient`: Der AWS SDK DynamoDB-Client
 
-**Ejemplo:**
+**Beispiel:**
 ```typescript
 const awsClient = client.getClient();
 
-// Usar para operaciones directas del SDK de AWS
+// Für direkte AWS SDK-Operationen verwenden
 import { DescribeTableCommand } from "@aws-sdk/client-dynamodb";
 const result = await awsClient.send(
   new DescribeTableCommand({ TableName: "users" })
 );
 ```
 
-**Casos de Uso:**
-- Acceso directo a operaciones del SDK de AWS
-- Comandos personalizados no soportados por Dynamite
-- Características avanzadas de DynamoDB
-- Pruebas y depuración
+**Anwendungsfälle:**
+- Direkter Zugriff auf AWS SDK-Operationen
+- Benutzerdefinierte Befehle, die von Dynamite nicht unterstützt werden
+- Erweiterte DynamoDB-Funktionen
+- Tests und Debugging
 
 ### isReady()
 
@@ -168,12 +168,12 @@ const result = await awsClient.send(
 isReady(): boolean
 ```
 
-Verifica si el cliente está conectado y todas las tablas están sincronizadas.
+Prüft, ob der Client verbunden und alle Tabellen synchronisiert sind.
 
-**Retorna:**
-- `boolean`: `true` si tanto `connect()` como `sync()` se han completado exitosamente
+**Rückgabe:**
+- `boolean`: `true` wenn sowohl `connect()` als auch `sync()` erfolgreich abgeschlossen wurden
 
-**Ejemplo:**
+**Beispiel:**
 ```typescript
 console.log(client.isReady()); // false
 
@@ -189,22 +189,22 @@ console.log(client.isReady()); // true
 disconnect(): void
 ```
 
-Desconecta y limpia el cliente DynamoDB. Destruye el cliente del SDK de AWS subyacente y reinicia el estado interno.
+Trennt und bereinigt den DynamoDB-Client. Zerstört den zugrundeliegenden AWS SDK-Client und setzt den internen Zustand zurück.
 
-**Ejemplo:**
+**Beispiel:**
 ```typescript
 client.disconnect();
 
-// El cliente ya no es utilizable
-// Las operaciones de Table lanzarán errores
+// Client ist nicht mehr verwendbar
+// Table-Operationen werden Fehler werfen
 ```
 
-**Comportamiento:**
-- Llama `client.destroy()` en el cliente del SDK de AWS subyacente
-- Reinicia las banderas `connected` y `synced`
-- Limpia la referencia del cliente global si coincide con esta instancia
-- Seguro de llamar múltiples veces
-- Registra advertencias si la destrucción falla
+**Verhalten:**
+- Ruft `client.destroy()` auf dem zugrundeliegenden AWS SDK-Client auf
+- Setzt die `connected`- und `synced`-Flags zurück
+- Löscht die globale Client-Referenz, wenn sie mit dieser Instanz übereinstimmt
+- Sicher mehrfach aufzurufen
+- Protokolliert Warnungen, wenn die Zerstörung fehlschlägt
 
 ### tx()
 
@@ -212,18 +212,18 @@ client.disconnect();
 async tx<R>(callback: (tx: TransactionContext) => Promise<R>): Promise<R>
 ```
 
-Ejecuta operaciones dentro de una transacción atómica. Si cualquier operación falla, todos los cambios se revierten automáticamente.
+Führt Operationen innerhalb einer atomaren Transaktion aus. Wenn eine Operation fehlschlägt, werden alle Änderungen automatisch zurückgerollt.
 
-**Parámetros de Tipo:**
-- `R`: Tipo de retorno de la función callback
+**Typ-Parameter:**
+- `R`: Rückgabetyp der Callback-Funktion
 
-**Parámetros:**
-- `callback` (`(tx: TransactionContext) => Promise<R>`): Función que contiene operaciones transaccionales
+**Parameter:**
+- `callback` (`(tx: TransactionContext) => Promise<R>`): Funktion mit transaktionalen Operationen
 
-**Retorna:**
-- `Promise<R>`: Resultado retornado por la función callback
+**Rückgabe:**
+- `Promise<R>`: Von der Callback-Funktion zurückgegebenes Ergebnis
 
-**Ejemplo:**
+**Beispiel:**
 ```typescript
 const dynamite = new Dynamite({
   region: "us-east-1",
@@ -233,56 +233,56 @@ const dynamite = new Dynamite({
 dynamite.connect();
 await dynamite.sync();
 
-// Transacción atómica - todas las operaciones tienen éxito o todas fallan
+// Atomare Transaktion - alle Operationen sind erfolgreich oder alle schlagen fehl
 await dynamite.tx(async (tx) => {
   const user = await User.create({ name: "John" }, tx);
   await Order.create({ user_id: user.id, total: 100 }, tx);
   await Order.create({ user_id: user.id, total: 200 }, tx);
-  // Si algún create falla, todas las operaciones se revierten
+  // Wenn ein create fehlschlägt, werden alle Operationen zurückgerollt
 });
 ```
 
-**Limitaciones:**
-- Máximo 25 operaciones por transacción (límite de DynamoDB)
-- Lanza error si se excede el límite
+**Einschränkungen:**
+- Maximal 25 Operationen pro Transaktion (DynamoDB-Limit)
+- Wirft Fehler, wenn das Limit überschritten wird
 
-**Operaciones Transaccionales:**
+**Transaktionsoperationen:**
 ```typescript
-// Crear registros en transacción
+// Datensätze in Transaktion erstellen
 await dynamite.tx(async (tx) => {
   await User.create({ name: "John" }, tx);
   await User.create({ name: "Jane" }, tx);
 });
 
-// Operaciones mixtas
+// Gemischte Operationen
 await dynamite.tx(async (tx) => {
   const user = await User.create({ name: "John" }, tx);
-  await user.destroy(tx); // Soft delete en transacción
+  await user.destroy(tx); // Soft Delete in Transaktion
 });
 ```
 
-**Casos de Uso:**
-- Crear registros relacionados atómicamente (usuario + órdenes)
-- Asegurar consistencia de datos entre múltiples tablas
-- Operaciones en lote que deben todas tener éxito o todas fallar
-- Soft-delete de registros padre e hijo juntos
+**Anwendungsfälle:**
+- Atomares Erstellen verwandter Datensätze (Benutzer + Bestellungen)
+- Sicherstellung der Datenkonsistenz über mehrere Tabellen
+- Batch-Operationen, die alle erfolgreich sein oder alle fehlschlagen müssen
+- Soft-Delete von Eltern- und Kind-Datensätzen zusammen
 
-**Manejo de Errores:**
+**Fehlerbehandlung:**
 ```typescript
 try {
   await dynamite.tx(async (tx) => {
     await User.create({ name: "John" }, tx);
-    throw new Error("Fallo simulado");
-    // El primer create se revierte
+    throw new Error("Simulierter Fehler");
+    // Das erste create wird zurückgerollt
   });
 } catch (error) {
-  console.log("La transacción falló, todos los cambios se revertieron");
+  console.log("Transaktion fehlgeschlagen, alle Änderungen wurden zurückgerollt");
 }
 ```
 
-## Clase: TransactionContext
+## Klasse: TransactionContext
 
-Clase interna que administra las operaciones transaccionales. Se pasa a los callbacks en `tx()`.
+Interne Klasse, die transaktionale Operationen verwaltet. Wird an Callbacks in `tx()` übergeben.
 
 ### addPut()
 
@@ -290,11 +290,11 @@ Clase interna que administra las operaciones transaccionales. Se pasa a los call
 addPut(table_name: string, item: Record<string, any>): void
 ```
 
-Agrega una operación Put a la transacción.
+Fügt eine Put-Operation zur Transaktion hinzu.
 
-**Parámetros:**
-- `table_name` (`string`): Nombre de la tabla DynamoDB
-- `item` (`Record<string, any>`): Elemento a insertar
+**Parameter:**
+- `table_name` (`string`): Name der DynamoDB-Tabelle
+- `item` (`Record<string, any>`): Einzufügendes Element
 
 ### addDelete()
 
@@ -302,11 +302,11 @@ Agrega una operación Put a la transacción.
 addDelete(table_name: string, key: Record<string, any>): void
 ```
 
-Agrega una operación Delete a la transacción.
+Fügt eine Delete-Operation zur Transaktion hinzu.
 
-**Parámetros:**
-- `table_name` (`string`): Nombre de la tabla DynamoDB
-- `key` (`Record<string, any>`): Clave primaria del elemento a eliminar
+**Parameter:**
+- `table_name` (`string`): Name der DynamoDB-Tabelle
+- `key` (`Record<string, any>`): Primärschlüssel des zu löschenden Elements
 
 ### commit()
 
@@ -314,15 +314,15 @@ Agrega una operación Delete a la transacción.
 async commit(): Promise<void>
 ```
 
-Confirma todas las operaciones encoladas atómicamente. Es llamado automáticamente por `tx()`.
+Committet alle eingereiht Operationen atomar. Wird automatisch von `tx()` aufgerufen.
 
-**Lanza:**
-- `Error`: Si la transacción excede 25 operaciones
-- Errores de DynamoDB si la transacción falla
+**Wirft:**
+- `Error`: Wenn die Transaktion 25 Operationen überschreitet
+- DynamoDB-Fehler, wenn die Transaktion fehlschlägt
 
-## Ejemplos de Configuración
+## Konfigurationsbeispiele
 
-### Desarrollo Local (DynamoDB Local)
+### Lokale Entwicklung (DynamoDB Local)
 
 ```typescript
 import { Dynamite } from "@arcaelas/dynamite";
@@ -342,7 +342,7 @@ client.connect();
 await client.sync();
 ```
 
-**Configuración Docker:**
+**Docker-Konfiguration:**
 ```bash
 docker run -d -p 8000:8000 amazon/dynamodb-local
 ```
@@ -358,7 +358,7 @@ services:
     command: ["-jar", "DynamoDBLocal.jar", "-sharedDb"]
 ```
 
-### Configuración de Producción AWS
+### AWS-Produktionskonfiguration
 
 ```typescript
 const client = new Dynamite({
@@ -376,15 +376,15 @@ client.connect();
 await client.sync();
 ```
 
-### Variables de Entorno
+### Umgebungsvariablen
 
 ```bash
-# .env file
+# .env Datei
 AWS_REGION=us-east-1
 AWS_ACCESS_KEY_ID=your-access-key-id
 AWS_SECRET_ACCESS_KEY=your-secret-access-key
 
-# Para desarrollo local
+# Für lokale Entwicklung
 DYNAMODB_ENDPOINT=http://localhost:8000
 ```
 
@@ -403,7 +403,7 @@ const config: any = {
   tables: [User, Order, Product]
 };
 
-// Añadir endpoint solo para desarrollo local
+// Endpoint nur für lokale Entwicklung hinzufügen
 if (process.env.DYNAMODB_ENDPOINT) {
   config.endpoint = process.env.DYNAMODB_ENDPOINT;
 }
@@ -413,16 +413,16 @@ client.connect();
 await client.sync();
 ```
 
-### Múltiples Instancias de Cliente
+### Mehrere Client-Instanzen
 
-Puedes crear múltiples clientes Dynamite para diferentes configuraciones o regiones.
+Sie können mehrere Dynamite-Clients für verschiedene Konfigurationen oder Regionen erstellen.
 
 ```typescript
 import { Dynamite } from "@arcaelas/dynamite";
 import { User, Order } from "./models";
 import { Log, Metric } from "./monitoring";
 
-// Cliente de base de datos de producción
+// Produktionsdatenbank-Client
 const production_client = new Dynamite({
   region: "us-east-1",
   credentials: {
@@ -432,7 +432,7 @@ const production_client = new Dynamite({
   tables: [User, Order]
 });
 
-// Cliente de base de datos de analítica (región diferente)
+// Analytics-Datenbank-Client (andere Region)
 const analytics_client = new Dynamite({
   region: "us-west-2",
   credentials: {
@@ -442,28 +442,28 @@ const analytics_client = new Dynamite({
   tables: [Log, Metric]
 });
 
-// Conectar cliente de producción (se convierte en global)
+// Produktions-Client verbinden (wird global)
 production_client.connect();
 await production_client.sync();
 
-// Las operaciones de User y Order usan production_client
+// User- und Order-Operationen verwenden production_client
 const user = await User.create({ name: "John" });
 
-// Cambiar a cliente de analítica
+// Zu Analytics-Client wechseln
 analytics_client.connect();
 await analytics_client.sync();
 
-// Las operaciones de Log y Metric ahora usan analytics_client
+// Log- und Metric-Operationen verwenden jetzt analytics_client
 const log = await Log.create({ message: "User created" });
 ```
 
-**Notas Importantes:**
-- Solo un cliente puede ser el cliente "global" a la vez
-- Llamar `connect()` en un nuevo cliente reemplaza el cliente global
-- Las operaciones de Table siempre usan el cliente global actual
-- Considera usar paso explícito de cliente para escenarios multi-cliente
+**Wichtige Hinweise:**
+- Nur ein Client kann gleichzeitig der "globale" Client sein
+- Das Aufrufen von `connect()` auf einem neuen Client ersetzt den globalen Client
+- Table-Operationen verwenden immer den aktuellen globalen Client
+- Erwägen Sie explizite Client-Übergabe für Multi-Client-Szenarien
 
-### Opciones de Configuración Personalizadas
+### Benutzerdefinierte Konfigurationsoptionen
 
 ```typescript
 const client = new Dynamite({
@@ -475,19 +475,19 @@ const client = new Dynamite({
   },
   tables: [User, Order, Product],
 
-  // Opciones avanzadas del SDK de AWS
+  // Erweiterte AWS SDK-Optionen
   maxAttempts: 5,
   requestTimeout: 5000,
 
-  // Estrategia de reintento personalizada
+  // Benutzerdefinierte Wiederholungsstrategie
   retryMode: "adaptive",
 
-  // Habilitar registro
+  // Protokollierung aktivieren
   logger: console
 });
 ```
 
-## Funciones de Utilidad
+## Hilfsfunktionen
 
 ### setGlobalClient()
 
@@ -495,12 +495,12 @@ const client = new Dynamite({
 export const setGlobalClient = (client: DynamoDBClient): void
 ```
 
-Establece el cliente DynamoDB global para operaciones de Table. Típicamente llamado internamente por `Dynamite.connect()`.
+Legt den globalen DynamoDB-Client für Table-Operationen fest. Wird typischerweise intern von `Dynamite.connect()` aufgerufen.
 
-**Parámetros:**
-- `client` (DynamoDBClient): Instancia de cliente DynamoDB del SDK de AWS
+**Parameter:**
+- `client` (DynamoDBClient): AWS SDK DynamoDB-Client-Instanz
 
-**Ejemplo:**
+**Beispiel:**
 ```typescript
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { setGlobalClient } from "@arcaelas/dynamite";
@@ -518,23 +518,23 @@ setGlobalClient(custom_client);
 export const getGlobalClient = (): DynamoDBClient
 ```
 
-Obtiene el cliente DynamoDB global actual. Lanza un error si no hay cliente establecido.
+Gibt den aktuellen globalen DynamoDB-Client zurück. Wirft einen Fehler, wenn kein Client festgelegt ist.
 
-**Retorna:**
-- `DynamoDBClient`: El cliente DynamoDB global
+**Rückgabe:**
+- `DynamoDBClient`: Der globale DynamoDB-Client
 
-**Lanza:**
-- `Error`: Si no se ha establecido un cliente global
+**Wirft:**
+- `Error`: Wenn kein globaler Client festgelegt wurde
 
-**Ejemplo:**
+**Beispiel:**
 ```typescript
 import { getGlobalClient } from "@arcaelas/dynamite";
 
 try {
   const client = getGlobalClient();
-  console.log("Client is configured");
+  console.log("Client ist konfiguriert");
 } catch (error) {
-  console.error("No client configured");
+  console.error("Kein Client konfiguriert");
 }
 ```
 
@@ -544,19 +544,19 @@ try {
 export const hasGlobalClient = (): boolean
 ```
 
-Verifica si un cliente DynamoDB global está disponible.
+Prüft, ob ein globaler DynamoDB-Client verfügbar ist.
 
-**Retorna:**
-- `boolean`: `true` si existe un cliente global
+**Rückgabe:**
+- `boolean`: `true` wenn ein globaler Client existiert
 
-**Ejemplo:**
+**Beispiel:**
 ```typescript
 import { hasGlobalClient } from "@arcaelas/dynamite";
 
 if (hasGlobalClient()) {
-  console.log("Client is available");
+  console.log("Client ist verfügbar");
 } else {
-  console.log("No client configured");
+  console.log("Kein Client konfiguriert");
 }
 ```
 
@@ -566,69 +566,69 @@ if (hasGlobalClient()) {
 export const requireClient = (): DynamoDBClient
 ```
 
-Requiere que un cliente global esté disponible. Lanza un error con un mensaje localizado si no está establecido.
+Erfordert, dass ein globaler Client verfügbar ist. Wirft einen Fehler mit lokalisierter Nachricht, wenn nicht festgelegt.
 
-**Retorna:**
-- `DynamoDBClient`: El cliente DynamoDB global
+**Rückgabe:**
+- `DynamoDBClient`: Der globale DynamoDB-Client
 
-**Lanza:**
-- `Error`: Si no hay cliente global configurado (mensaje de error en español)
+**Wirft:**
+- `Error`: Wenn kein globaler Client konfiguriert ist (Fehlermeldung auf Spanisch)
 
-**Ejemplo:**
+**Beispiel:**
 ```typescript
 import { requireClient } from "@arcaelas/dynamite";
 
 try {
   const client = requireClient();
-  // Usar cliente para operaciones
+  // Client für Operationen verwenden
 } catch (error) {
   console.error(error.message); // "DynamoDB client no configurado. Use Dynamite.connect() primero."
 }
 ```
 
-## Manejo de Errores
+## Fehlerbehandlung
 
-### Errores Comunes
+### Häufige Fehler
 
 #### ResourceInUseException
 
-Lanzado al intentar crear una tabla que ya existe.
+Wird geworfen, wenn versucht wird, eine bereits existierende Tabelle zu erstellen.
 
 ```typescript
 try {
   await client.sync();
 } catch (error) {
   if (error.name === "ResourceInUseException") {
-    console.log("Table already exists");
+    console.log("Tabelle existiert bereits");
   }
 }
 ```
 
-**Nota:** Dynamite maneja automáticamente este error durante `sync()`.
+**Hinweis:** Dynamite behandelt diesen Fehler während `sync()` automatisch.
 
 #### ValidationException
 
-Lanzado cuando el esquema de tabla o atributos son inválidos.
+Wird geworfen, wenn das Tabellenschema oder die Attribute ungültig sind.
 
 ```typescript
 try {
   await client.sync();
 } catch (error) {
   if (error.name === "ValidationException") {
-    console.error("Invalid table schema:", error.message);
+    console.error("Ungültiges Tabellenschema:", error.message);
   }
 }
 ```
 
-**Causas Comunes:**
-- Falta decorador `@PrimaryKey()` o `@Index()`
-- Palabra clave reservada usada como nombre de atributo
-- Tipo de atributo inválido
-- PK y SK con el mismo nombre de atributo
+**Häufige Ursachen:**
+- Fehlender Decorator `@PrimaryKey()` oder `@Index()`
+- Reserviertes Schlüsselwort als Attributname verwendet
+- Ungültiger Attributtyp
+- PK und SK mit demselben Attributnamen
 
 #### UnrecognizedClientException
 
-Lanzado cuando las credenciales son inválidas o el endpoint de DynamoDB es inalcanzable.
+Wird geworfen, wenn die Anmeldeinformationen ungültig sind oder der DynamoDB-Endpoint nicht erreichbar ist.
 
 ```typescript
 try {
@@ -636,48 +636,48 @@ try {
   await client.sync();
 } catch (error) {
   if (error.name === "UnrecognizedClientException") {
-    console.error("Invalid credentials or endpoint");
+    console.error("Ungültige Anmeldeinformationen oder Endpoint");
   }
 }
 ```
 
-**Soluciones:**
-- Verificar credenciales de AWS
-- Verificar que DynamoDB Local esté ejecutándose (para desarrollo local)
-- Verificar que la URL del endpoint sea correcta
-- Verificar conectividad de red
+**Lösungen:**
+- AWS-Anmeldeinformationen überprüfen
+- Sicherstellen, dass DynamoDB Local läuft (für lokale Entwicklung)
+- Endpoint-URL überprüfen
+- Netzwerkverbindung prüfen
 
 #### Metadata Not Found
 
-Lanzado al intentar sincronizar una tabla sin decoradores apropiados.
+Wird geworfen, wenn versucht wird, eine Tabelle ohne entsprechende Decorators zu synchronisieren.
 
 ```typescript
 try {
   await client.sync();
 } catch (error) {
   if (error.message.includes("not registered in wrapper")) {
-    console.error("Table class missing decorators");
+    console.error("Table-Klasse fehlen Decorators");
   }
 }
 ```
 
-**Solución:** Asegurar que todas las clases de tabla usen el decorador `@PrimaryKey()` o `@Index()`.
+**Lösung:** Sicherstellen, dass alle Table-Klassen den Decorator `@PrimaryKey()` oder `@Index()` verwenden.
 
 #### No Global Client
 
-Lanzado al intentar operaciones de Table sin conectar primero.
+Wird geworfen, wenn Table-Operationen ohne vorherige Verbindung versucht werden.
 
 ```typescript
 try {
   const user = await User.create({ name: "John" });
 } catch (error) {
   if (error.message.includes("DynamoDB client no configurado")) {
-    console.error("Call client.connect() first");
+    console.error("Zuerst client.connect() aufrufen");
   }
 }
 ```
 
-### Mejores Prácticas de Manejo de Errores
+### Best Practices für Fehlerbehandlung
 
 ```typescript
 import { Dynamite } from "@arcaelas/dynamite";
@@ -695,59 +695,59 @@ async function initialize_database() {
   });
 
   try {
-    // Conectar cliente
+    // Client verbinden
     client.connect();
-    console.log("Client connected");
+    console.log("Client verbunden");
 
-    // Sincronizar tablas
+    // Tabellen synchronisieren
     await client.sync();
-    console.log("Tables synchronized");
+    console.log("Tabellen synchronisiert");
 
-    // Verificar estado ready
+    // Ready-Status prüfen
     if (client.isReady()) {
-      console.log("Database ready for operations");
+      console.log("Datenbank bereit für Operationen");
     }
 
     return client;
   } catch (error: any) {
-    // Manejar errores específicos
+    // Spezifische Fehler behandeln
     if (error.name === "UnrecognizedClientException") {
-      console.error("Authentication failed. Check credentials.");
+      console.error("Authentifizierung fehlgeschlagen. Anmeldeinformationen prüfen.");
     } else if (error.name === "ValidationException") {
-      console.error("Invalid table schema:", error.message);
+      console.error("Ungültiges Tabellenschema:", error.message);
     } else if (error.message?.includes("not registered in wrapper")) {
-      console.error("Table class missing decorators");
+      console.error("Table-Klasse fehlen Decorators");
     } else {
-      console.error("Database initialization failed:", error);
+      console.error("Datenbank-Initialisierung fehlgeschlagen:", error);
     }
 
-    // Limpieza en caso de fallo
+    // Bereinigung bei Fehler
     client.disconnect();
     throw error;
   }
 }
 
-// Uso
+// Verwendung
 try {
   const client = await initialize_database();
 
-  // Realizar operaciones
+  // Operationen ausführen
   const user = await User.create({ name: "John" });
 
-  // Limpieza al apagar
+  // Bereinigung beim Herunterfahren
   process.on("SIGINT", () => {
     client.disconnect();
     process.exit(0);
   });
 } catch (error) {
-  console.error("Application failed to start");
+  console.error("Anwendung konnte nicht gestartet werden");
   process.exit(1);
 }
 ```
 
-## Ejemplo de Uso Completo
+## Vollständiges Verwendungsbeispiel
 
-### Configuración Básica de Aplicación
+### Grundlegende Anwendungskonfiguration
 
 ```typescript
 import { Dynamite } from "@arcaelas/dynamite";
@@ -762,7 +762,7 @@ import {
   NonAttribute
 } from "@arcaelas/dynamite";
 
-// Definir modelos
+// Modelle definieren
 class User extends Table<User> {
   @PrimaryKey()
   @Default(() => crypto.randomUUID())
@@ -799,7 +799,7 @@ class Order extends Table<Order> {
   declare createdAt: CreationOptional<string>;
 }
 
-// Inicializar cliente
+// Client initialisieren
 async function setup_database() {
   const client = new Dynamite({
     region: "us-east-1",
@@ -811,28 +811,28 @@ async function setup_database() {
     tables: [User, Order]
   });
 
-  // Conectar y sincronizar
+  // Verbinden und synchronisieren
   client.connect();
   await client.sync();
 
-  console.log("Database ready:", client.isReady());
+  console.log("Datenbank bereit:", client.isReady());
   return client;
 }
 
-// Punto de entrada de la aplicación
+// Anwendungs-Einstiegspunkt
 async function main() {
   const client = await setup_database();
 
   try {
-    // Crear usuario
+    // Benutzer erstellen
     const user = await User.create({
       name: "John Doe",
       email: "john@example.com"
     });
 
-    console.log("User created:", user.id);
+    console.log("Benutzer erstellt:", user.id);
 
-    // Crear órdenes
+    // Bestellungen erstellen
     const order1 = await Order.create({
       user_id: user.id,
       total: 99.99
@@ -843,7 +843,7 @@ async function main() {
       total: 149.99
     });
 
-    // Consultar con relaciones
+    // Mit Beziehungen abfragen
     const users_with_orders = await User.where({ id: user.id }, {
       include: {
         orders: {
@@ -852,9 +852,9 @@ async function main() {
       }
     });
 
-    console.log("User orders:", users_with_orders[0].orders.length);
+    console.log("Benutzer-Bestellungen:", users_with_orders[0].orders.length);
   } finally {
-    // Limpieza al salir
+    // Bereinigung beim Beenden
     client.disconnect();
   }
 }
@@ -862,7 +862,7 @@ async function main() {
 main().catch(console.error);
 ```
 
-### Integración con Express.js
+### Integration mit Express.js
 
 ```typescript
 import express from "express";
@@ -872,7 +872,7 @@ import { User } from "./models";
 const app = express();
 app.use(express.json());
 
-// Inicializar base de datos
+// Datenbank initialisieren
 let client: Dynamite;
 
 async function initialize() {
@@ -888,16 +888,16 @@ async function initialize() {
 
   client.connect();
   await client.sync();
-  console.log("Database initialized");
+  console.log("Datenbank initialisiert");
 }
 
-// Rutas API
+// API-Routen
 app.get("/users", async (req, res) => {
   try {
     const users = await User.where({});
     res.json(users);
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch users" });
+    res.status(500).json({ error: "Benutzer konnten nicht abgerufen werden" });
   }
 });
 
@@ -906,86 +906,86 @@ app.post("/users", async (req, res) => {
     const user = await User.create(req.body);
     res.status(201).json(user);
   } catch (error) {
-    res.status(500).json({ error: "Failed to create user" });
+    res.status(500).json({ error: "Benutzer konnte nicht erstellt werden" });
   }
 });
 
-// Iniciar servidor
+// Server starten
 initialize()
   .then(() => {
     app.listen(3000, () => {
-      console.log("Server running on port 3000");
+      console.log("Server läuft auf Port 3000");
     });
   })
   .catch((error) => {
-    console.error("Failed to start:", error);
+    console.error("Start fehlgeschlagen:", error);
     process.exit(1);
   });
 
-// Apagado graceful
+// Graceful Shutdown
 process.on("SIGINT", () => {
-  console.log("Shutting down...");
+  console.log("Herunterfahren...");
   client.disconnect();
   process.exit(0);
 });
 ```
 
-## Mejores Prácticas
+## Best Practices
 
-### 1. Instancia Única de Cliente
+### 1. Einzelne Client-Instanz
 
-Crear una instancia de cliente por aplicación y reutilizarla.
+Eine Client-Instanz pro Anwendung erstellen und wiederverwenden.
 
 ```typescript
-// Bien
+// Gut
 const client = new Dynamite({ /* config */ });
 client.connect();
 await client.sync();
 
-// Mal - crea múltiples clientes innecesariamente
+// Schlecht - erstellt unnötig mehrere Clients
 function get_client() {
   return new Dynamite({ /* config */ });
 }
 ```
 
-### 2. Llamar sync() Una Vez
+### 2. sync() einmal aufrufen
 
-Llamar `sync()` solo durante la inicialización de la aplicación, no antes de cada operación.
+`sync()` nur während der Anwendungsinitialisierung aufrufen, nicht vor jeder Operation.
 
 ```typescript
-// Bien - sincronizar una vez al inicio
+// Gut - einmal beim Start synchronisieren
 await client.sync();
 const user = await User.create({ name: "John" });
 const order = await Order.create({ user_id: user.id });
 
-// Mal - sincronizar repetidamente
+// Schlecht - wiederholt synchronisieren
 await client.sync();
 const user = await User.create({ name: "John" });
 await client.sync();
 const order = await Order.create({ user_id: user.id });
 ```
 
-### 3. Apagado Graceful
+### 3. Graceful Shutdown
 
-Siempre desconectar el cliente al apagar la aplicación.
+Client beim Herunterfahren der Anwendung immer trennen.
 
 ```typescript
 process.on("SIGINT", () => {
-  console.log("Shutting down gracefully");
+  console.log("Graceful Shutdown");
   client.disconnect();
   process.exit(0);
 });
 
 process.on("SIGTERM", () => {
-  console.log("Shutting down gracefully");
+  console.log("Graceful Shutdown");
   client.disconnect();
   process.exit(0);
 });
 ```
 
-### 4. Configuración Basada en Entorno
+### 4. Umgebungsbasierte Konfiguration
 
-Usar variables de entorno para la configuración para separar dev/staging/producción.
+Umgebungsvariablen für die Konfiguration verwenden, um dev/staging/Produktion zu trennen.
 
 ```typescript
 const client = new Dynamite({
@@ -1001,9 +1001,9 @@ const client = new Dynamite({
 });
 ```
 
-### 5. Manejo de Errores
+### 5. Fehlerbehandlung
 
-Siempre manejar errores durante la inicialización y proporcionar retroalimentación significativa.
+Fehler während der Initialisierung immer behandeln und aussagekräftiges Feedback geben.
 
 ```typescript
 try {
@@ -1011,17 +1011,17 @@ try {
   await client.sync();
 } catch (error: any) {
   if (error.name === "UnrecognizedClientException") {
-    console.error("Check DynamoDB Local is running: docker run -p 8000:8000 amazon/dynamodb-local");
+    console.error("DynamoDB Local läuft prüfen: docker run -p 8000:8000 amazon/dynamodb-local");
   } else {
-    console.error("Database initialization failed:", error.message);
+    console.error("Datenbank-Initialisierung fehlgeschlagen:", error.message);
   }
   process.exit(1);
 }
 ```
 
-### 6. Configuración de Pruebas
+### 6. Test-Konfiguration
 
-Usar clientes separados para pruebas con configuración aislada.
+Separate Clients für Tests mit isolierter Konfiguration verwenden.
 
 ```typescript
 // test/setup.ts
@@ -1049,9 +1049,9 @@ export async function teardown_test_database(client: Dynamite) {
 }
 ```
 
-## Ver También
+## Siehe auch
 
-- [Referencia de API Table](./table.md) - Documentación completa de la clase Table
-- [Referencia de Decoradores](./decorators/) - Todos los decoradores disponibles
-- [Cliente DynamoDB del SDK de AWS](https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/clients/client-dynamodb/) - Documentación del SDK de AWS subyacente
-- [DynamoDB Local](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html) - Configuración de desarrollo local
+- [Table API-Referenz](./table.md) - Vollständige Table-Klassendokumentation
+- [Decorator-Referenz](./decorators/) - Alle verfügbaren Decorators
+- [AWS SDK DynamoDB-Client](https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/clients/client-dynamodb/) - Zugrundeliegende AWS SDK-Dokumentation
+- [DynamoDB Local](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html) - Lokale Entwicklungseinrichtung

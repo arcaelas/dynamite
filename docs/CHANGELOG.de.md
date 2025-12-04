@@ -8,10 +8,38 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/spec/v
 ## [Unveröffentlicht]
 
 ### Geplant
-- Verbesserte Transaktionsunterstützung für komplexe Operationen
 - Leistungsoptimierungen für Batch-Operationen
 - Zusätzliche Abfrageoperatoren und Filter
 - Verbesserte Fehlerbehandlung und Debugging-Tools
+
+---
+
+## [1.0.17] - 2025-12-03
+
+### Hinzugefügt
+- `@Serialize(fromDB, toDB)` - Bidirektionaler Datentransformations-Decorator
+- `@DeleteAt()` - Soft Delete Decorator mit Zeitstempel
+- `Dynamite.tx()` - Atomare Transaktionen mit automatischem Rollback
+- `TransactionContext` Klasse zur Verwaltung transaktionaler Operationen
+- `withTrashed()` Methode zum Einschließen soft-gelöschter Datensätze
+- `onlyTrashed()` Methode zum Abfragen nur soft-gelöschter Datensätze
+- Unterstützung für `null` als Fallback in `@Serialize` Parametern
+
+### Geändert
+- Verbesserte `destroy()` Methode unterstützt Soft Delete wenn `@DeleteAt` vorhanden
+- `destroy()` akzeptiert jetzt optionalen `TransactionContext` Parameter für transaktionale Operationen
+- Verbesserte Dokumentation mit `@Serialize` und `@DeleteAt` Beispielen
+- Decorator-Dokumentation konsolidiert in `/guides/decorators.md`
+
+### Entfernt
+- `/api/decorators/` Verzeichnis (21 Dateien) - Inhalt in `/guides/decorators.md` zusammengeführt
+
+### Dokumentation
+- Umfassende `@Serialize` Dokumentation mit Verschlüsselungs- und Komprimierungsbeispielen
+- `@DeleteAt` Dokumentation mit Papierkorb-System-Mustern
+- `Dynamite.tx()` Transaktions-API Dokumentation
+- Aktualisierte Modellbeispiele mit neuen Decorators
+- Konsolidierte mehrsprachige Dokumentation (EN/ES/DE)
 
 ---
 
@@ -128,8 +156,8 @@ Keine Breaking Changes seit v1.0.0. Alle Funktionen sind abwärtskompatibel.
 
 ## Beiträge
 
-Siehe [README.md](../README.md#-contributing) für Beitragsrichtlinien.
+Siehe [GitHub-Repository](https://github.com/arcaelas/dynamite#contributing) für Beitragsrichtlinien.
 
 ---
 
-**Hinweis**: Für detaillierte Verwendungsbeispiele und API-Dokumentation lesen Sie bitte die [README.md](../README.md)-Datei.
+**Hinweis**: Für detaillierte Verwendungsbeispiele und API-Dokumentation lesen Sie bitte das [GitHub-Repository](https://github.com/arcaelas/dynamite).

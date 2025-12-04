@@ -516,9 +516,9 @@ Lernen Sie die grundlegenden Konzepte und Architektur kennen:
 - Behandeln Sie Fehler elegant mit Try-Catch-Blöcken
 
 ### Zusätzliche Ressourcen
-- [API-Referenz](../api/README.md) - Vollständige API-Dokumentation
+- [API-Referenz](../api/table.md) - Vollständige API-Dokumentation
 - [Beispiele](../../examples/) - Weitere Codebeispiele
-- [Fehlerbehebung](../troubleshooting.md) - Häufige Probleme und Lösungen
+- [GitHub Issues](https://github.com/arcaelas/dynamite/issues) - Häufige Probleme und Lösungen
 
 ## Schnellreferenz
 
@@ -563,9 +563,8 @@ await User.delete("123");
 ## Hilfe erhalten
 
 Wenn Sie auf Probleme stoßen:
-1. Überprüfen Sie die [Fehlerbehebungsanleitung](../troubleshooting.md)
-2. Überprüfen Sie die [API-Referenz](../api/README.md)
-3. Suchen Sie in bestehenden [GitHub-Issues](https://github.com/arcaelas/dynamite/issues)
-4. Erstellen Sie ein neues Issue mit einem minimalen reproduzierbaren Beispiel
+1. Überprüfen Sie die [API-Referenz](../api/table.md)
+2. Suchen Sie in bestehenden [GitHub-Issues](https://github.com/arcaelas/dynamite/issues)
+3. Erstellen Sie ein neues Issue mit einem minimalen reproduzierbaren Beispiel
 
 Viel Spaß beim Programmieren mit Dynamite!

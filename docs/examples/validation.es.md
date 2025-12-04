@@ -922,6 +922,6 @@ class User extends Table<User> {
 
 - [Guía de Decoradores](../guides/decorators.md) - Todos los decoradores disponibles
 - [API de Table](../api/table.md) - Documentación completa de la clase Table
-- [Mejores Prácticas](../guides/best-practices.md) - Mejores prácticas de desarrollo
+- [Conceptos Básicos](../guides/core-concepts.md) - Conceptos y patrones básicos
 
 ¡Feliz validación con Dynamite!

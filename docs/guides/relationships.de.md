@@ -407,4 +407,4 @@ Beziehungen in Dynamite ermöglichen:
 - Tiefe und Menge geladener Daten begrenzen
 - Fremdschlüssel mit `@NotNull()` und `@Validate()` validieren
 
-Weitere Informationen finden Sie in der [Hauptdokumentation](../../README.md).
+Weitere Informationen finden Sie in der [API-Referenz](../api/table.md).

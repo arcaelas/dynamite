@@ -1062,7 +1062,7 @@ class User extends Table<User> {
 
 - [Decorators Guide](../guides/decorators.md) - All available decorators
 - [Table API](../api/table.md) - Complete Table class documentation
-- [Best Practices](../guides/best-practices.md) - Development best practices
+- [Core Concepts](../guides/core-concepts.md) - Core concepts and patterns
 
 ### Additional Topics
 
