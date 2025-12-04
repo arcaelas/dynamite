@@ -9,8 +9,10 @@ import {
   CreateTableCommand,
   DynamoDBClient,
   DynamoDBClientConfig,
+  TransactWriteItemsCommand,
 } from "@aws-sdk/client-dynamodb";
-import wrapper from "./wrapper";
+import { marshall } from "@aws-sdk/util-dynamodb";
+import wrapper from "./decorator";
 
 /**
  * Configuration for Dynamite client initialization
@@ -84,6 +86,26 @@ export class Dynamite {
     } catch (error) {
       console.warn("Error during Dynamite disconnect:", error);
     }
+  }
+
+  /**
+   * Ejecutar operaciones en una transacción atómica.
+   * Si cualquier operación falla, todas se revierten automáticamente.
+   *
+   * @param callback Función que recibe el contexto de transacción
+   * @returns Resultado del callback
+   *
+   * @example
+   * await dynamite.tx(async (tx) => {
+   *   const user = await User.create({ name: "Juan" }, tx);
+   *   await Order.create({ user_id: user.id, total: 100 }, tx);
+   * });
+   */
+  async tx<R>(callback: (tx: TransactionContext) => Promise<R>): Promise<R> {
+    const ctx = new TransactionContext(this.client);
+    const result = await callback(ctx);
+    await ctx.commit();
+    return result;
   }
 
   /**
@@ -183,3 +205,64 @@ export const requireClient = (): DynamoDBClient => {
   }
   return globalClient;
 };
+
+/**
+ * Contexto de transacción para agrupar operaciones atómicas.
+ * Máximo 25 operaciones por transacción (límite DynamoDB).
+ */
+export class TransactionContext {
+  private operations: TransactionItem[] = [];
+  private client: DynamoDBClient;
+
+  constructor(client: DynamoDBClient) {
+    this.client = client;
+  }
+
+  /**
+   * Agregar operación Put a la transacción
+   */
+  addPut(table_name: string, item: Record<string, any>): void {
+    this.operations.push({
+      Put: {
+        TableName: table_name,
+        Item: marshall(item, { removeUndefinedValues: true }),
+      },
+    });
+  }
+
+  /**
+   * Agregar operación Delete a la transacción
+   */
+  addDelete(table_name: string, key: Record<string, any>): void {
+    this.operations.push({
+      Delete: {
+        TableName: table_name,
+        Key: marshall(key),
+      },
+    });
+  }
+
+  /**
+   * Confirmar todas las operaciones de la transacción.
+   * Si alguna falla, todas se revierten.
+   */
+  async commit(): Promise<void> {
+    if (this.operations.length === 0) return;
+
+    if (this.operations.length > 25) {
+      throw new Error(
+        `Transacción excede el límite de 25 operaciones (tiene ${this.operations.length})`
+      );
+    }
+
+    await this.client.send(
+      new TransactWriteItemsCommand({
+        TransactItems: this.operations,
+      })
+    );
+  }
+}
+
+type TransactionItem =
+  | { Put: { TableName: string; Item: Record<string, any> } }
+  | { Delete: { TableName: string; Key: Record<string, any> } };

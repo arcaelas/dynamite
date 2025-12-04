@@ -94,23 +94,6 @@ type ResolveIncludeType<T, K extends keyof T> = T[K] extends HasMany<infer U>
   ? U | null
   : never;
 
-export type IncludeOptions = {
-  where?: Record<string, any>;
-  attributes?: string[];
-  limit?: number;
-  skip?: number;
-  order?: "ASC" | "DESC";
-};
-
-export type QueryResult<
-  T,
-  A extends keyof T = keyof T,
-  I extends Record<string, any> = {}
-> = SelectResult<
-  T & { [K in keyof I]: K extends keyof T ? ResolveIncludeType<T, K> : never },
-  A
->;
-
 export type WhereOptions<T> = {
   where?: Partial<FilterableAttributes<T>>;
   skip?: number;
@@ -119,12 +102,16 @@ export type WhereOptions<T> = {
   attributes?: (keyof FilterableAttributes<T>)[];
   include?: {
     [K in keyof T]?: T[K] extends HasMany<any> | BelongsTo<any>
-      ? IncludeOptions | {}
+      ? IncludeRelationOptions | true
       : never;
   };
 };
 
-export type WhereOptionsWithoutWhere<T> = Omit<WhereOptions<T>, "where">;
+/** Filtros de query sin cláusula where */
+export type QueryFilters<T> = Omit<WhereOptions<T>, "where">;
+
+/** @deprecated Usa QueryFilters */
+export type WhereOptionsWithoutWhere<T> = QueryFilters<T>;
 
 export type QueryOperator =
   | "="
@@ -138,12 +125,24 @@ export type QueryOperator =
   | "contains"
   | "begins-with";
 
+/** Entrada de validador con soporte lazy */
+export interface ValidatorEntry {
+  fn: (value: any) => boolean | string;
+  lazy?: boolean;
+}
+
+/** Configuración de serialización para transformar valores DB ↔ App */
+export interface SerializeConfig {
+  fromDB?: (value: any) => any;
+  toDB?: (value: any) => any;
+}
+
 // Tipos para core/wrapper
 export interface Column {
   name: string;
   default?: any | (() => any);
   mutate?: ((value: any) => any)[];
-  validate?: ((value: any) => boolean | string)[];
+  validate?: (((value: any) => boolean | string) | ValidatorEntry)[];
   index?: true;
   indexSort?: true;
   primaryKey?: boolean;
@@ -151,6 +150,8 @@ export interface Column {
   unique?: true;
   createdAt?: boolean;
   updatedAt?: boolean;
+  softDelete?: boolean;
+  serialize?: SerializeConfig;
 }
 
 export interface RelationMetadata {
@@ -176,7 +177,8 @@ export type IncludeRelationOptions = {
   include?: Record<string, IncludeRelationOptions | true>;
 };
 
-export type WhereQueryOptions<T> = {
+/** Opciones de query para métodos where(), first(), last(), etc. */
+export type QueryOptions<T> = {
   order?: "ASC" | "DESC";
   skip?: number;
   limit?: number;
@@ -187,6 +189,9 @@ export type WhereQueryOptions<T> = {
       : never;
   };
 };
+
+/** @deprecated Usa QueryOptions */
+export type WhereQueryOptions<T> = QueryOptions<T>;
 
 // Tipos utilitarios para decoradores
 export type Mutate = (value: any) => any;

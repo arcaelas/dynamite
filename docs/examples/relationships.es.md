@@ -459,16 +459,6 @@ import {
   Dynamite
 } from "@arcaelas/dynamite";
 
-// Configurar DynamoDB
-Dynamite.config({
-  region: "us-east-1",
-  endpoint: "http://localhost:8000",
-  credentials: {
-    accessKeyId: "test",
-    secretAccessKey: "test"
-  }
-});
-
 // Modelo User
 class User extends Table<User> {
   @PrimaryKey()
@@ -587,8 +577,22 @@ class Review extends Table<Review> {
   declare product: NonAttribute<BelongsTo<Product>>;
 }
 
+// Configurar DynamoDB y registrar todas las tablas
+const dynamite = new Dynamite({
+  region: "us-east-1",
+  endpoint: "http://localhost:8000",
+  tables: [User, Product, Order, OrderItem, Review],
+  credentials: {
+    accessKeyId: "test",
+    secretAccessKey: "test"
+  }
+});
+
 // Aplicación principal
 async function main() {
+  // Conectar y sincronizar tablas
+  dynamite.connect();
+  await dynamite.sync();
   console.log("=== E-Commerce Relationships Example ===\n");
 
   // 1. Crear usuarios

@@ -443,16 +443,6 @@ import {
   Dynamite
 } from "@arcaelas/dynamite";
 
-// DynamoDB konfigurieren
-Dynamite.config({
-  region: "us-east-1",
-  endpoint: "http://localhost:8000",
-  credentials: {
-    accessKeyId: "test",
-    secretAccessKey: "test"
-  }
-});
-
 // Benutzerdefinierte Validatoren
 function validate_email(value: any): boolean | string {
   const email = value as string;
@@ -494,8 +484,22 @@ class User extends Table<User> {
   declare created_at: CreationOptional<string>;
 }
 
+// DynamoDB konfigurieren und User-Tabelle registrieren
+const dynamite = new Dynamite({
+  region: "us-east-1",
+  endpoint: "http://localhost:8000",
+  tables: [User],
+  credentials: {
+    accessKeyId: "test",
+    secretAccessKey: "test"
+  }
+});
+
 // Hauptanwendung
 async function main() {
+  // Verbindung herstellen und Tabellen synchronisieren
+  dynamite.connect();
+  await dynamite.sync();
   console.log("=== Data Validation Example ===\n");
 
   // Gültigen Benutzer erstellen

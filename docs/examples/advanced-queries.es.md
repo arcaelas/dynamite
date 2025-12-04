@@ -582,16 +582,6 @@ import {
   Dynamite
 } from "@arcaelas/dynamite";
 
-// Configurar DynamoDB
-Dynamite.config({
-  region: "us-east-1",
-  endpoint: "http://localhost:8000",
-  credentials: {
-    accessKeyId: "test",
-    secretAccessKey: "test"
-  }
-});
-
 // Modelo User
 class User extends Table<User> {
   @PrimaryKey()
@@ -639,8 +629,22 @@ class Product extends Table<Product> {
   declare created_at: CreationOptional<string>;
 }
 
+// Configurar DynamoDB y registrar tablas
+const dynamite = new Dynamite({
+  region: "us-east-1",
+  endpoint: "http://localhost:8000",
+  tables: [User, Product],
+  credentials: {
+    accessKeyId: "test",
+    secretAccessKey: "test"
+  }
+});
+
 // Aplicación principal
 async function main() {
+  // Conectar y sincronizar tablas
+  dynamite.connect();
+  await dynamite.sync();
   console.log("=== Advanced Queries Example ===\n");
 
   // 1. Crear usuarios de muestra

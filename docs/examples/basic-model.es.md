@@ -72,28 +72,35 @@ Antes de usar tus modelos, configura la conexión a DynamoDB:
 
 ```typescript
 // Para desarrollo local con DynamoDB Local
-Dynamite.config({
+const dynamite = new Dynamite({
   region: "us-east-1",
   endpoint: "http://localhost:8000",
+  tables: [User], // Tus clases de modelo
   credentials: {
     accessKeyId: "test",
     secretAccessKey: "test"
   }
 });
+dynamite.connect();
+await dynamite.sync();
 
 // Para producción en AWS
-Dynamite.config({
+const dynamite = new Dynamite({
   region: "us-east-1",
+  tables: [User],
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
   }
 });
+dynamite.connect();
+await dynamite.sync();
 ```
 
 **Opciones de Configuración:**
 - `region` - Región de AWS (ej., "us-east-1", "eu-west-1")
 - `endpoint` - Endpoint de DynamoDB (usa localhost:8000 para desarrollo local)
+- `tables` - Array de clases de modelo a registrar
 - `credentials` - Objeto de credenciales AWS con accessKeyId y secretAccessKey
 
 ## Creación de Registros
@@ -442,16 +449,6 @@ import {
   Dynamite
 } from "@arcaelas/dynamite";
 
-// Configurar conexión a DynamoDB
-Dynamite.config({
-  region: "us-east-1",
-  endpoint: "http://localhost:8000",
-  credentials: {
-    accessKeyId: "test",
-    secretAccessKey: "test"
-  }
-});
-
 // Definir modelo User
 class User extends Table<User> {
   @PrimaryKey()
@@ -474,8 +471,22 @@ class User extends Table<User> {
   declare updated_at: CreationOptional<string>;
 }
 
+// Configurar conexión DynamoDB y registrar tabla User
+const dynamite = new Dynamite({
+  region: "us-east-1",
+  endpoint: "http://localhost:8000",
+  tables: [User],
+  credentials: {
+    accessKeyId: "test",
+    secretAccessKey: "test"
+  }
+});
+
 // Aplicación principal
 async function main() {
+  // Conectar y sincronizar tablas
+  dynamite.connect();
+  await dynamite.sync();
   console.log("=== User Management System ===\n");
 
   // 1. CREATE - Agregar nuevos usuarios
@@ -815,7 +826,7 @@ const results = await search_users("john");
 ### Solución de Problemas
 
 **Problema: "Metadata not found"**
-- Asegúrate de que `Dynamite.config()` se llame antes de usar modelos
+- Asegúrate de llamar `dynamite.connect()` y `await dynamite.sync()` antes de usar modelos
 - Verifica importaciones circulares
 
 **Problema: "Primary key missing"**

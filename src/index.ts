@@ -9,33 +9,53 @@
 export { Dynamite } from "./core/client";
 export { default as Table } from "./core/table";
 
-// Decoradores
-export { default as BelongsTo } from "./decorators/belongs_to";
-export { default as CreatedAt } from "./decorators/created_at";
-export { default as Default } from "./decorators/default";
-export { default as HasMany } from "./decorators/has_many";
-export { default as Index } from "./decorators/index";
-export { default as IndexSort } from "./decorators/index_sort";
-export { default as Mutate } from "./decorators/mutate";
-export { default as Name } from "./decorators/name";
-export { default as NotNull } from "./decorators/not_null";
-export { default as PrimaryKey } from "./decorators/primary_key";
-export { default as UpdatedAt } from "./decorators/updated_at";
-export { default as Validate } from "./decorators/validate";
+// Factory para crear decoradores personalizados
+export { decorator, relationDecorator } from "./core/decorator";
 
-// Relaciones
+// Sistema de métodos extensibles
+export {
+  registerStaticMethod,
+  registerInstanceMethod,
+  type StaticMethodHandler,
+  type InstanceMethodHandler,
+} from "./core/method";
+
+// Decoradores - Índices
+export { Index, IndexSort, PrimaryKey } from "./decorators/indexes";
+
+// Decoradores - Timestamps
+export { CreatedAt, UpdatedAt, DeleteAt } from "./decorators/timestamps";
+
+// Decoradores - Transformación
+export { Default, Mutate, Validate, Serialize, NotNull, Name } from "./decorators/transforms";
+
+// Decoradores - Relaciones
+export { HasMany, BelongsTo } from "./decorators/relations";
+
+// Utils - Procesamiento de relaciones
 export { belongsTo, hasMany } from "./utils/relations";
 
 // Tipos avanzados (reexportados desde @types)
 export type {
+  // Relaciones branded
   BelongsTo as BelongsToType,
+  HasMany as HasManyType,
+  // Atributos
   CreationOptional,
   FilterableAttributes,
-  HasMany as HasManyType,
   InferAttributes,
   NonAttribute,
+  // Queries
   QueryOperator,
-  QueryResult,
+  QueryOptions,
+  QueryFilters,
   WhereOptions,
+  IncludeRelationOptions,
+  // Metadatos (para decoradores custom)
+  Column,
+  RelationMetadata,
+  ValidatorEntry,
+  SerializeConfig,
+  // Deprecated (mantener para compatibilidad)
   WhereOptionsWithoutWhere,
 } from "@type/index";

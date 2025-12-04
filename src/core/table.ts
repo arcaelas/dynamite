@@ -14,12 +14,20 @@ import { marshall, unmarshall } from "@aws-sdk/util-dynamodb";
 import type {
   InferAttributes,
   QueryOperator,
-  WhereQueryOptions,
+  QueryOptions,
+  ValidatorEntry,
   WrapperEntry,
 } from "@type/index";
 import { processIncludes } from "../utils/relations";
-import { requireClient } from "./client";
-import { mustMeta, STORE } from "./wrapper";
+import { requireClient, TransactionContext } from "./client";
+import { mustMeta, STORE } from "./decorator";
+import {
+  registerStaticMethod,
+  registerInstanceMethod,
+  setTableClass,
+  type StaticMethodHandler,
+  type InstanceMethodHandler,
+} from "./method";
 
 /** Tipos importados desde @types */
 
@@ -56,17 +64,33 @@ function buildConditionExpression(
   names: Record<string, string>;
   values: Record<string, any>;
 } {
+  // Eliminar campos nullish antes de procesar
+  const clean_filters: Record<string, any> = {};
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== null && value !== undefined) {
+      clean_filters[key] = value;
+    }
+  }
+
+  if (Object.keys(clean_filters).length === 0) {
+    return { expression: "", names: {}, values: {} };
+  }
+
   const expressions: string[] = [];
   const names: Record<string, string> = {};
   const values: Record<string, any> = {};
 
-  Object.entries(filters).forEach(([key, value], index) => {
+  Object.entries(clean_filters).forEach(([key, value], index) => {
     const nameKey = `#attr${index}`;
     const valueKey = `:val${index}`;
 
     names[nameKey] = key;
 
     if (operator === "in" && Array.isArray(value)) {
+      if (value.length === 0) {
+        expressions.push("1 = 0");
+        return;
+      }
       const inValues = value.map((v, i) => {
         const inValueKey = `:val${index}_${i}`;
         values[inValueKey] = v;
@@ -74,6 +98,7 @@ function buildConditionExpression(
       });
       expressions.push(`${nameKey} IN (${inValues.join(", ")})`);
     } else if (operator === "not-in" && Array.isArray(value)) {
+      if (value.length === 0) return;
       const notInValues = value.map((v, i) => {
         const notInValueKey = `:val${index}_${i}`;
         values[notInValueKey] = v;
@@ -110,20 +135,66 @@ function buildConditionExpression(
 export default class Table<T = any> {
   protected [STORE]!: { [K in keyof T]?: T[K] };
 
+  /**
+   * @description Registra un método estático extensible en Table
+   * @param name Nombre del método
+   * @param handler Handler que recibe (TableClass, args)
+   * @example
+   * ```typescript
+   * Table.static('findByEmail', (t, [email]) => {
+   *   return t.first('email', email);
+   * });
+   * // Uso: User.findByEmail('test@example.com')
+   * ```
+   */
+  static static<R = any>(
+    name: string,
+    handler: StaticMethodHandler<R>
+  ): typeof Table {
+    registerStaticMethod(name, handler);
+    return this;
+  }
+
+  /**
+   * @description Registra un método de instancia extensible en Table
+   * @param name Nombre del método
+   * @param handler Handler que recibe (TableClass, instance, args)
+   * @example
+   * ```typescript
+   * Table.method('duplicate', (t, m, args) => {
+   *   const data = m.toJSON();
+   *   delete data.id;
+   *   return t.create(data);
+   * });
+   * // Uso: await user.duplicate()
+   * ```
+   */
+  static method<R = any>(
+    name: string,
+    handler: InstanceMethodHandler<R>
+  ): typeof Table {
+    registerInstanceMethod(name, handler);
+    return this;
+  }
+
   constructor(data: InferAttributes<T>) {
     requireClient();
     const meta = mustMeta(Object.getPrototypeOf(this).constructor);
 
+    // Aplicar deserialización fromDB si existe
+    for (const [key, col] of meta.columns) {
+      if (typeof key === "string" && key in data && col.serialize?.fromDB) {
+        (data as any)[key] = col.serialize.fromDB((data as any)[key]);
+      }
+    }
+
     // Inicializar propiedades con valores por defecto
     meta.columns.forEach((col, key) => {
       if (typeof key === "string" && !(key in data)) {
-        // Forzar aplicación de valor por defecto mediante setter
         if (col.default !== undefined) {
           const defaultValue =
             typeof col.default === "function" ? col.default() : col.default;
           (this as any)[key] = defaultValue;
-        } else {
-          (this as any)[key] = undefined;
         }
       }
     });
@@ -131,29 +202,35 @@ export default class Table<T = any> {
     Object.assign(this, data);
   }
 
-  /** Serializar instancia a JSON plano */
+  /** Serializar instancia a JSON plano (descarta campos null/undefined) */
   toJSON(): Record<string, any> {
     const meta = mustMeta(Object.getPrototypeOf(this).constructor);
     const result: Record<string, any> = {};
 
     meta.columns.forEach((column, key) => {
       if (typeof key === "string") {
-        // Acceder a la propiedad directamente para activar getters virtuales
-        const value = (this as any)[key];
-        if (value !== undefined) {
-          result[key] = value;
+        let value = (this as any)[key];
+
+        // Descartar campos nullish
+        if (value === null || value === undefined) return;
+
+        // Aplicar serialización toDB si existe
+        if (column.serialize?.toDB) {
+          value = column.serialize.toDB(value);
         }
+
+        result[key] = value;
       }
     });
 
     // Incluir propiedades enumerables ad-hoc no registradas como relaciones
-    // Esto permite persistir campos opcionales sin decoradores (p.ej. 'notes')
     for (const key of Object.keys(this as any)) {
       if (result[key] !== undefined) continue;
       if ((meta.relations as any).has && (meta.relations as any).has(key))
         continue;
       const val = (this as any)[key];
-      if (val === undefined) continue;
+      // Descartar nullish
+      if (val === null || val === undefined) continue;
       if (typeof val === "function") continue;
       result[key] = val;
     }
@@ -168,6 +245,23 @@ export default class Table<T = any> {
     const meta = mustMeta(Ctor);
     const now = new Date().toISOString();
     const isNew = id === undefined || id === null;
+
+    // Ejecutar validadores lazy antes de persistir
+    for (const [key, col] of meta.columns) {
+      if (col.validate) {
+        const value = (this as any)[key];
+        for (const v of col.validate) {
+          if (typeof v === "object" && (v as ValidatorEntry).lazy) {
+            const result = (v as ValidatorEntry).fn(value);
+            if (result !== true) {
+              throw new Error(
+                typeof result === "string" ? result : `Validación fallida en ${String(key)}`
+              );
+            }
+          }
+        }
+      }
+    }
 
     // Actualizar campos de timestamp
     meta.columns.forEach((col, key) => {
@@ -206,11 +300,39 @@ export default class Table<T = any> {
     return await this.save();
   }
 
-  /** Eliminar instancia */
+  /** Eliminar instancia (soft delete si está configurado) */
   async destroy(): Promise<null> {
     const id: unknown = (this as any).id;
     if (id === undefined || id === null) {
       throw new Error("destroy() requiere que la instancia tenga un id");
+    }
+
+    const Ctor = this.constructor as typeof Table;
+    const meta = mustMeta(Ctor);
+
+    // Buscar columna soft delete
+    let soft_delete_key: string | undefined;
+    for (const [k, col] of meta.columns) {
+      if (col.softDelete) {
+        soft_delete_key = String(k);
+        break;
+      }
+    }
+
+    if (soft_delete_key) {
+      (this as any)[soft_delete_key] = new Date().toISOString();
+      await this.save();
+      return null;
+    }
+
+    return await (Ctor as any).delete({ id: String(id) });
+  }
+
+  /** Forzar eliminación física ignorando soft delete */
+  async forceDestroy(): Promise<null> {
+    const id: unknown = (this as any).id;
+    if (id === undefined || id === null) {
+      throw new Error("forceDestroy() requiere que la instancia tenga un id");
     }
 
     const Ctor = this.constructor as typeof Table;
@@ -223,14 +345,17 @@ export default class Table<T = any> {
 
   /**
    * Crear un nuevo registro en la base de datos
+   * @param data Datos del registro
+   * @param tx Contexto de transacción opcional
    */
   static async create<M extends Table>(
     this: { new (data: InferAttributes<M>): M; prototype: M },
-    data: InferAttributes<M>
+    data: InferAttributes<M>,
+    tx?: TransactionContext
   ): Promise<M> {
-    const client = requireClient();
     const meta = mustMeta(this);
     const instance = new this(data);
+
     // Establecer timestamps si corresponde
     const now = new Date().toISOString();
     meta.columns.forEach((col, key) => {
@@ -241,118 +366,124 @@ export default class Table<T = any> {
         (instance as any)[key] = now;
       }
     });
+
     const payload = instance.toJSON();
 
-    await client.send(
-      new PutItemCommand({
-        TableName: meta.name,
-        Item: marshall(payload, { removeUndefinedValues: true }),
-      })
-    );
+    if (tx) {
+      tx.addPut(meta.name, payload);
+    } else {
+      const client = requireClient();
+      await client.send(
+        new PutItemCommand({
+          TableName: meta.name,
+          Item: marshall(payload, { removeUndefinedValues: true }),
+        })
+      );
+    }
 
     return instance;
   }
 
   /**
    * Actualizar registros en la base de datos
-   * @param updates - Campos a actualizar. Los campos con valor `undefined` se ignoran.
-   * @param filters - Filtros para seleccionar los registros a actualizar
+   * @param updates Campos a actualizar
+   * @param filters Filtros para seleccionar los registros a actualizar
+   * @param tx Contexto de transacción opcional
    * @returns Número de registros actualizados
    */
   static async update<M extends Table>(
     this: { new (data: InferAttributes<M>): M; prototype: M },
     updates: Partial<InferAttributes<M>>,
-    filters: Partial<InferAttributes<M>>
+    filters: Partial<InferAttributes<M>>,
+    tx?: TransactionContext
   ): Promise<number> {
-    // Obtener metadatos del modelo para manejar timestamps
     const meta = mustMeta(this);
-    const client = requireClient();
 
     // Buscar registros que coincidan con los filtros
-    const recordsToUpdate = await (this as any).where(filters);
+    const records_to_update = await (this as any).where(filters);
 
-    if (recordsToUpdate.length === 0) {
+    if (records_to_update.length === 0) {
       return 0;
     }
 
-    // No filtrar campos undefined aquí para permitir establecer valores nulos/explicitos
-    const cleanUpdates = { ...updates };
-
-    // Verificar si hay campos para actualizar
-    if (Object.keys(cleanUpdates).length === 0) {
-      return recordsToUpdate.length; // No hay cambios que hacer
+    // Filtrar campos nullish de updates
+    const clean_updates: Record<string, any> = {};
+    for (const [key, value] of Object.entries(updates)) {
+      if (value !== null && value !== undefined) {
+        clean_updates[key] = value;
+      }
     }
 
+    if (Object.keys(clean_updates).length === 0) {
+      return records_to_update.length;
+    }
+
+    const client = tx ? null : requireClient();
+
     // Actualizar cada registro
-    const updatePromises = recordsToUpdate.map(async (record) => {
-      // Obtener datos actuales
-      const currentData = record.toJSON();
-
-      // Aplicar actualizaciones, preservando valores existentes
-      const updatedData = { ...currentData };
-
-      // Aplicar solo los campos que no son undefined
-      for (const [key, value] of Object.entries(cleanUpdates)) {
-        if (value !== undefined) {
-          updatedData[key] = value;
-        }
-      }
+    for (const record of records_to_update) {
+      const current_data = record.toJSON();
+      const updated_data = { ...current_data, ...clean_updates };
 
       // Actualizar timestamp updated_at si está configurado
-      let updatedAtKey: string | symbol | undefined = undefined;
       for (const [k, col] of meta.columns.entries()) {
         if (col.updatedAt === true) {
-          updatedAtKey = k as any;
+          updated_data[String(k)] = new Date().toISOString();
           break;
         }
       }
-      if (updatedAtKey !== undefined) {
-        (updatedData as any)[String(updatedAtKey)] = new Date().toISOString();
+
+      if (tx) {
+        tx.addPut(meta.name, updated_data);
+      } else {
+        await client!.send(
+          new PutItemCommand({
+            TableName: meta.name,
+            Item: marshall(updated_data, { removeUndefinedValues: true }),
+          })
+        );
       }
+    }
 
-      // Actualizar en la base de datos
-      await client.send(
-        new PutItemCommand({
-          TableName: meta.name,
-          Item: marshall(updatedData, { removeUndefinedValues: true }),
-        })
-      );
-    });
-
-    await Promise.all(updatePromises);
-    return recordsToUpdate.length;
+    return records_to_update.length;
   }
 
   /**
    * Eliminar registros de la base de datos
+   * @param filters Filtros para seleccionar registros
+   * @param tx Contexto de transacción opcional
    */
   static async delete<M extends Table>(
     this: { new (data: InferAttributes<M>): M; prototype: M },
-    filters: Partial<InferAttributes<M>>
+    filters: Partial<InferAttributes<M>>,
+    tx?: TransactionContext
   ): Promise<number> {
-    const recordsToDelete = await (this as any).where(filters);
+    const records_to_delete = await (this as any).where(filters);
 
-    if (recordsToDelete.length === 0) {
+    if (records_to_delete.length === 0) {
       return 0;
     }
 
-    const client = requireClient();
     const meta = mustMeta(this);
+    const client = tx ? null : requireClient();
 
-    const deletePromises = recordsToDelete.map(async (record) => {
+    for (const record of records_to_delete) {
       const id = (record as any).id;
       if (id) {
-        await client.send(
-          new DeleteItemCommand({
-            TableName: meta.name,
-            Key: marshall({ id: String(id) }),
-          })
-        );
+        if (tx) {
+          tx.addDelete(meta.name, { id: String(id) });
+        } else {
+          await client!.send(
+            new DeleteItemCommand({
+              TableName: meta.name,
+              Key: marshall({ id: String(id) }),
+            })
+          );
+        }
       }
-    });
+    }
 
-    await Promise.all(deletePromises);
-    return recordsToDelete.length;
+    return records_to_delete.length;
   }
 
   // ===========================================================================
@@ -384,7 +515,7 @@ export default class Table<T = any> {
   static async where<M extends Table>(
     this: { new (data: InferAttributes<M>): M; prototype: M },
     filters: Partial<InferAttributes<M>>,
-    options: WhereQueryOptions<M>
+    options: QueryOptions<M>
   ): Promise<M[]>;
 
   /** Implementación del método where */
@@ -396,7 +527,7 @@ export default class Table<T = any> {
     const meta = mustMeta(this);
 
     let filters: Partial<InferAttributes<M>>;
-    let options: WhereQueryOptions<M> = {};
+    let options: QueryOptions<M> = {};
     let operator: QueryOperator = "=";
 
     // Parsear argumentos según la sobrecarga utilizada
@@ -425,6 +556,9 @@ export default class Table<T = any> {
       throw new Error("Argumentos inválidos para where()");
     }
 
+    // Retorno temprano si limit es 0
+    if (options.limit === 0) return [];
+
     // Validar límites y opciones
     if (options.limit && options.limit < 0) {
       throw new Error("limit debe ser mayor o igual a 0");
@@ -434,6 +568,19 @@ export default class Table<T = any> {
     }
     if (options.order && !["ASC", "DESC"].includes(options.order)) {
       throw new Error('order debe ser "ASC" o "DESC"');
+    }
+
+    // Auto-excluir soft deleted a menos que _includeTrashed esté activo
+    if (!(options as any)._includeTrashed) {
+      for (const [k, col] of meta.columns) {
+        if (col.softDelete) {
+          const soft_key = String(k);
+          if (!(soft_key in filters)) {
+            (filters as any)[soft_key] = null;
+          }
+          break;
+        }
+      }
     }
 
     // Construir la consulta DynamoDB
@@ -455,7 +602,9 @@ export default class Table<T = any> {
       scanParams.FilterExpression = expression;
       // Merge filter attribute names
       Object.assign(scanParams.ExpressionAttributeNames, names);
-      scanParams.ExpressionAttributeValues = marshall(values);
+      scanParams.ExpressionAttributeValues = marshall(values, {
+        removeUndefinedValues: true,
+      });
     }
 
     if (options.attributes) {
@@ -474,7 +623,7 @@ export default class Table<T = any> {
     let lastEvaluatedKey: any = undefined;
     let scannedCount = 0;
     const targetSkip = options.skip || 0;
-    const targetLimit = options.limit || 100;
+    const targetLimit = options.limit ?? 100;
 
     do {
       if (lastEvaluatedKey) {
@@ -484,7 +633,16 @@ export default class Table<T = any> {
       const result = await client.send(new ScanCommand(scanParams));
 
       if (result.Items) {
-        const items = result.Items.map((item) => unmarshall(item));
+        const items = result.Items.map((item) => {
+          const raw = unmarshall(item);
+          // Eliminar campos null/undefined del resultado
+          for (const k of Object.keys(raw)) {
+            if (raw[k] === null || raw[k] === undefined) {
+              delete raw[k];
+            }
+          }
+          return raw;
+        });
 
         for (const item of items) {
           if (scannedCount < targetSkip) {
@@ -626,7 +784,67 @@ export default class Table<T = any> {
     }
     throw new Error("Argumentos no válidos para last()");
   }
+
+  // ===========================================================================
+  // MÉTODOS SOFT DELETE
+  // ===========================================================================
+
+  /**
+   * Buscar registros incluyendo los soft deleted
+   * @param filters Filtros opcionales
+   * @param options Opciones de query
+   */
+  static async withTrashed<M extends Table>(
+    this: { new (data: InferAttributes<M>): M; prototype: M },
+    filters?: Partial<InferAttributes<M>>,
+    options?: QueryOptions<M>
+  ): Promise<M[]> {
+    return await (this as any).where(filters ?? {}, {
+      ...options,
+      _includeTrashed: true,
+    });
+  }
+
+  /**
+   * Buscar solo registros soft deleted
+   * @param filters Filtros opcionales
+   * @param options Opciones de query
+   */
+  static async onlyTrashed<M extends Table>(
+    this: { new (data: InferAttributes<M>): M; prototype: M },
+    filters?: Partial<InferAttributes<M>>,
+    options?: QueryOptions<M>
+  ): Promise<M[]> {
+    const meta = mustMeta(this);
+
+    // Encontrar columna soft delete
+    let soft_delete_key: string | undefined;
+    for (const [k, col] of meta.columns) {
+      if (col.softDelete) {
+        soft_delete_key = String(k);
+        break;
+      }
+    }
+
+    if (!soft_delete_key) {
+      throw new Error("onlyTrashed() requiere un campo @SoftDelete configurado");
+    }
+
+    // Filtrar solo donde deleted_at no es null
+    const merged_filters = {
+      ...filters,
+      [soft_delete_key]: { "!=": null },
+    } as Partial<InferAttributes<M>>;
+
+    return await (this as any).where(merged_filters, {
+      ...options,
+      _includeTrashed: true,
+    });
+  }
 }
+
+// Conectar Table con el sistema de métodos extensibles
+setTableClass(Table);
 
 export { STORE };
 export type { WrapperEntry };
