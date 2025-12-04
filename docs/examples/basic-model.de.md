@@ -72,28 +72,35 @@ Vor der Verwendung Ihrer Modelle konfigurieren Sie die DynamoDB-Verbindung:
 
 ```typescript
 // Für lokale Entwicklung mit DynamoDB Local
-Dynamite.config({
+const dynamite = new Dynamite({
   region: "us-east-1",
   endpoint: "http://localhost:8000",
+  tables: [User], // Ihre Modellklassen
   credentials: {
     accessKeyId: "test",
     secretAccessKey: "test"
   }
 });
+dynamite.connect();
+await dynamite.sync();
 
 // Für AWS-Produktion
-Dynamite.config({
+const dynamite = new Dynamite({
   region: "us-east-1",
+  tables: [User],
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
   }
 });
+dynamite.connect();
+await dynamite.sync();
 ```
 
 **Konfigurationsoptionen:**
 - `region` - AWS-Region (z.B. "us-east-1", "eu-west-1")
 - `endpoint` - DynamoDB-Endpunkt (verwenden Sie localhost:8000 für lokale Entwicklung)
+- `tables` - Array von Modellklassen zur Registrierung
 - `credentials` - AWS-Anmeldeinformationsobjekt mit accessKeyId und secretAccessKey
 
 ## Datensätze Erstellen
@@ -397,16 +404,6 @@ import {
   Dynamite
 } from "@arcaelas/dynamite";
 
-// DynamoDB-Verbindung konfigurieren
-Dynamite.config({
-  region: "us-east-1",
-  endpoint: "http://localhost:8000",
-  credentials: {
-    accessKeyId: "test",
-    secretAccessKey: "test"
-  }
-});
-
 // User-Modell definieren
 class User extends Table<User> {
   @PrimaryKey()
@@ -429,8 +426,22 @@ class User extends Table<User> {
   declare updated_at: CreationOptional<string>;
 }
 
+// DynamoDB-Verbindung konfigurieren und User-Tabelle registrieren
+const dynamite = new Dynamite({
+  region: "us-east-1",
+  endpoint: "http://localhost:8000",
+  tables: [User],
+  credentials: {
+    accessKeyId: "test",
+    secretAccessKey: "test"
+  }
+});
+
 // Hauptanwendung
 async function main() {
+  // Verbindung herstellen und Tabellen synchronisieren
+  dynamite.connect();
+  await dynamite.sync();
   console.log("=== User Management System ===\n");
 
   // 1. CREATE - Neue Benutzer hinzufügen

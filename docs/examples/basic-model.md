@@ -72,28 +72,35 @@ Before using your models, configure the DynamoDB connection:
 
 ```typescript
 // For local development with DynamoDB Local
-Dynamite.config({
+const dynamite = new Dynamite({
   region: "us-east-1",
   endpoint: "http://localhost:8000",
+  tables: [User], // Your model classes
   credentials: {
     accessKeyId: "test",
     secretAccessKey: "test"
   }
 });
+dynamite.connect();
+await dynamite.sync();
 
 // For AWS production
-Dynamite.config({
+const dynamite = new Dynamite({
   region: "us-east-1",
+  tables: [User],
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
   }
 });
+dynamite.connect();
+await dynamite.sync();
 ```
 
 **Configuration Options:**
 - `region` - AWS region (e.g., "us-east-1", "eu-west-1")
 - `endpoint` - DynamoDB endpoint (use localhost:8000 for local development)
+- `tables` - Array of model classes to register
 - `credentials` - AWS credentials object with accessKeyId and secretAccessKey
 
 ## Creating Records
@@ -442,17 +449,7 @@ import {
   Dynamite
 } from "@arcaelas/dynamite";
 
-// Configure DynamoDB connection
-Dynamite.config({
-  region: "us-east-1",
-  endpoint: "http://localhost:8000",
-  credentials: {
-    accessKeyId: "test",
-    secretAccessKey: "test"
-  }
-});
-
-// Define User model
+// Define User model first
 class User extends Table<User> {
   @PrimaryKey()
   @Default(() => crypto.randomUUID())
@@ -473,6 +470,19 @@ class User extends Table<User> {
   @UpdatedAt()
   declare updated_at: CreationOptional<string>;
 }
+
+// Configure DynamoDB connection
+const dynamite = new Dynamite({
+  region: "us-east-1",
+  endpoint: "http://localhost:8000",
+  tables: [User],
+  credentials: {
+    accessKeyId: "test",
+    secretAccessKey: "test"
+  }
+});
+dynamite.connect();
+await dynamite.sync();
 
 // Main application
 async function main() {
@@ -815,7 +825,7 @@ const results = await search_users("john");
 ### Troubleshooting
 
 **Issue: "Metadata not found"**
-- Ensure `Dynamite.config()` is called before using models
+- Ensure `new Dynamite({ tables: [...] })` is configured and `connect()` is called before using models
 - Check for circular imports
 
 **Issue: "Primary key missing"**

@@ -9,8 +9,7 @@
 // IMPORTS
 // =============================================================================
 import { RelationMetadata } from "@type/index";
-import { ensureConfig, mustMeta } from "../core/wrapper";
-import { toSnakePlural } from "./naming";
+import { ensureConfig, mustMeta, toSnakePlural } from "../core/decorator";
 
 // =============================================================================
 // TYPES
