@@ -1426,4 +1426,4 @@ Las relaciones en Dynamite permiten:
 - Limitar profundidad y cantidad de datos cargados
 - Validar foreign keys con `@NotNull()` y `@Validate()`
 
-Para más información consulta la [documentación principal](../../README.md).
+Para más información consulta la [Referencia de API](../api/table.md).

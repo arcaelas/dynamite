@@ -75,20 +75,11 @@ nav:
     - Core Concepts: guides/core-concepts.md
     - Decorators: guides/decorators.md
     - Relationships: guides/relationships.md
-    - Best Practices: guides/best-practices.md
 
   - API Reference:
     - Table: api/table.md
     - Client: api/client.md
     - Types: api/types.md
-    - Decorators:
-      - Primary Key: api/decorators/primary-key.md
-      - Index Sort: api/decorators/index-sort.md
-      - Default: api/decorators/default.md
-      - Validate: api/decorators/validate.md
-      - Mutate: api/decorators/mutate.md
-      - Timestamps: api/decorators/timestamps.md
-      - Relationships: api/decorators/relationships.md
 
   - Examples:
     - Basic Model: examples/basic-model.md
@@ -97,8 +88,6 @@ nav:
     - Advanced Queries: examples/advanced-queries.md
 
   - Advanced:
-    - Performance: advanced/performance.md
-    - Troubleshooting: advanced/troubleshooting.md
     - Migration Guide: advanced/migration.md
 
 markdown_extensions:
@@ -175,24 +164,15 @@ plugins:
             Core Concepts: Conceptos Básicos
             Decorators: Decoradores
             Relationships: Relaciones
-            Best Practices: Mejores Prácticas
             API Reference: Referencia API
             Table: Tabla
             Client: Cliente
             Types: Tipos
-            Primary Key: Llave Primaria
-            Index Sort: Índice de Ordenamiento
-            Default: Valor Predeterminado
-            Validate: Validación
-            Mutate: Mutación
-            Timestamps: Marcas de Tiempo
             Examples: Ejemplos
             Basic Model: Modelo Básico
             Validation: Validación
             Advanced Queries: Consultas Avanzadas
             Advanced: Avanzado
-            Performance: Rendimiento
-            Troubleshooting: Solución de Problemas
             Migration Guide: Guía de Migración
         - locale: de
           name: Deutsch
@@ -207,24 +187,15 @@ plugins:
             Core Concepts: Kernkonzepte
             Decorators: Dekoratoren
             Relationships: Beziehungen
-            Best Practices: Best Practices
             API Reference: API-Referenz
             Table: Tabelle
             Client: Client
             Types: Typen
-            Primary Key: Primärschlüssel
-            Index Sort: Indexsortierung
-            Default: Standardwert
-            Validate: Validierung
-            Mutate: Mutation
-            Timestamps: Zeitstempel
             Examples: Beispiele
             Basic Model: Grundlegendes Modell
             Validation: Validierung
             Advanced Queries: Erweiterte Abfragen
             Advanced: Erweitert
-            Performance: Leistung
-            Troubleshooting: Fehlerbehebung
             Migration Guide: Migrationsanleitung
   - minify:
       minify_html: true

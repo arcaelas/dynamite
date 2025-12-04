@@ -892,11 +892,11 @@ Herzlichen Glückwunsch! Sie haben @arcaelas/dynamite erfolgreich installiert un
 
 ### Empfohlene nächste Schritte
 
-1. **Grundlagen lernen**: Lesen Sie den [Einstiegsleitfaden](./getting-started.md)
-2. **Funktionen erkunden**: Sehen Sie sich [Erweiterte Funktionen](../README.md#-advanced-features) an
-3. **Beziehungen verstehen**: Lernen Sie über [Beziehungen](../README.md#-relationships)
-4. **Abfragen meistern**: Studieren Sie [Abfrageoperationen](../README.md#-query-operations)
-5. **TypeScript-Typen**: Überprüfen Sie [TypeScript-Typen](../README.md#-typescript-types)
+1. **Grundlagen lernen**: Lesen Sie den [Einstiegsleitfaden](./guides/getting-started.md)
+2. **Funktionen erkunden**: Sehen Sie sich den [Decorator-Leitfaden](./guides/decorators.md) an
+3. **Beziehungen verstehen**: Lernen Sie über [Beziehungen](./guides/relationships.md)
+4. **Abfragen meistern**: Studieren Sie [Erweiterte Abfragen](./examples/advanced-queries.md)
+5. **TypeScript-Typen**: Überprüfen Sie [Typen-Referenz](./api/types.md)
 
 ### Beispielprojekte
 
@@ -911,7 +911,7 @@ npm install @arcaelas/dynamite @aws-sdk/client-dynamodb @aws-sdk/lib-dynamodb
 
 ### Zusätzliche Ressourcen
 
-- [API-Referenz](../README.md#-api-reference)
+- [API-Referenz](./api/table.md)
 - [DynamoDB Best Practices](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/best-practices.html)
 - [AWS SDK v3-Dokumentation](https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/)
 - [GitHub-Repository](https://github.com/arcaelas/dynamite)
@@ -928,8 +928,7 @@ npm install @arcaelas/dynamite @aws-sdk/client-dynamodb @aws-sdk/lib-dynamodb
 
 Wenn Sie auf Probleme stoßen, die in diesem Leitfaden nicht behandelt werden, bitte:
 1. Überprüfen Sie den Abschnitt [Fehlerbehebung](#fehlerbehebung) oben
-2. Lesen Sie die [Haupt-README](../README.md#-troubleshooting)
-3. Öffnen Sie ein Issue auf [GitHub](https://github.com/arcaelas/dynamite/issues)
+2. Öffnen Sie ein Issue auf [GitHub](https://github.com/arcaelas/dynamite/issues)
 
 ---
 

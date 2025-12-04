@@ -1058,7 +1058,7 @@ async function get_users_1() {
 
 - [Table API](../api/table.md) - Complete Table class documentation
 - [Query Operators](../guides/core-concepts.md#query-operators) - All available operators
-- [Best Practices](../guides/best-practices.md) - Development best practices
+- [Decorators Guide](../guides/decorators.md) - All available decorators
 
 ### Advanced Topics
 

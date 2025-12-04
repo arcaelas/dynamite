@@ -15,9 +15,15 @@ Diese Anleitung dokumentiert alle TypeScript-Typen, die von Dynamite ORM exporti
   - [BelongsTo\<T\>](#belongstot)
 - [Abfrage-Typen](#abfrage-typen)
   - [QueryOperator](#queryoperator)
-  - [QueryResult\<T, A, I\>](#queryresultt-a-i)
+  - [QueryOptions\<T\>](#queryoptionst)
+  - [QueryFilters\<T\>](#queryfilterst)
   - [WhereOptions\<T\>](#whereoptionst)
-  - [WhereOptionsWithoutWhere\<T\>](#whereoptionswithoutwheret)
+  - [IncludeRelationOptions](#includerelationoptions)
+- [Metadaten-Typen](#metadaten-typen)
+  - [Column](#column)
+  - [RelationMetadata](#relationmetadata)
+  - [ValidatorEntry](#validatorentry)
+  - [SerializeConfig](#serializeconfig)
 
 ---
 
@@ -797,118 +803,137 @@ const paginated = await User.where(
 
 ---
 
-### QueryResult\<T, A, I\>
+### QueryOptions\<T\>
 
-Typ des Ergebnisses einer Abfrage mit Includes und Attributauswahl.
+Query-Optionen für `where()`, `first()`, `last()`, etc. Dieser Typ definiert Paginierung, Sortierung, Attributauswahl und Includes.
 
 **Syntax:**
 ```typescript
-type Result = QueryResult<Model, Attributes, Includes>;
+interface QueryOptions<T> {
+  order?: "ASC" | "DESC";
+  skip?: number;
+  limit?: number;
+  attributes?: (keyof InferAttributes<T>)[];
+  include?: Record<string, IncludeRelationOptions | true>;
+}
 ```
 
-**Parameter:**
-- `T`: Modellklasse
-- `A`: Ausgewählte Attribute (Keys von T)
-- `I`: Eingeschlossene Beziehungen (Include-Konfigurationsobjekt)
+**Eigenschaften:**
 
-**Merkmale:**
-- Leitet automatisch den Rückgabetyp basierend auf Includes ab
-- Vollständige Type-Safety für eingeschlossene Beziehungen
-- Unterstützt partielle Attributauswahl
+| Eigenschaft | Typ | Beschreibung |
+|-------------|-----|--------------|
+| `order` | `'ASC' \| 'DESC'` | Sortierung nach Sort Key |
+| `skip` | `number` | Offset für Paginierung |
+| `limit` | `number` | Limit der Ergebnisse |
+| `attributes` | `(keyof InferAttributes<T>)[]` | Auszuwählende Felder |
+| `include` | `Record<string, IncludeRelationOptions \| true>` | Einzuschließende Beziehungen |
 
 **Beispiele:**
 
 ```typescript
-import { Table, PrimaryKey, NotNull, HasMany, BelongsTo, QueryResult } from '@arcaelas/dynamite';
+import { Table, PrimaryKey, HasMany, QueryOptions } from '@arcaelas/dynamite';
 
 class User extends Table<User> {
   @PrimaryKey()
   declare id: string;
-
-  @NotNull()
   declare name: string;
-
-  @NotNull()
   declare email: string;
 
   @HasMany(() => Order, 'user_id')
   declare orders: any;
 }
 
-class Order extends Table<Order> {
+// Grundlegende Verwendung mit Paginierung
+const options: QueryOptions<User> = {
+  limit: 10,
+  skip: 20,
+  order: 'DESC'
+};
+const users = await User.where({ role: 'customer' }, options);
+
+// Mit Attributauswahl
+const options2: QueryOptions<User> = {
+  attributes: ['id', 'name', 'email'],
+  limit: 50
+};
+const minimal_users = await User.where({}, options2);
+
+// Mit Includes
+const options3: QueryOptions<User> = {
+  include: {
+    orders: {
+      where: { status: 'pending' },
+      limit: 5,
+      order: 'DESC'
+    }
+  }
+};
+const users_with_orders = await User.where({}, options3);
+```
+
+---
+
+### QueryFilters\<T\>
+
+Alias von `QueryOptions<T>` ohne das `where`-Feld. Nützlich wenn Filter als erstes Argument übergeben werden.
+
+**Syntax:**
+```typescript
+type QueryFilters<T> = Omit<WhereOptions<T>, 'where'>;
+```
+
+**Merkmale:**
+- Ist `WhereOptions<T>` ohne die `where`-Eigenschaft
+- Verwendet wenn Filter separat als erstes Argument übergeben werden
+- Semantischer in Helper-Funktionen
+
+**Beispiele:**
+
+```typescript
+import { Table, PrimaryKey, HasMany, QueryFilters } from '@arcaelas/dynamite';
+
+class User extends Table<User> {
   @PrimaryKey()
   declare id: string;
+  declare name: string;
 
-  @NotNull()
-  declare user_id: string;
-
-  @NotNull()
-  declare total: number;
-
-  @BelongsTo(() => User, 'user_id')
-  declare user: any;
-
-  @HasMany(() => OrderItem, 'order_id')
-  declare items: any;
+  @HasMany(() => Order, 'user_id')
+  declare orders: any;
 }
 
-class OrderItem extends Table<OrderItem> {
-  @PrimaryKey()
-  declare id: string;
+// Filter getrennt von Optionen
+const filters = { role: 'admin' };
 
-  @NotNull()
-  declare order_id: string;
-
-  @NotNull()
-  declare quantity: number;
-}
-
-// Beispiel 1: Ohne Includes
-const users1 = await User.where({});
-// Typ: User[]
-
-// Beispiel 2: Mit einfachem Include
-const users2 = await User.where({}, {
+const options: QueryFilters<User> = {
+  limit: 10,
+  skip: 0,
+  order: 'DESC',
+  attributes: ['id', 'name'],
   include: {
     orders: {}
   }
-});
-// Inferierter Typ:
-// (User & { orders: Order[] })[]
+};
 
-// Beispiel 3: Mit Attributauswahl
-const users3 = await User.where({}, {
-  attributes: ['id', 'name']
-});
-// Inferierter Typ:
-// Pick<User, 'id' | 'name'>[]
+const users = await User.where(filters, options);
 
-// Beispiel 4: Mit verschachtelten Includes
-const users4 = await User.where({}, {
-  include: {
-    orders: {
-      include: {
-        items: {}
-      }
-    }
-  }
-});
-// Inferierter Typ:
-// (User & {
-//   orders: (Order & {
-//     items: OrderItem[]
-//   })[]
-// })[]
+// Nützlich in generischen Helper-Funktionen
+async function find_paginated<T extends Table<T>>(
+  Model: { where: Function },
+  filters: Record<string, any>,
+  page: number,
+  page_size: number
+): Promise<T[]> {
+  const options: QueryFilters<T> = {
+    limit: page_size,
+    skip: page * page_size,
+    order: 'ASC'
+  };
 
-// Verwendung mit Type-Safety
-users4.forEach(user => {
-  console.log(user.name);      // ✓ Type-safe
-  console.log(user.orders);    // ✓ Order[]
-  user.orders.forEach(order => {
-    console.log(order.items);  // ✓ OrderItem[]
-  });
-});
+  return Model.where(filters, options);
+}
 ```
+
+> **Hinweis:** `WhereOptionsWithoutWhere<T>` ist ein deprecated Alias von `QueryFilters<T>`. Verwende `QueryFilters<T>` in neuem Code.
 
 ---
 
@@ -1065,65 +1090,113 @@ const users = await User.where(
 
 ---
 
-### WhereOptionsWithoutWhere\<T\>
+### IncludeRelationOptions
 
-Abfrageoptionen ohne das Feld `where`, nützlich wenn Filter als erstes Argument übergeben werden.
+Optionen für eingeschlossene Beziehungen in Abfragen.
 
 **Syntax:**
 ```typescript
-type OptionsWithoutWhere<T> = Omit<WhereOptions<T>, 'where'>;
+interface IncludeRelationOptions {
+  where?: Record<string, any>;
+  attributes?: string[];
+  limit?: number;
+  skip?: number;
+  order?: "ASC" | "DESC";
+  include?: Record<string, IncludeRelationOptions | true>;
+}
 ```
 
-**Merkmale:**
-- Ist `WhereOptions<T>` ohne die Eigenschaft `where`
-- Wird verwendet, wenn Filter separat übergeben werden
-- Semantischer in bestimmten Kontexten
+**Eigenschaften:**
 
-**Beispiele:**
+| Eigenschaft | Typ | Beschreibung |
+|-------------|-----|--------------|
+| `where` | `Record<string, any>` | Filter für die Beziehung |
+| `attributes` | `string[]` | Auszuwählende Felder der Beziehung |
+| `limit` | `number` | Limit der Beziehungsergebnisse |
+| `skip` | `number` | Offset für Beziehungspaginierung |
+| `order` | `'ASC' \| 'DESC'` | Sortierung der Beziehung |
+| `include` | `Record<string, IncludeRelationOptions \| true>` | Verschachtelte Includes |
+
+---
+
+## Metadaten-Typen
+
+Die folgenden Typen werden für Introspektion und Erstellung benutzerdefinierter Decorators verwendet.
+
+### Column
+
+Konfigurationsmetadaten einer Spalte/Eigenschaft des Modells.
+
+**Syntax:**
+```typescript
+interface Column {
+  name: string;
+  nullable?: boolean;
+  default?: () => any;
+  index?: boolean;
+  indexSort?: boolean;
+  primaryKey?: boolean;
+  createdAt?: boolean;
+  updatedAt?: boolean;
+  softDelete?: boolean;
+  lazy_validators: Array<(value: any) => true | string>;
+  serialize?: SerializeConfig;
+  set: (fn: (current: any, next: any) => any) => void;
+  get: (fn: (current: any) => any) => void;
+}
+```
+
+**Verwendung:**
+Dieser Typ wird hauptsächlich zum Erstellen benutzerdefinierter Decorators mit der `decorator()`-Factory verwendet.
 
 ```typescript
-import { Table, PrimaryKey, NotNull, HasMany, WhereOptionsWithoutWhere } from '@arcaelas/dynamite';
+import { decorator, Column } from '@arcaelas/dynamite';
 
-class User extends Table<User> {
-  @PrimaryKey()
-  declare id: string;
+// Benutzerdefinierten Decorator erstellen
+const Encrypted = decorator<[key: string]>((col: Column, [key]) => {
+  col.set((_, value) => encrypt(value, key));
+  col.get((current) => decrypt(current, key));
+});
+```
 
-  @NotNull()
-  declare name: string;
+---
 
-  @HasMany(() => Order, 'user_id')
-  declare orders: any;
+### RelationMetadata
+
+Konfigurationsmetadaten einer Beziehung zwischen Modellen.
+
+**Syntax:**
+```typescript
+interface RelationMetadata {
+  type: "hasMany" | "belongsTo";
+  targetModel: () => any;
+  foreignKey: string;
+  localKey: string;
 }
+```
 
-// Filter getrennt von Optionen
-const filters = { role: 'admin' };
+---
 
-const options: WhereOptionsWithoutWhere<User> = {
-  limit: 10,
-  skip: 0,
-  order: 'DESC',
-  attributes: ['id', 'name'],
-  include: {
-    orders: {}
-  }
-};
+### ValidatorEntry
 
-const users = await User.where(filters, options);
+Validator-Eintrag für Lazy-Validierung (ausgeführt bei `save()`).
 
-// Auch nützlich in Hilfsfunktionen
-async function find_paginated<T extends Table>(
-  Model: { new (data: any): T },
-  filters: Partial<InferAttributes<T>>,
-  page: number,
-  page_size: number
-): Promise<T[]> {
-  const options: WhereOptionsWithoutWhere<T> = {
-    limit: page_size,
-    skip: page * page_size,
-    order: 'ASC'
-  };
+**Syntax:**
+```typescript
+type ValidatorEntry = (value: any) => true | string;
+```
 
-  return Model.where(filters, options);
+---
+
+### SerializeConfig
+
+Bidirektionale Serialisierungskonfiguration.
+
+**Syntax:**
+```typescript
+interface SerializeConfig {
+  fromDB?: (value: any) => any;
+  toDB?: (value: any) => any;
 }
 ```
 
@@ -1224,7 +1297,7 @@ async function find_advanced<T extends Table>(
   field: keyof FilterableAttributes<T>,
   operator: QueryOperator,
   value: any,
-  options?: WhereOptionsWithoutWhere<T>
+  options?: QueryFilters<T>
 ): Promise<T[]> {
   return Model.where(field as string, operator, value, options);
 }
@@ -1261,9 +1334,14 @@ const admins = await find_advanced(
 | `HasMany<T>` | Eins-zu-Viele-Beziehung | Wenn ein Modell mehrere verknüpfte Instanzen hat |
 | `BelongsTo<T>` | Viele-zu-Eins-Beziehung | Wenn ein Modell zu einem anderen gehört |
 | `QueryOperator` | Abfrageoperatoren | Erweiterte Filter in where |
-| `QueryResult<T, A, I>` | Ergebnistyp | Typinferenz in Abfragen mit Includes |
-| `WhereOptions<T>` | Abfrageoptionen | Vollständige Abfragen mit Filtern, Paginierung und Includes |
-| `WhereOptionsWithoutWhere<T>` | Optionen ohne Filter | Abfragen, bei denen Filter separat übergeben werden |
+| `QueryOptions<T>` | Query-Optionen | Paginierung, Sortierung, Includes |
+| `QueryFilters<T>` | Optionen ohne Filter | Abfragen, bei denen Filter separat übergeben werden |
+| `WhereOptions<T>` | Vollständige Optionen | Abfragen mit Filtern, Paginierung und Includes |
+| `IncludeRelationOptions` | Include-Optionen | Verschachtelte Beziehungen konfigurieren |
+| `Column` | Spaltenmetadaten | Benutzerdefinierte Decorators erstellen |
+| `RelationMetadata` | Beziehungsmetadaten | Introspektion von Beziehungen |
+| `ValidatorEntry` | Validatorfunktion | Benutzerdefinierte Validierungen |
+| `SerializeConfig` | Serialisierungskonfiguration | Bidirektionale Transformationen |
 
 ---
 
@@ -1298,5 +1376,5 @@ const admins = await find_advanced(
 
 Für weitere Informationen siehe:
 - [Installationsanleitung](../installation.md)
-- [Decorator-Referenz](./decorators.md)
+- [Decorator-Referenz](../guides/decorators.md)
 - [Table-Referenz](./table.md)

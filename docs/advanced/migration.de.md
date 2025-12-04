@@ -1,21 +1,21 @@
-# Migrationsleitfaden
+# Migrationsanleitung
 
-Dieser Leitfaden hilft Ihnen bei der Migration zu Dynamite von anderen ORMs oder beim Upgrade zwischen Versionen.
+Diese Anleitung hilft Ihnen bei der Migration zu Dynamite von anderen ORMs oder beim Upgrade zwischen Versionen.
 
 ## Inhaltsverzeichnis
 
-- [Migration von Anderen ORMs](#migration-von-anderen-orms)
-- [Versions-Upgrade-Leitfaden](#versions-upgrade-leitfaden)
+- [Migration von anderen ORMs](#migration-von-anderen-orms)
+- [Versions-Upgrade-Anleitung](#versions-upgrade-anleitung)
 - [Schema-Migration](#schema-migration)
-- [Datenmigration](#datenmigration)
-- [Migrations-Tests](#migrations-tests)
-- [Produktionsbereitstellung](#produktionsbereitstellung)
+- [Daten-Migration](#daten-migration)
+- [Migrationen testen](#migrationen-testen)
+- [Produktions-Deployment](#produktions-deployment)
 
-## Migration von Anderen ORMs
+## Migration von anderen ORMs
 
 ### Von Sequelize (SQL)
 
-Sequelize ist für relationale Datenbanken konzipiert. So passen Sie sich an das NoSQL-Paradigma von DynamoDB an.
+Sequelize ist für relationale Datenbanken konzipiert. Hier erfahren Sie, wie Sie sich an das NoSQL-Paradigma von DynamoDB anpassen können.
 
 **Sequelize-Modell:**
 
@@ -53,7 +53,7 @@ const Order = sequelize.define('Order', {
   status: DataTypes.STRING
 });
 
-// Query
+// Abfrage
 const users = await User.findAll({
   where: {
     email: { [Op.like]: '%@example.com' }
@@ -66,69 +66,67 @@ const users = await User.findAll({
 
 ```typescript
 // Dynamite (DynamoDB)
-@Entity()
-class User {
-  @PartitionKey()
-  id!: string; // Use UUID instead of auto-increment
+import {
+  Table, PrimaryKey, Default, NotNull, CreatedAt,
+  HasMany, BelongsTo, CreationOptional, NonAttribute
+} from "@arcaelas/dynamite";
 
-  @Attribute()
-  @Index('EmailIndex', { type: 'PARTITION' })
-  email!: string;
+class User extends Table<User> {
+  @PrimaryKey()
+  @Default(() => crypto.randomUUID())
+  declare id: CreationOptional<string>; // UUID statt Auto-Increment verwenden
 
-  @Attribute()
-  name!: string;
+  @NotNull()
+  declare email: string;
 
-  @Attribute()
-  created_at!: number; // Unix timestamp
+  declare name: string;
 
-  @HasMany(() => Order, 'user_id')
-  orders!: Order[];
+  @CreatedAt()
+  declare created_at: CreationOptional<string>;
+
+  @HasMany(() => Order, "user_id")
+  declare orders: NonAttribute<Order[]>;
 }
 
-@Entity()
-class Order {
-  @PartitionKey()
-  user_id!: string; // Partition by user for efficient queries
+class Order extends Table<Order> {
+  @PrimaryKey()
+  @Default(() => crypto.randomUUID())
+  declare id: CreationOptional<string>;
 
-  @SortKey()
-  id!: string; // Order ID as sort key
+  @NotNull()
+  declare user_id: string;
 
-  @Attribute()
-  total!: number;
+  declare total: number;
+  declare status: string;
 
-  @Attribute()
-  status!: string;
-
-  @BelongsTo(() => User, 'user_id')
-  user!: User;
+  @BelongsTo(() => User, "user_id")
+  declare user: NonAttribute<User | null>;
 }
 
-// Query - different approach for NoSQL
-const users = await User.find({
-  where: { email: 'user@example.com' }, // Exact match with GSI
-  index: 'EmailIndex',
-  include: ['orders']
+// Abfrage - anderer Ansatz für NoSQL
+const users = await User.where({ email: "user@example.com" }, {
+  include: { orders: true }
 });
 
-// For "LIKE" queries, fetch and filter in memory
-const all_users = await User.scan();
-const filtered = all_users.filter(u => u.email.endsWith('@example.com'));
+// Für Pattern-Matching: abrufen und filtern
+const all_users = await User.where({});
+const filtered = all_users.filter(u => u.email.endsWith("@example.com"));
 ```
 
-**Hauptunterschiede:**
+**Wichtige Unterschiede:**
 
 | Konzept | Sequelize (SQL) | Dynamite (DynamoDB) |
 |---------|----------------|---------------------|
 | Primärschlüssel | Auto-Increment Integer | UUID oder zusammengesetzter Schlüssel |
 | Abfragen | Komplexe WHERE-Klauseln | Schlüsselbedingungen + Filter |
 | Joins | Native JOIN-Unterstützung | Manuelle Beziehungsladung |
-| Transaktionen | ACID-Transaktionen | Begrenzte Transaktionen (25 Elemente) |
+| Transaktionen | ACID-Transaktionen | Begrenzte Transaktionen (25 Items) |
 | Schema | Starres Schema | Flexibles Schema |
 
 **Migrationsstrategie:**
 
 ```typescript
-// 1. Export data from SQL
+// 1. Daten aus SQL exportieren
 import { Sequelize } from 'sequelize';
 
 async function ExportFromSQL(): Promise<void> {
@@ -136,38 +134,31 @@ async function ExportFromSQL(): Promise<void> {
   const users = await sequelize.models.User.findAll();
 
   const export_data = users.map(user => ({
-    id: `user-${user.id}`, // Transform ID format
+    id: `user-${user.id}`, // ID-Format transformieren
     email: user.email,
     name: user.name,
-    created_at: user.created_at.getTime()
+    created_at: user.created_at.toISOString()
   }));
 
-  // Save to file
+  // In Datei speichern
   await fs.writeFile(
     'users_export.json',
     JSON.stringify(export_data, null, 2)
   );
 }
 
-// 2. Import to DynamoDB
+// 2. In DynamoDB importieren
 async function ImportToDynamoDB(): Promise<void> {
   const data = JSON.parse(
     await fs.readFile('users_export.json', 'utf-8')
   );
 
-  // Import in batches
-  for (let i = 0; i < data.length; i += 25) {
-    const batch = data.slice(i, i + 25);
-
-    await User.batchWrite(
-      batch.map(item => ({
-        action: 'put',
-        item
-      }))
-    );
-
-    console.log(`Imported ${Math.min(i + 25, data.length)}/${data.length}`);
+  // In Batches importieren
+  for (const item of data) {
+    await User.create(item);
   }
+
+  console.log(`${data.length} Benutzer importiert`);
 }
 ```
 
@@ -179,6 +170,8 @@ TypeORM unterstützt mehrere Datenbanken einschließlich DynamoDB (grundlegende 
 
 ```typescript
 // TypeORM
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany, ManyToOne, CreateDateColumn, UpdateDateColumn } from "typeorm";
+
 @Entity()
 class User {
   @PrimaryGeneratedColumn()
@@ -212,7 +205,7 @@ class Order {
   total!: number;
 }
 
-// Query
+// Abfrage
 const users = await userRepository.find({
   where: { name: Like('%John%') },
   relations: ['orders']
@@ -223,71 +216,70 @@ const users = await userRepository.find({
 
 ```typescript
 // Dynamite
-@Entity()
-class User {
-  @PartitionKey()
-  id!: string;
+import {
+  Table, PrimaryKey, Default, NotNull, CreatedAt, UpdatedAt,
+  HasMany, BelongsTo, CreationOptional, NonAttribute
+} from "@arcaelas/dynamite";
 
-  @Attribute()
-  @Index('EmailIndex', { type: 'PARTITION' })
-  email!: string;
+class User extends Table<User> {
+  @PrimaryKey()
+  @Default(() => crypto.randomUUID())
+  declare id: CreationOptional<string>;
 
-  @Attribute()
-  name!: string;
+  @NotNull()
+  declare email: string;
 
-  @HasMany(() => Order, 'user_id')
-  orders!: Order[];
+  declare name: string;
 
-  @Attribute()
-  created_at!: number;
+  @HasMany(() => Order, "user_id")
+  declare orders: NonAttribute<Order[]>;
 
-  @Attribute()
-  updated_at!: number;
+  @CreatedAt()
+  declare created_at: CreationOptional<string>;
+
+  @UpdatedAt()
+  declare updated_at: CreationOptional<string>;
 }
 
-@Entity()
-class Order {
-  @PartitionKey()
-  user_id!: string;
+class Order extends Table<Order> {
+  @PrimaryKey()
+  @Default(() => crypto.randomUUID())
+  declare id: CreationOptional<string>;
 
-  @SortKey()
-  id!: string;
+  @NotNull()
+  declare user_id: string;
 
-  @Attribute()
-  total!: number;
+  declare total: number;
 
-  @BelongsTo(() => User, 'user_id')
-  user!: User;
+  @BelongsTo(() => User, "user_id")
+  declare user: NonAttribute<User | null>;
 }
 
-// Query
-const users = await User.scan({
-  filter: { name: { contains: 'John' } }
+// Abfrage
+const users = await User.where({});
+const filtered = users.filter(u => u.name.includes("John"));
+
+// Beziehungen laden
+const users_with_orders = await User.where({}, {
+  include: { orders: true }
 });
-
-// Load relationships
-for (const user of users) {
-  user.orders = await Order.find({
-    where: { user_id: user.id }
-  });
-}
 ```
 
 **Migrationsschritte:**
 
 ```typescript
-// 1. Create mapping function
+// 1. Mapping-Funktion erstellen
 function MapTypeORMToDynamite(typeorm_user: any): any {
   return {
     id: `user-${typeorm_user.id}`,
     email: typeorm_user.email,
     name: typeorm_user.name,
-    created_at: typeorm_user.created_at.getTime(),
-    updated_at: typeorm_user.updated_at.getTime()
+    created_at: typeorm_user.created_at.toISOString(),
+    updated_at: typeorm_user.updated_at.toISOString()
   };
 }
 
-// 2. Migrate with streaming
+// 2. Mit Streaming migrieren
 async function MigrateFromTypeORM(): Promise<void> {
   const typeorm_repo = connection.getRepository(TypeORMUser);
 
@@ -304,15 +296,12 @@ async function MigrateFromTypeORM(): Promise<void> {
 
     const dynamite_users = users.map(MapTypeORMToDynamite);
 
-    await User.batchWrite(
-      dynamite_users.map(user => ({
-        action: 'put',
-        item: user
-      }))
-    );
+    for (const user of dynamite_users) {
+      await User.create(user);
+    }
 
     page++;
-    console.log(`Migrated page ${page}`);
+    console.log(`Seite ${page} migriert`);
   }
 }
 ```
@@ -338,7 +327,7 @@ const UserSchema = new mongoose.Schema({
 
 const User = mongoose.model('User', UserSchema);
 
-// Query
+// Abfrage
 const users = await User.find({
   tags: { $in: ['premium', 'verified'] }
 }).sort({ created_at: -1 });
@@ -348,472 +337,195 @@ const users = await User.find({
 
 ```typescript
 // Dynamite
-@Entity()
-class User {
-  @PartitionKey()
-  id!: string; // MongoDB _id → DynamoDB id
+import {
+  Table, PrimaryKey, Default, NotNull, CreatedAt,
+  CreationOptional
+} from "@arcaelas/dynamite";
 
-  @Attribute()
-  @Index('EmailIndex', { type: 'PARTITION' })
-  email!: string;
+class User extends Table<User> {
+  @PrimaryKey()
+  @Default(() => crypto.randomUUID())
+  declare id: CreationOptional<string>; // MongoDB _id → DynamoDB id
 
-  @Attribute()
-  name!: string;
+  @NotNull()
+  declare email: string;
 
-  @Attribute()
-  profile!: {
+  declare name: string;
+
+  declare profile: {
     bio: string;
     avatar_url: string;
   };
 
-  @Attribute()
-  tags!: string[];
+  declare tags: string[];
 
-  @Attribute()
-  created_at!: number;
+  @CreatedAt()
+  declare created_at: CreationOptional<string>;
 }
 
-// Query - use sparse index for tag queries
-@Entity()
-class User {
-  // ... other fields
-
-  @Attribute()
-  @Index('TagIndex', { type: 'PARTITION' })
-  tag_premium?: string; // Set to 'true' if has premium tag
-
-  @Attribute()
-  @Index('TagIndex', { type: 'SORT' })
-  created_at!: number;
-}
-
-const users = await User.find({
-  where: {
-    tag_premium: 'true'
-  },
-  index: 'TagIndex',
-  sort: 'desc'
-});
+// Abfrage - Abrufen und Filtern für Tag-Abfragen
+const all_users = await User.where({}, { order: "DESC" });
+const premium_users = all_users.filter(u =>
+  u.tags?.some(tag => ["premium", "verified"].includes(tag))
+);
 ```
 
 **Migrationsskript:**
 
 ```typescript
-// Migrate from MongoDB to DynamoDB
+// Von MongoDB zu DynamoDB migrieren
 async function MigrateFromMongoDB(): Promise<void> {
   const mongo_users = await mongoose.models.User.find().lean();
 
-  const dynamite_users = mongo_users.map(user => ({
-    id: user._id.toString(),
-    email: user.email,
-    name: user.name,
-    profile: user.profile,
-    tags: user.tags,
-    created_at: user.created_at.getTime(),
-    // Create sparse index attributes
-    tag_premium: user.tags.includes('premium') ? 'true' : undefined,
-    tag_verified: user.tags.includes('verified') ? 'true' : undefined
-  }));
-
-  // Batch write
-  for (let i = 0; i < dynamite_users.length; i += 25) {
-    await User.batchWrite(
-      dynamite_users.slice(i, i + 25).map(user => ({
-        action: 'put',
-        item: user
-      }))
-    );
+  for (const user of mongo_users) {
+    await User.create({
+      id: user._id.toString(),
+      email: user.email,
+      name: user.name,
+      profile: user.profile,
+      tags: user.tags,
+      created_at: user.created_at.toISOString()
+    });
   }
 }
 ```
 
-## Versions-Upgrade-Leitfaden
+## Versions-Upgrade-Anleitung
 
-### Upgrade auf v2.0
+### Upgrade auf v1.0
 
-**Breaking Changes:**
+**Wichtige Änderungen:**
 
-1. **Änderungen der Decorator-Syntax**
+1. **Klassenbasierte Modelle**
 
 ```typescript
-// v1.x
-@Entity({ table_name: 'Users' })
-class User {
+// Vorher: Einfache Objekte
+const user = { id: "123", name: "John" };
+
+// Nachher: Klasse erweitert Table
+class User extends Table<User> {
   @PrimaryKey()
-  id!: string;
+  declare id: string;
 
-  @Column()
-  name!: string;
+  declare name: string;
 }
 
-// v2.x
-@Entity()
-class User {
-  @PartitionKey() // Renamed from @PrimaryKey
-  id!: string;
+const user = await User.create({ name: "John" });
+```
 
-  @Attribute() // Renamed from @Column
-  name!: string;
+2. **Decorator-basierte Konfiguration**
+
+```typescript
+// Alle Konfiguration über Decorators
+class User extends Table<User> {
+  @PrimaryKey()
+  @Default(() => crypto.randomUUID())
+  declare id: CreationOptional<string>;
+
+  @NotNull()
+  @Validate((v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v as string) || "Ungültige E-Mail")
+  declare email: string;
+
+  @CreatedAt()
+  declare created_at: CreationOptional<string>;
+
+  @UpdatedAt()
+  declare updated_at: CreationOptional<string>;
 }
 ```
 
-2. **Konfigurationsänderungen**
+3. **Client-Initialisierung**
 
 ```typescript
-// v1.x
-Dynamite.init({
-  region: 'us-east-1',
-  table_prefix: 'prod_'
+import { Dynamite } from "@arcaelas/dynamite";
+
+const client = new Dynamite({
+  region: "us-east-1",
+  endpoint: "http://localhost:8000",
+  credentials: {
+    accessKeyId: "test",
+    secretAccessKey: "test"
+  },
+  tables: [User, Order]
 });
 
-// v2.x
-Dynamite.Configure({
-  client: new DynamoDBClient({ region: 'us-east-1' }),
-  table_prefix: 'prod_'
-});
-```
-
-3. **Änderungen der Abfragesyntax**
-
-```typescript
-// v1.x
-const users = await User.find({
-  status: 'active'
-});
-
-// v2.x
-const users = await User.find({
-  where: { status: 'active' }
-});
-```
-
-**Migrationsschritte:**
-
-```bash
-# 1. Install new version
-npm install dynamite@2.0.0
-
-# 2. Run migration script
-npx dynamite migrate --from=1.x --to=2.x
-
-# 3. Update code with codemod
-npx dynamite-codemod v1-to-v2 ./src
-```
-
-### Upgrade auf v3.0
-
-**Breaking Changes:**
-
-1. **Asynchrone Konfiguration**
-
-```typescript
-// v2.x
-Dynamite.Configure({ client });
-
-// v3.x
-await Dynamite.Configure({ client });
-```
-
-2. **Beziehungsladung**
-
-```typescript
-// v2.x
-const user = await User.findOne({
-  where: { id: 'user-123' },
-  include: { orders: true }
-});
-
-// v3.x
-const user = await User.findOne({
-  where: { id: 'user-123' },
-  include: ['orders']
-});
-```
-
-**Automatisierte Migration:**
-
-```typescript
-// migration_v2_to_v3.ts
-import { readdirSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
-
-function MigrateFile(file_path: string): void {
-  let content = readFileSync(file_path, 'utf-8');
-
-  // Replace sync Configure with async
-  content = content.replace(
-    /Dynamite\.Configure\(/g,
-    'await Dynamite.Configure('
-  );
-
-  // Replace include object with array
-  content = content.replace(
-    /include:\s*{\s*(\w+):\s*true\s*}/g,
-    "include: ['$1']"
-  );
-
-  writeFileSync(file_path, content);
-  console.log(`Migrated: ${file_path}`);
-}
-
-// Run on all TypeScript files
-function MigrateDirectory(dir: string): void {
-  for (const file of readdirSync(dir)) {
-    const file_path = join(dir, file);
-
-    if (file.endsWith('.ts')) {
-      MigrateFile(file_path);
-    }
-  }
-}
-
-MigrateDirectory('./src');
+client.connect();
+await client.sync();
 ```
 
 ## Schema-Migration
 
-### Neue Attribute Hinzufügen
+### Neue Attribute hinzufügen
 
-Das Hinzufügen von Attributen zu vorhandenen Elementen erfordert sorgfältige Planung.
+Das Hinzufügen von Attributen zu bestehenden Items erfordert sorgfältige Planung.
 
 ```typescript
-// Old schema
-@Entity()
-class User {
-  @PartitionKey()
-  id!: string;
+// Altes Schema
+class User extends Table<User> {
+  @PrimaryKey()
+  declare id: string;
 
-  @Attribute()
-  name!: string;
+  declare name: string;
 }
 
-// New schema
-@Entity()
-class User {
-  @PartitionKey()
-  id!: string;
+// Neues Schema
+class User extends Table<User> {
+  @PrimaryKey()
+  declare id: string;
 
-  @Attribute()
-  name!: string;
+  declare name: string;
 
-  @Attribute()
-  email?: string; // New optional attribute
+  declare email?: string; // Neues optionales Attribut
 
-  @Attribute()
-  created_at!: number; // New required attribute
+  @Default(() => new Date().toISOString())
+  declare created_at: CreationOptional<string>; // Neu mit Default
 }
 
-// Migration script
+// Migrationsskript
 async function AddAttributes(): Promise<void> {
-  let cursor: any;
+  const users = await User.where({});
 
-  do {
-    const page = await User.scan({ limit: 100, cursor });
-
-    for (const user of page.items) {
-      await User.update(
-        { id: user.id },
-        {
-          email: user.email || `${user.id}@example.com`,
-          created_at: user.created_at || Date.now()
-        }
-      );
+  for (const user of users) {
+    if (!user.created_at) {
+      user.created_at = new Date().toISOString();
+      await user.save();
     }
-
-    cursor = page.cursor;
-  } while (cursor);
-}
-```
-
-### Neue Indizes Erstellen
-
-Global Secondary Indexes können ohne Ausfallzeit hinzugefügt werden.
-
-```typescript
-// Add GSI to entity
-@Entity()
-class User {
-  @PartitionKey()
-  id!: string;
-
-  @Attribute()
-  @Index('EmailIndex', { type: 'PARTITION' }) // New GSI
-  email!: string;
-
-  @Attribute()
-  name!: string;
-}
-
-// Create index using AWS SDK
-import { UpdateTableCommand } from '@aws-sdk/client-dynamodb';
-
-async function CreateIndex(): Promise<void> {
-  const client = new DynamoDBClient({ region: 'us-east-1' });
-
-  await client.send(new UpdateTableCommand({
-    TableName: 'Users',
-    AttributeDefinitions: [
-      { AttributeName: 'email', AttributeType: 'S' }
-    ],
-    GlobalSecondaryIndexUpdates: [{
-      Create: {
-        IndexName: 'EmailIndex',
-        KeySchema: [
-          { AttributeName: 'email', KeyType: 'HASH' }
-        ],
-        Projection: { ProjectionType: 'ALL' },
-        ProvisionedThroughput: {
-          ReadCapacityUnits: 5,
-          WriteCapacityUnits: 5
-        }
-      }
-    }]
-  }));
-
-  console.log('Index creation started');
-
-  // Wait for index to be active
-  let status = 'CREATING';
-  while (status === 'CREATING') {
-    await new Promise(resolve => setTimeout(resolve, 5000));
-
-    const table = await User.describeTable();
-    const index = table.GlobalSecondaryIndexes?.find(
-      i => i.IndexName === 'EmailIndex'
-    );
-
-    status = index?.IndexStatus || 'CREATING';
-    console.log(`Index status: ${status}`);
   }
 
-  console.log('Index created successfully');
+  console.log(`${users.length} Benutzer migriert`);
 }
 ```
 
-### Attribute Umbenennen
+### Attribute umbenennen
 
-DynamoDB unterstützt kein Umbenennen von Attributen. Erstellen Sie ein neues Attribut und kopieren Sie die Daten.
+DynamoDB unterstützt das Umbenennen von Attributen nicht. Erstellen Sie ein neues Attribut und kopieren Sie die Daten.
 
 ```typescript
 // Migration: name → full_name
 async function RenameAttribute(): Promise<void> {
-  let cursor: any;
-  let processed = 0;
+  const users = await User.where({});
 
-  do {
-    const page = await User.scan({ limit: 100, cursor });
+  for (const user of users) {
+    // In neues Attribut kopieren
+    (user as any).full_name = user.name;
+    await user.save();
+  }
 
-    const updates = page.items.map(user => ({
-      action: 'put' as const,
-      item: {
-        ...user,
-        full_name: user.name, // Copy to new attribute
-        name: undefined // Remove old attribute
-      }
-    }));
-
-    await User.batchWrite(updates);
-
-    processed += page.items.length;
-    cursor = page.cursor;
-
-    console.log(`Processed ${processed} users`);
-  } while (cursor);
+  console.log(`${users.length} Benutzer verarbeitet`);
 }
 
-// Update entity definition
-@Entity()
-class User {
-  @PartitionKey()
-  id!: string;
+// Entity-Definition nach der Migration aktualisieren
+class User extends Table<User> {
+  @PrimaryKey()
+  declare id: string;
 
-  @Attribute()
-  full_name!: string; // Renamed from 'name'
+  declare full_name: string; // Umbenannt von 'name'
 }
 ```
 
-### Schlüsselschema Ändern
+## Daten-Migration
 
-Das Ändern von Partitions- oder Sortierschlüsseln erfordert das Erstellen einer neuen Tabelle.
-
-```typescript
-// Old schema
-@Entity({ table_name: 'Orders_v1' })
-class OrderV1 {
-  @PartitionKey()
-  order_id!: string;
-
-  @Attribute()
-  customer_id!: string;
-}
-
-// New schema - optimized for customer queries
-@Entity({ table_name: 'Orders_v2' })
-class OrderV2 {
-  @PartitionKey()
-  customer_id!: string; // Changed to partition key
-
-  @SortKey()
-  order_id!: string; // Changed to sort key
-}
-
-// Migration script
-async function MigrateKeySchema(): Promise<void> {
-  // 1. Create new table
-  await OrderV2.createTable();
-
-  // 2. Copy data
-  let cursor: any;
-
-  do {
-    const page = await OrderV1.scan({ limit: 100, cursor });
-
-    await OrderV2.batchWrite(
-      page.items.map(order => ({
-        action: 'put',
-        item: {
-          customer_id: order.customer_id,
-          order_id: order.order_id,
-          // ... copy other attributes
-        }
-      }))
-    );
-
-    cursor = page.cursor;
-  } while (cursor);
-
-  // 3. Switch application to use new table
-  // 4. Delete old table after verification
-  await OrderV1.deleteTable();
-}
-```
-
-## Datenmigration
-
-### Nach S3 Exportieren
-
-Verwenden Sie für große Datensätze S3-Export.
-
-```typescript
-import { ExportTableToPointInTimeCommand } from '@aws-sdk/client-dynamodb';
-
-async function ExportToS3(): Promise<void> {
-  const client = new DynamoDBClient({ region: 'us-east-1' });
-
-  const export_arn = await client.send(
-    new ExportTableToPointInTimeCommand({
-      TableArn: 'arn:aws:dynamodb:us-east-1:123456789:table/Users',
-      S3Bucket: 'my-exports-bucket',
-      S3Prefix: 'dynamodb-exports/',
-      ExportFormat: 'DYNAMODB_JSON'
-    })
-  );
-
-  console.log('Export started:', export_arn.ExportDescription?.ExportArn);
-}
-```
-
-### Daten Während Migration Transformieren
+### Daten während der Migration transformieren
 
 Wenden Sie Transformationen während der Migration an.
 
@@ -823,124 +535,74 @@ interface TransformFunction<TInput, TOutput> {
 }
 
 async function MigrateWithTransform<TInput, TOutput>(
-  source_model: typeof Entity,
-  target_model: typeof Entity,
+  source_data: TInput[],
+  target_model: typeof Table,
   transform: TransformFunction<TInput, TOutput>
 ): Promise<void> {
-  let cursor: any;
   let migrated = 0;
 
-  do {
-    const page = await source_model.scan({ limit: 100, cursor });
+  for (const item of source_data) {
+    const transformed = transform(item);
+    await target_model.create(transformed as any);
+    migrated++;
 
-    const transformed = page.items.map(transform);
+    if (migrated % 100 === 0) {
+      console.log(`${migrated} Items migriert`);
+    }
+  }
 
-    await target_model.batchWrite(
-      transformed.map(item => ({
-        action: 'put',
-        item
-      }))
-    );
-
-    migrated += transformed.length;
-    cursor = page.cursor;
-
-    console.log(`Migrated ${migrated} items`);
-  } while (cursor);
+  console.log(`Migration abgeschlossen: ${migrated} Items`);
 }
 
-// Usage
+// Verwendung
 await MigrateWithTransform(
-  OldUser,
-  NewUser,
+  old_users,
+  User,
   (old_user) => ({
     id: old_user.id,
-    email: old_user.email.toLowerCase(), // Transform: normalize email
-    name: old_user.first_name + ' ' + old_user.last_name, // Transform: combine names
-    created_at: new Date(old_user.created_at).getTime() // Transform: date to timestamp
+    email: old_user.email.toLowerCase(), // Transformieren: E-Mail normalisieren
+    name: old_user.first_name + ' ' + old_user.last_name, // Transformieren: Namen kombinieren
+    created_at: new Date(old_user.created_at).toISOString() // Transformieren: Datum zu ISO
   })
 );
 ```
 
-### Parallele Migration
-
-Beschleunigen Sie die Migration mit paralleler Verarbeitung.
-
-```typescript
-async function ParallelMigration(partition_count = 10): Promise<void> {
-  const workers = Array.from({ length: partition_count }, async (_, segment) => {
-    let cursor: any;
-    let processed = 0;
-
-    do {
-      const page = await User.scan({
-        limit: 100,
-        cursor,
-        segment,
-        total_segments: partition_count
-      });
-
-      // Process items
-      for (const user of page.items) {
-        await ProcessUser(user);
-        processed++;
-      }
-
-      cursor = page.cursor;
-
-      console.log(`Worker ${segment}: processed ${processed}`);
-    } while (cursor);
-  });
-
-  await Promise.all(workers);
-}
-```
-
-## Migrations-Tests
+## Migrationen testen
 
 ### Test-Framework
 
 Erstellen Sie ein Test-Framework für Migrationen.
 
 ```typescript
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { Dynamite } from "@arcaelas/dynamite";
 
 class MigrationTester {
-  private readonly test_client: DynamoDBClient;
+  private client: Dynamite;
 
   constructor() {
-    this.test_client = new DynamoDBClient({
-      region: 'local',
-      endpoint: 'http://localhost:8000',
+    this.client = new Dynamite({
+      region: "us-east-1",
+      endpoint: "http://localhost:8000",
       credentials: {
-        accessKeyId: 'dummy',
-        secretAccessKey: 'dummy'
-      }
+        accessKeyId: "test",
+        secretAccessKey: "test"
+      },
+      tables: [User]
     });
   }
 
   async Setup(): Promise<void> {
-    // Create test tables
-    await User.createTable();
-
-    // Seed test data
+    this.client.connect();
+    await this.client.sync();
     await this.SeedData();
   }
 
   private async SeedData(): Promise<void> {
-    const test_users = Array.from({ length: 100 }, (_, i) => ({
-      id: `user-${i}`,
-      name: `User ${i}`,
-      email: `user${i}@example.com`
-    }));
-
-    for (let i = 0; i < test_users.length; i += 25) {
-      await User.batchWrite(
-        test_users.slice(i, i + 25).map(user => ({
-          action: 'put',
-          item: user
-        }))
-      );
+    for (let i = 0; i < 100; i++) {
+      await User.create({
+        name: `Benutzer ${i}`,
+        email: `user${i}@example.com`
+      });
     }
   }
 
@@ -953,7 +615,7 @@ class MigrationTester {
       await migration_fn();
       return { success: true, duration_ms: Date.now() - start };
     } catch (error) {
-      console.error('Migration failed:', error);
+      console.error('Migration fehlgeschlagen:', error);
       return { success: false, duration_ms: Date.now() - start };
     }
   }
@@ -965,78 +627,42 @@ class MigrationTester {
   }
 
   async Teardown(): Promise<void> {
-    await User.deleteTable();
+    this.client.disconnect();
   }
 }
 
-// Usage
+// Verwendung
 const tester = new MigrationTester();
 
 await tester.Setup();
 
 const result = await tester.RunMigration(async () => {
-  // Run your migration
   await AddEmailAttribute();
 });
 
 const verified = await tester.Verify(async () => {
-  const users = await User.scan();
+  const users = await User.where({});
   return users.every(u => u.email !== undefined);
 });
 
 console.log('Migration:', result.success ? 'PASS' : 'FAIL');
-console.log('Verification:', verified ? 'PASS' : 'FAIL');
+console.log('Verifizierung:', verified ? 'PASS' : 'FAIL');
 
 await tester.Teardown();
 ```
 
-## Produktionsbereitstellung
+## Produktions-Deployment
 
-### Checkliste Vor Bereitstellung
+### Pre-Deployment-Checkliste
 
 ```markdown
-- [ ] Migration auf produktionsähnlichen Daten testen
-- [ ] Überprüfen, dass Indexerstellung die Leistung nicht beeinträchtigt
+- [ ] Migration mit produktionsähnlichen Daten testen
 - [ ] Rollback-Plan vorbereiten
 - [ ] Überwachungsalarme einrichten
-- [ ] Während Zeitfenster mit niedrigem Datenverkehr planen
-- [ ] Mit Team kommunizieren
+- [ ] Während Niedrigverkehrs-Zeitfenster planen
+- [ ] Mit dem Team kommunizieren
 - [ ] Kritische Daten sichern
 - [ ] In Staging-Umgebung testen
-```
-
-### Blue-Green-Bereitstellung
-
-Bereitstellen ohne Ausfallzeit mithilfe von Blue-Green-Strategie.
-
-```typescript
-// 1. Deploy new version (green) alongside old (blue)
-// 2. Route small percentage to green
-// 3. Monitor metrics
-// 4. Gradually increase traffic to green
-// 5. Decommission blue when stable
-
-class BlueGreenDeployment {
-  private green_percentage = 0;
-
-  async RouteRequest(user_id: string): Promise<'blue' | 'green'> {
-    const hash = this.HashUserId(user_id);
-    return hash < this.green_percentage ? 'green' : 'blue';
-  }
-
-  private HashUserId(user_id: string): number {
-    let hash = 0;
-    for (let i = 0; i < user_id.length; i++) {
-      hash = (hash << 5) - hash + user_id.charCodeAt(i);
-    }
-    return Math.abs(hash % 100);
-  }
-
-  IncreaseGreenTraffic(percentage: number): void {
-    this.green_percentage = Math.min(100, percentage);
-    console.log(`Green traffic: ${this.green_percentage}%`);
-  }
-}
 ```
 
 ### Rollback-Strategie
@@ -1045,40 +671,26 @@ Haben Sie immer einen Rollback-Plan.
 
 ```typescript
 class MigrationRollback {
-  private backup_table_name = 'Users_backup';
+  private backup_data: any[] = [];
 
   async CreateBackup(): Promise<void> {
-    console.log('Creating backup...');
-
-    let cursor: any;
-
-    do {
-      const page = await User.scan({ limit: 100, cursor });
-
-      // Write to backup table
-      await this.WriteToBackup(page.items);
-
-      cursor = page.cursor;
-    } while (cursor);
-
-    console.log('Backup complete');
-  }
-
-  private async WriteToBackup(items: any[]): Promise<void> {
-    // Implementation depends on your backup strategy
-    // Could be: S3, separate DynamoDB table, etc.
+    console.log('Backup wird erstellt...');
+    this.backup_data = await User.where({});
+    console.log(`Backup abgeschlossen: ${this.backup_data.length} Items`);
   }
 
   async Rollback(): Promise<void> {
-    console.log('Rolling back...');
+    console.log('Rollback wird durchgeführt...');
 
-    // Restore from backup
-    // Delete new table
-    // Rename backup to original
+    for (const item of this.backup_data) {
+      await User.create(item);
+    }
+
+    console.log('Rollback abgeschlossen');
   }
 }
 
-// Usage
+// Verwendung
 const rollback = new MigrationRollback();
 
 await rollback.CreateBackup();
@@ -1086,14 +698,14 @@ await rollback.CreateBackup();
 try {
   await RunMigration();
 } catch (error) {
-  console.error('Migration failed, rolling back...');
+  console.error('Migration fehlgeschlagen, Rollback wird durchgeführt...');
   await rollback.Rollback();
 }
 ```
 
 ---
 
-Weitere Informationen finden Sie unter:
-- [Leistungsleitfaden](./performance.md)
-- [Leitfaden zur Fehlerbehebung](./troubleshooting.md)
+Weitere Informationen:
+- [Decorator-Leitfaden](../guides/decorators.md)
+- [API-Referenz](../api/table.md)
 - [AWS DynamoDB-Dokumentation](https://docs.aws.amazon.com/dynamodb/)

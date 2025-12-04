@@ -834,6 +834,6 @@ const results = await search_users("john");
 
 - [Repositorio de GitHub](https://github.com/arcaelas/dynamite)
 - [Guía de Inicio](../guides/getting-started.md)
-- [Mejores Prácticas](../guides/best-practices.md)
+- [Conceptos Básicos](../guides/core-concepts.md)
 
 ¡Feliz codificación con Dynamite!
