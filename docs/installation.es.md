@@ -892,11 +892,11 @@ const users = await User.where({}, {
 
 ### Próximos Pasos Recomendados
 
-1. **Aprende lo Básico**: Lee la [Guía de Inicio](./getting-started.md)
-2. **Explora Características**: Revisa las [Características Avanzadas](../README.md#-advanced-features)
-3. **Entiende las Relaciones**: Aprende sobre [Relaciones](../README.md#-relationships)
-4. **Domina las Consultas**: Estudia las [Operaciones de Consulta](../README.md#-query-operations)
-5. **Tipos TypeScript**: Revisa los [Tipos TypeScript](../README.md#-typescript-types)
+1. **Aprende lo Básico**: Lee la [Guía de Inicio](./guides/getting-started.md)
+2. **Explora Características**: Revisa la [Guía de Decoradores](./guides/decorators.md)
+3. **Entiende las Relaciones**: Aprende sobre [Relaciones](./guides/relationships.md)
+4. **Domina las Consultas**: Estudia las [Consultas Avanzadas](./examples/advanced-queries.md)
+5. **Tipos TypeScript**: Revisa los [Tipos](./api/types.md)
 
 ### Proyectos de Ejemplo
 
@@ -911,7 +911,7 @@ npm install @arcaelas/dynamite @aws-sdk/client-dynamodb @aws-sdk/lib-dynamodb
 
 ### Recursos Adicionales
 
-- [Referencia de API](../README.md#-api-reference)
+- [Referencia de API](./api/table.md)
 - [Mejores Prácticas de DynamoDB](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/best-practices.html)
 - [Documentación AWS SDK v3](https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/)
 - [Repositorio GitHub](https://github.com/arcaelas/dynamite)
@@ -928,8 +928,7 @@ npm install @arcaelas/dynamite @aws-sdk/client-dynamodb @aws-sdk/lib-dynamodb
 
 Si encuentras algún problema no cubierto en esta guía, por favor:
 1. Revisa la sección de [Solución de Problemas](#solución-de-problemas) arriba
-2. Consulta el [README principal](../README.md#-troubleshooting)
-3. Abre un issue en [GitHub](https://github.com/arcaelas/dynamite/issues)
+2. Abre un issue en [GitHub](https://github.com/arcaelas/dynamite/issues)
 
 ---
 

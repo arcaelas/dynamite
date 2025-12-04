@@ -864,6 +864,6 @@ async function get_users_1() {
 
 - [Table API](../api/table.md) - Vollständige Table-Klassendokumentation
 - [Abfrageoperatoren](../guides/core-concepts.md#query-operators) - Alle verfügbaren Operatoren
-- [Best Practices](../guides/best-practices.md) - Entwicklungs-Best-Practices
+- [Decorator-Leitfaden](../guides/decorators.md) - Alle verfügbaren Decorators
 
 Viel Erfolg beim Abfragen mit Dynamite!

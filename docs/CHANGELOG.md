@@ -8,10 +8,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- Enhanced transaction support for complex operations
 - Performance optimizations for batch operations
 - Additional query operators and filters
 - Improved error handling and debugging tools
+
+---
+
+## [1.0.17] - 2025-12-03
+
+### Added
+- `@Serialize(fromDB, toDB)` - Bidirectional data transformation decorator
+- `@DeleteAt()` - Soft delete decorator with timestamp
+- `Dynamite.tx()` - Atomic transactions with automatic rollback
+- `TransactionContext` class for managing transactional operations
+- `withTrashed()` method to include soft-deleted records
+- `onlyTrashed()` method to query only soft-deleted records
+- Support for `null` as fallback in `@Serialize` parameters
+
+### Changed
+- Enhanced `destroy()` method to support soft delete when `@DeleteAt` is present
+- `destroy()` now accepts optional `TransactionContext` parameter for transactional operations
+- Improved documentation with `@Serialize` and `@DeleteAt` examples
+- Consolidated decorator documentation into `/guides/decorators.md`
+
+### Removed
+- `/api/decorators/` directory (21 files) - content merged into `/guides/decorators.md`
+
+### Documentation
+- Added comprehensive `@Serialize` documentation with encryption, compression examples
+- Added `@DeleteAt` documentation with trash system patterns
+- Added `Dynamite.tx()` transaction API documentation
+- Updated model examples to include new decorators
+- Consolidated multilingual documentation (EN/ES/DE)
 
 ---
 
@@ -104,7 +132,8 @@ This is the current stable release of @arcaelas/dynamite - a modern, decorator-f
 
 ## Version History Summary
 
-- **v1.0.13** (Current) - Stable release with full feature set
+- **v1.0.17** (Current) - Added @Serialize, @DeleteAt, Dynamite.tx() transactions
+- **v1.0.13** - Stable release with full feature set
 - **v1.0.0** - Initial public release
 
 ---
@@ -128,8 +157,8 @@ No breaking changes from v1.0.0. All features are backward compatible.
 
 ## Contributing
 
-See [README.md](../README.md#-contributing) for contribution guidelines.
+See [GitHub Repository](https://github.com/arcaelas/dynamite#contributing) for contribution guidelines.
 
 ---
 
-**Note**: For detailed usage examples and API documentation, please refer to the [README.md](../README.md) file.
+**Note**: For detailed usage examples and API documentation, please refer to the [GitHub Repository](https://github.com/arcaelas/dynamite).

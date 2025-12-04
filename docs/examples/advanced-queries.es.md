@@ -1058,6 +1058,6 @@ async function get_users_1() {
 
 - [API de Table](../api/table.md) - Documentación completa de la clase Table
 - [Operadores de Consulta](../guides/core-concepts.md#query-operators) - Todos los operadores disponibles
-- [Mejores Prácticas](../guides/best-practices.md) - Mejores prácticas de desarrollo
+- [Guía de Decoradores](../guides/decorators.md) - Todos los decoradores disponibles
 
 ¡Feliz consulta con Dynamite!

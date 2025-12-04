@@ -906,5 +906,5 @@ This guide covered the core concepts of Dynamite:
 
 For more advanced topics, see:
 - [Relationships Guide](relationships.md)
-- [Advanced Queries](advanced-queries.md)
+- [Advanced Queries](../examples/advanced-queries.md)
 - [API Reference](../api/table.md)

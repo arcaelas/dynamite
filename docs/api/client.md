@@ -206,6 +206,120 @@ client.disconnect();
 - Safe to call multiple times
 - Logs warnings if destruction fails
 
+### tx()
+
+```typescript
+async tx<R>(callback: (tx: TransactionContext) => Promise<R>): Promise<R>
+```
+
+Executes operations within an atomic transaction. If any operation fails, all changes are automatically rolled back.
+
+**Type Parameters:**
+- `R`: Return type of the callback function
+
+**Parameters:**
+- `callback` (`(tx: TransactionContext) => Promise<R>`): Function containing transactional operations
+
+**Returns:**
+- `Promise<R>`: Result returned by the callback function
+
+**Example:**
+```typescript
+const dynamite = new Dynamite({
+  region: "us-east-1",
+  tables: [User, Order]
+});
+
+dynamite.connect();
+await dynamite.sync();
+
+// Atomic transaction - all operations succeed or all fail
+await dynamite.tx(async (tx) => {
+  const user = await User.create({ name: "John" }, tx);
+  await Order.create({ user_id: user.id, total: 100 }, tx);
+  await Order.create({ user_id: user.id, total: 200 }, tx);
+  // If any create fails, all operations are rolled back
+});
+```
+
+**Limitations:**
+- Maximum 25 operations per transaction (DynamoDB limit)
+- Throws error if limit exceeded
+
+**Transaction Operations:**
+```typescript
+// Creating records in transaction
+await dynamite.tx(async (tx) => {
+  await User.create({ name: "John" }, tx);
+  await User.create({ name: "Jane" }, tx);
+});
+
+// Mixed operations
+await dynamite.tx(async (tx) => {
+  const user = await User.create({ name: "John" }, tx);
+  await user.destroy(tx); // Soft delete in transaction
+});
+```
+
+**Use Cases:**
+- Creating related records atomically (user + orders)
+- Ensuring data consistency across multiple tables
+- Batch operations that must all succeed or all fail
+- Soft-deleting parent and child records together
+
+**Error Handling:**
+```typescript
+try {
+  await dynamite.tx(async (tx) => {
+    await User.create({ name: "John" }, tx);
+    throw new Error("Simulated failure");
+    // First create is rolled back
+  });
+} catch (error) {
+  console.log("Transaction failed, all changes rolled back");
+}
+```
+
+## Class: TransactionContext
+
+Internal class that manages transactional operations. Passed to callbacks in `tx()`.
+
+### addPut()
+
+```typescript
+addPut(table_name: string, item: Record<string, any>): void
+```
+
+Adds a Put operation to the transaction.
+
+**Parameters:**
+- `table_name` (`string`): DynamoDB table name
+- `item` (`Record<string, any>`): Item to insert
+
+### addDelete()
+
+```typescript
+addDelete(table_name: string, key: Record<string, any>): void
+```
+
+Adds a Delete operation to the transaction.
+
+**Parameters:**
+- `table_name` (`string`): DynamoDB table name
+- `key` (`Record<string, any>`): Primary key of item to delete
+
+### commit()
+
+```typescript
+async commit(): Promise<void>
+```
+
+Commits all queued operations atomically. Called automatically by `tx()`.
+
+**Throws:**
+- `Error`: If transaction exceeds 25 operations
+- DynamoDB errors if transaction fails
+
 ## Configuration Examples
 
 ### Local Development (DynamoDB Local)

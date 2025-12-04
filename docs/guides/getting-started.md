@@ -622,9 +622,9 @@ Learn about the fundamental concepts and architecture:
 - Handle errors gracefully with try-catch blocks
 
 ### Additional Resources
-- [API Reference](../api/README.md) - Complete API documentation
+- [API Reference](../api/table.md) - Complete API documentation
 - [Examples](../../examples/) - More code examples
-- [Troubleshooting](../troubleshooting.md) - Common issues and solutions
+- [GitHub Issues](https://github.com/arcaelas/dynamite/issues) - Common issues and solutions
 
 ## Quick Reference
 
@@ -669,9 +669,8 @@ await User.delete("123");
 ## Getting Help
 
 If you encounter issues:
-1. Check the [Troubleshooting Guide](../troubleshooting.md)
-2. Review the [API Reference](../api/README.md)
-3. Search existing [GitHub Issues](https://github.com/arcaelas/dynamite/issues)
-4. Create a new issue with a minimal reproducible example
+1. Review the [API Reference](../api/table.md)
+2. Search existing [GitHub Issues](https://github.com/arcaelas/dynamite/issues)
+3. Create a new issue with a minimal reproducible example
 
 Happy coding with Dynamite!

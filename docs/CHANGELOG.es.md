@@ -8,10 +8,38 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 ## [Sin Publicar]
 
 ### Planificado
-- Soporte mejorado de transacciones para operaciones complejas
 - Optimizaciones de rendimiento para operaciones por lotes
 - Operadores de consulta y filtros adicionales
 - Herramientas mejoradas de manejo de errores y depuración
+
+---
+
+## [1.0.17] - 2025-12-03
+
+### Agregado
+- `@Serialize(fromDB, toDB)` - Decorador de transformación bidireccional de datos
+- `@DeleteAt()` - Decorador de soft delete con timestamp
+- `Dynamite.tx()` - Transacciones atómicas con rollback automático
+- Clase `TransactionContext` para gestionar operaciones transaccionales
+- Método `withTrashed()` para incluir registros soft-deleted
+- Método `onlyTrashed()` para consultar solo registros soft-deleted
+- Soporte para `null` como fallback en parámetros de `@Serialize`
+
+### Cambiado
+- Método `destroy()` mejorado para soportar soft delete cuando `@DeleteAt` está presente
+- `destroy()` ahora acepta parámetro opcional `TransactionContext` para operaciones transaccionales
+- Documentación mejorada con ejemplos de `@Serialize` y `@DeleteAt`
+- Documentación de decoradores consolidada en `/guides/decorators.md`
+
+### Eliminado
+- Directorio `/api/decorators/` (21 archivos) - contenido fusionado en `/guides/decorators.md`
+
+### Documentación
+- Documentación completa de `@Serialize` con ejemplos de encriptación y compresión
+- Documentación de `@DeleteAt` con patrones de sistema de papelera
+- Documentación de API de transacciones `Dynamite.tx()`
+- Ejemplos de modelos actualizados para incluir nuevos decoradores
+- Documentación multilingüe consolidada (EN/ES/DE)
 
 ---
 
@@ -128,8 +156,8 @@ Sin cambios incompatibles desde v1.0.0. Todas las características son compatibl
 
 ## Contribuciones
 
-Consulte [README.md](../README.md#-contributing) para pautas de contribución.
+Consulte el [Repositorio de GitHub](https://github.com/arcaelas/dynamite#contributing) para pautas de contribución.
 
 ---
 
-**Nota**: Para ejemplos de uso detallados y documentación de la API, consulte el archivo [README.md](../README.md).
+**Nota**: Para ejemplos de uso detallados y documentación de la API, consulte el [Repositorio de GitHub](https://github.com/arcaelas/dynamite).

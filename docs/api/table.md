@@ -417,7 +417,7 @@ Busca registros con opciones avanzadas de paginación, ordenamiento, selección 
 **Opciones Disponibles:**
 
 ```typescript
-interface WhereQueryOptions<T> {
+interface QueryOptions<T> {
   order?: "ASC" | "DESC";        // Ordenamiento
   skip?: number;                  // Número de registros a saltar (offset)
   limit?: number;                 // Número máximo de registros a retornar
