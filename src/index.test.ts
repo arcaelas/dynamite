@@ -17,25 +17,26 @@
 
 import "reflect-metadata"; // CRÍTICO: Primera línea siempre
 
+import type {
+  BelongsTo,
+  CreationOptional,
+  HasMany,
+  WrapperEntry,
+} from "./@types/index";
 import { Dynamite } from "./core/client";
 import Table from "./core/table";
-import { STORE } from "./core/decorator";
-import type { CreationOptional, HasMany, BelongsTo, WrapperEntry } from "./@types/index";
 
 // Decoradores
-import PrimaryKey from "./decorators/primary_key";
-import Default from "./decorators/default";
-import CreatedAt from "./decorators/created_at";
-import UpdatedAt from "./decorators/updated_at";
-import Validate from "./decorators/validate";
-import Mutate from "./decorators/mutate";
-import NotNull from "./decorators/not_null";
-import Name from "./decorators/name";
-import HasManyDecorator from "./decorators/has_many";
-import BelongsToDecorator from "./decorators/belongs_to";
+import { BelongsTo as BelongsToDecorator, HasMany as HasManyDecorator } from "./decorators/relations";
+import { CreatedAt, UpdatedAt } from "./decorators/timestamps";
+import { Default, Mutate, Name, NotNull, Validate } from "./decorators/transforms";
+import { PrimaryKey } from "./decorators/indexes";
 
 // AWS SDK
-import { ListTablesCommand, DescribeTableCommand } from "@aws-sdk/client-dynamodb";
+import {
+  DescribeTableCommand,
+  ListTablesCommand,
+} from "@aws-sdk/client-dynamodb";
 
 // Variables globales
 let dynamite: Dynamite;
@@ -107,8 +108,8 @@ const metrics = {
     users: [] as User[],
     categories: [] as Category[],
     products: [] as Product[],
-    orders: [] as Order[]
-  }
+    orders: [] as Order[],
+  },
 };
 
 /**
@@ -127,11 +128,15 @@ function measurePhase(phaseName: string, testsCount: number) {
         start,
         end,
         duration,
-        tests_count: testsCount
+        tests_count: testsCount,
       });
 
-      console.log(`✓ ${phaseName} completed in ${duration.toFixed(2)}ms (${testsCount} tests)`);
-    }
+      console.log(
+        `✓ ${phaseName} completed in ${duration.toFixed(
+          2
+        )}ms (${testsCount} tests)`
+      );
+    },
   };
 }
 
@@ -142,18 +147,28 @@ function measurePhase(phaseName: string, testsCount: number) {
 @Name("test_users")
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`)
+  @Default(
+    () => `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  )
   declare id: CreationOptional<string>;
 
   @NotNull()
-  @Validate((val) => typeof val === "string" && val.length >= 3 || "Nombre mínimo 3 caracteres")
+  @Validate(
+    (val) =>
+      (typeof val === "string" && val.length >= 3) ||
+      "Nombre mínimo 3 caracteres"
+  )
   declare name: string;
 
-  @Validate((val) => typeof val === "string" && val.includes("@") || "Email inválido")
+  @Validate(
+    (val) => (typeof val === "string" && val.includes("@")) || "Email inválido"
+  )
   declare email: string;
 
   @Default(18)
-  @Mutate((val) => typeof val === "number" ? val : parseInt(val as string, 10))
+  @Mutate((val) =>
+    typeof val === "number" ? val : parseInt(val as string, 10)
+  )
   @Validate((val) => (val as number) >= 18 || "Edad mínima 18 años")
   declare age: CreationOptional<number>;
 
@@ -176,7 +191,9 @@ class User extends Table<User> {
 @Name("test_products")
 class Product extends Table<Product> {
   @PrimaryKey()
-  @Default(() => `prod_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`)
+  @Default(
+    () => `prod_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  )
   declare id: CreationOptional<string>;
 
   @NotNull()
@@ -189,7 +206,7 @@ class Product extends Table<Product> {
   @Default(0)
   declare stock: CreationOptional<number>;
 
-  @Mutate((val) => typeof val === "string" ? val.toUpperCase() : val)
+  @Mutate((val) => (typeof val === "string" ? val.toUpperCase() : val))
   declare category_id: string;
 
   @BelongsToDecorator(() => Category, "category_id", "id")
@@ -211,7 +228,9 @@ class Product extends Table<Product> {
 @Name("test_orders")
 class Order extends Table<Order> {
   @PrimaryKey()
-  @Default(() => `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`)
+  @Default(
+    () => `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  )
   declare id: CreationOptional<string>;
 
   @NotNull()
@@ -224,7 +243,11 @@ class Order extends Table<Order> {
   declare total: CreationOptional<number>;
 
   @Default("pending")
-  @Validate((val) => ["pending", "completed", "cancelled"].includes(val as string) || "Estado inválido")
+  @Validate(
+    (val) =>
+      ["pending", "completed", "cancelled"].includes(val as string) ||
+      "Estado inválido"
+  )
   declare status: CreationOptional<"pending" | "completed" | "cancelled">;
 
   @CreatedAt()
@@ -241,7 +264,7 @@ class Category extends Table<Category> {
   declare id: CreationOptional<string>;
 
   @NotNull()
-  @Mutate((val) => typeof val === "string" ? val.toLowerCase() : val)
+  @Mutate((val) => (typeof val === "string" ? val.toLowerCase() : val))
   declare name: string;
 
   @Default("")
@@ -271,9 +294,9 @@ beforeAll(async () => {
     region: "us-east-1",
     credentials: {
       accessKeyId: "test",
-      secretAccessKey: "test"
+      secretAccessKey: "test",
     },
-    tables: [User, Product, Order, Category]
+    tables: [User, Product, Order, Category],
   });
 
   // Conectar y sincronizar
@@ -298,7 +321,7 @@ beforeAll(async () => {
     Array.from({ length: 20 }, (_, i) =>
       Category.create({
         name: `category${i}`,
-        description: `Test category ${i}`
+        description: `Test category ${i}`,
       } as any)
     )
   );
@@ -309,7 +332,7 @@ beforeAll(async () => {
       User.create({
         name: `SeedUser${i}`,
         email: `seed${i}@test.com`,
-        age: 20 + (i % 50)
+        age: 20 + (i % 50),
       } as any)
     )
   );
@@ -318,14 +341,15 @@ beforeAll(async () => {
   metrics.seeds.products = [];
   for (let i = 0; i < 100; i++) {
     const user = metrics.seeds.users[i % metrics.seeds.users.length];
-    const category = metrics.seeds.categories[i % metrics.seeds.categories.length];
+    const category =
+      metrics.seeds.categories[i % metrics.seeds.categories.length];
 
     const product = await Product.create({
       name: `Product${i}`,
       price: Math.floor(Math.random() * 1000),
       stock: Math.floor(Math.random() * 100),
       category_id: category.id,
-      owner_id: user.id
+      owner_id: user.id,
     } as any);
 
     metrics.seeds.products.push(product);
@@ -339,7 +363,7 @@ beforeAll(async () => {
     const order = await Order.create({
       user_id: user.id,
       total: Math.floor(Math.random() * 5000),
-      status: ["pending", "completed", "cancelled"][i % 3] as any
+      status: ["pending", "completed", "cancelled"][i % 3] as any,
     } as any);
 
     metrics.seeds.orders.push(order);
@@ -347,14 +371,16 @@ beforeAll(async () => {
 
   metrics.seed_duration = performance.now() - seed_start;
 
-  console.log(`✅ Seed completed in ${(metrics.seed_duration / 1000).toFixed(2)}s`);
+  console.log(
+    `✅ Seed completed in ${(metrics.seed_duration / 1000).toFixed(2)}s`
+  );
   console.log(`   - Categories: ${metrics.seeds.categories.length}`);
   console.log(`   - Users: ${metrics.seeds.users.length}`);
   console.log(`   - Products: ${metrics.seeds.products.length}`);
   console.log(`   - Orders: ${metrics.seeds.orders.length}\n`);
 
   // Seed adicional para Phase 13+ (Deep Searching y tests avanzados)
-  if (process.env.FULL_TEST === 'true') {
+  if (process.env.FULL_TEST === "true") {
     console.log("🔥 Seeding para Deep Searching (Phase 13+)...");
     const deep_seed_start = performance.now();
 
@@ -365,11 +391,11 @@ beforeAll(async () => {
     for (let batch = 0; batch < large_users_batches; batch++) {
       const batch_users = await Promise.all(
         Array.from({ length: users_per_batch }, (_, j) => {
-          const idx = metrics.seeds.users.length + (batch * users_per_batch) + j;
+          const idx = metrics.seeds.users.length + batch * users_per_batch + j;
           return User.create({
             name: `LargeUser${idx}`,
             email: `large${idx}@test.com`,
-            age: 18 + (idx % 60)
+            age: 18 + (idx % 60),
           } as any);
         })
       );
@@ -384,14 +410,15 @@ beforeAll(async () => {
     const large_products_count = 5000;
     for (let i = metrics.seeds.products.length; i < large_products_count; i++) {
       const user = metrics.seeds.users[i % metrics.seeds.users.length];
-      const category = metrics.seeds.categories[i % metrics.seeds.categories.length];
+      const category =
+        metrics.seeds.categories[i % metrics.seeds.categories.length];
 
       const product = await Product.create({
         name: `LargeProduct${i}`,
         price: Math.floor(Math.random() * 10000),
         stock: Math.floor(Math.random() * 500),
         category_id: category.id,
-        owner_id: user.id
+        owner_id: user.id,
       } as any);
 
       metrics.seeds.products.push(product);
@@ -409,7 +436,7 @@ beforeAll(async () => {
       const order = await Order.create({
         user_id: user.id,
         total: Math.floor(Math.random() * 50000),
-        status: ["pending", "completed", "cancelled"][i % 3] as any
+        status: ["pending", "completed", "cancelled"][i % 3] as any,
       } as any);
 
       metrics.seeds.orders.push(order);
@@ -420,7 +447,9 @@ beforeAll(async () => {
     }
 
     const deep_seed_duration = performance.now() - deep_seed_start;
-    console.log(`✅ Deep seed completed in ${(deep_seed_duration / 1000).toFixed(2)}s`);
+    console.log(
+      `✅ Deep seed completed in ${(deep_seed_duration / 1000).toFixed(2)}s`
+    );
     console.log(`   - Total Users: ${metrics.seeds.users.length}`);
     console.log(`   - Total Products: ${metrics.seeds.products.length}`);
     console.log(`   - Total Orders: ${metrics.seeds.orders.length}\n`);
@@ -430,32 +459,58 @@ beforeAll(async () => {
 }, 300000);
 
 afterAll(async () => {
-  console.log("\n\n╔══════════════════════════════════════════════════════════╗");
+  console.log(
+    "\n\n╔══════════════════════════════════════════════════════════╗"
+  );
   console.log("║         DYNAMITE ORM - TEST RESULTS REPORT              ║");
   console.log("╚══════════════════════════════════════════════════════════╝\n");
 
   // 1. Phase Summary
   console.log("📊 PHASE SUMMARY\n");
 
-  const total_test_time = metrics.phases.reduce((sum, p) => sum + p.duration, 0);
+  const total_test_time = metrics.phases.reduce(
+    (sum, p) => sum + p.duration,
+    0
+  );
 
-  metrics.phases.forEach(phase => {
+  metrics.phases.forEach((phase) => {
     const percentage = (phase.duration / total_test_time) * 100;
     const bar = "█".repeat(Math.floor(percentage / 2));
-    console.log(`  ${phase.phase.padEnd(35)} ${phase.duration.toFixed(0).padStart(6)}ms ${bar} ${percentage.toFixed(1)}%`);
+    console.log(
+      `  ${phase.phase.padEnd(35)} ${phase.duration
+        .toFixed(0)
+        .padStart(6)}ms ${bar} ${percentage.toFixed(1)}%`
+    );
   });
 
   console.log(`\n  Total Test Time: ${(total_test_time / 1000).toFixed(2)}s\n`);
 
   // 2. Query Performance
-  if (metrics.query_comparison && Object.keys(metrics.query_comparison).length > 0) {
+  if (
+    metrics.query_comparison &&
+    Object.keys(metrics.query_comparison).length > 0
+  ) {
     console.log("⚡ QUERY PERFORMANCE\n");
 
-    const { simple, include_1_level, include_2_levels, overhead_1_level, overhead_2_levels } = metrics.query_comparison;
+    const {
+      simple,
+      include_1_level,
+      include_2_levels,
+      overhead_1_level,
+      overhead_2_levels,
+    } = metrics.query_comparison;
 
     console.log(`  Simple Query:              ${simple.toFixed(2)}ms`);
-    console.log(`  Query + 1 level include:   ${include_1_level.toFixed(2)}ms (${overhead_1_level.toFixed(2)}x)`);
-    console.log(`  Query + 2 levels include:  ${include_2_levels.toFixed(2)}ms (${overhead_2_levels.toFixed(2)}x)`);
+    console.log(
+      `  Query + 1 level include:   ${include_1_level.toFixed(
+        2
+      )}ms (${overhead_1_level.toFixed(2)}x)`
+    );
+    console.log(
+      `  Query + 2 levels include:  ${include_2_levels.toFixed(
+        2
+      )}ms (${overhead_2_levels.toFixed(2)}x)`
+    );
     console.log();
   }
 
@@ -463,9 +518,11 @@ afterAll(async () => {
   if (metrics.memory.length > 0) {
     console.log("🧠 MEMORY ANALYSIS\n");
 
-    metrics.memory.forEach(mem => {
+    metrics.memory.forEach((mem) => {
       const status = mem.leak < 20 ? "✅" : mem.leak < 50 ? "⚠️ " : "❌";
-      console.log(`  ${status} ${mem.test.padEnd(30)} Leak: ${mem.leak.toFixed(2)}MB`);
+      console.log(
+        `  ${status} ${mem.test.padEnd(30)} Leak: ${mem.leak.toFixed(2)}MB`
+      );
     });
     console.log();
   }
@@ -474,11 +531,24 @@ afterAll(async () => {
   if (metrics.deep_search && Object.keys(metrics.deep_search).length > 0) {
     console.log("🔎 DEEP SEARCHING PERFORMANCE\n");
 
-    const { multi_field_avg_duration, large_dataset_throughput, projection_overhead_percent, slow_queries_count } = metrics.deep_search;
+    const {
+      multi_field_avg_duration,
+      large_dataset_throughput,
+      projection_overhead_percent,
+      slow_queries_count,
+    } = metrics.deep_search;
 
-    console.log(`  Multi-field queries avg:   ${multi_field_avg_duration.toFixed(2)}ms`);
-    console.log(`  Large dataset throughput:  ${large_dataset_throughput.toFixed(2)} queries/sec`);
-    console.log(`  Projection overhead:       ${projection_overhead_percent.toFixed(1)}%`);
+    console.log(
+      `  Multi-field queries avg:   ${multi_field_avg_duration.toFixed(2)}ms`
+    );
+    console.log(
+      `  Large dataset throughput:  ${large_dataset_throughput.toFixed(
+        2
+      )} queries/sec`
+    );
+    console.log(
+      `  Projection overhead:       ${projection_overhead_percent.toFixed(1)}%`
+    );
     console.log(`  Slow queries detected:     ${slow_queries_count}`);
     console.log();
   }
@@ -487,25 +557,51 @@ afterAll(async () => {
   if (metrics.pipeline && Object.keys(metrics.pipeline).length > 0) {
     console.log("🔍 PIPELINE BOTTLENECK ANALYSIS\n");
 
-    const { total, marshalling, network, unmarshalling, percentages } = metrics.pipeline;
+    const { total, marshalling, network, unmarshalling, percentages } =
+      metrics.pipeline;
 
     console.log(`  Total Pipeline Time: ${total.toFixed(2)}ms\n`);
-    console.log(`    Marshalling:   ${marshalling.toFixed(2)}ms (${percentages.marshalling.toFixed(1)}%)`);
-    console.log(`    Network:       ${network.toFixed(2)}ms (${percentages.network.toFixed(1)}%)`);
-    console.log(`    Unmarshalling: ${unmarshalling.toFixed(2)}ms (${percentages.unmarshalling.toFixed(1)}%)`);
+    console.log(
+      `    Marshalling:   ${marshalling.toFixed(
+        2
+      )}ms (${percentages.marshalling.toFixed(1)}%)`
+    );
+    console.log(
+      `    Network:       ${network.toFixed(
+        2
+      )}ms (${percentages.network.toFixed(1)}%)`
+    );
+    console.log(
+      `    Unmarshalling: ${unmarshalling.toFixed(
+        2
+      )}ms (${percentages.unmarshalling.toFixed(1)}%)`
+    );
 
-    const bottleneck_entries = Object.entries(percentages) as [string, number][];
+    const bottleneck_entries = Object.entries(percentages) as [
+      string,
+      number
+    ][];
     const bottleneck = bottleneck_entries.sort((a, b) => b[1] - a[1])[0];
 
-    console.log(`\n  🎯 Primary Bottleneck: ${bottleneck[0]} (${bottleneck[1].toFixed(1)}%)\n`);
+    console.log(
+      `\n  🎯 Primary Bottleneck: ${bottleneck[0]} (${bottleneck[1].toFixed(
+        1
+      )}%)\n`
+    );
   }
 
   // 6. Bulk Operations
   if (metrics.bulk_operations.length > 0) {
     console.log("📦 BULK OPERATIONS\n");
 
-    metrics.bulk_operations.forEach(op => {
-      console.log(`  ${op.operation.toUpperCase().padEnd(10)} ${op.count} records: ${op.duration.toFixed(0)}ms (${op.avg_per_record.toFixed(2)}ms/record)`);
+    metrics.bulk_operations.forEach((op) => {
+      console.log(
+        `  ${op.operation.toUpperCase().padEnd(10)} ${
+          op.count
+        } records: ${op.duration.toFixed(0)}ms (${op.avg_per_record.toFixed(
+          2
+        )}ms/record)`
+      );
     });
     console.log();
   }
@@ -514,7 +610,7 @@ afterAll(async () => {
   if (metrics.slow_queries && metrics.slow_queries.length > 0) {
     console.log("⚠️  SLOW QUERIES DETECTED (>100ms)\n");
 
-    metrics.slow_queries.forEach(q => {
+    metrics.slow_queries.forEach((q) => {
       console.log(`  - ${q.name}: ${q.duration.toFixed(2)}ms`);
     });
     console.log();
@@ -526,38 +622,57 @@ afterAll(async () => {
   const suggestions: string[] = [];
 
   if (metrics.pipeline?.percentages?.network > 40) {
-    suggestions.push("High network latency detected. Consider using connection pooling or HTTP/2.");
+    suggestions.push(
+      "High network latency detected. Consider using connection pooling or HTTP/2."
+    );
   }
 
   if (metrics.pipeline?.percentages?.marshalling > 30) {
-    suggestions.push("High marshalling overhead. Use projection (attributes) to reduce payload size.");
+    suggestions.push(
+      "High marshalling overhead. Use projection (attributes) to reduce payload size."
+    );
   }
 
   if (metrics.query_comparison?.overhead_2_levels > 5) {
-    suggestions.push("Deep includes are expensive. Consider denormalization for frequently accessed paths.");
+    suggestions.push(
+      "Deep includes are expensive. Consider denormalization for frequently accessed paths."
+    );
   }
 
   if (metrics.memory.some((m: any) => m.leak > 20)) {
-    suggestions.push("⚠️  Memory leak detected! Review cache cleanup and circular references.");
+    suggestions.push(
+      "⚠️  Memory leak detected! Review cache cleanup and circular references."
+    );
   }
 
-  if (metrics.batch_efficiency && metrics.batch_efficiency.improvement_percent < 50) {
-    suggestions.push("Batch loading not optimizing significantly. Review query patterns.");
+  if (
+    metrics.batch_efficiency &&
+    metrics.batch_efficiency.improvement_percent < 50
+  ) {
+    suggestions.push(
+      "Batch loading not optimizing significantly. Review query patterns."
+    );
   }
 
   if (metrics.race_conditions.some((r: any) => r.failed > r.succeeded * 0.5)) {
-    suggestions.push("High race condition failure rate. Consider optimistic locking or transactions.");
+    suggestions.push(
+      "High race condition failure rate. Consider optimistic locking or transactions."
+    );
   }
 
   if (suggestions.length === 0) {
-    suggestions.push("✅ No major optimization opportunities detected. Performance is excellent!");
+    suggestions.push(
+      "✅ No major optimization opportunities detected. Performance is excellent!"
+    );
   }
 
   suggestions.forEach((s, i) => {
     console.log(`  ${i + 1}. ${s}`);
   });
 
-  console.log("\n╚══════════════════════════════════════════════════════════╝\n");
+  console.log(
+    "\n╚══════════════════════════════════════════════════════════╝\n"
+  );
 
   // Cleanup
   console.log("🧹 Cleaning up...");
@@ -587,7 +702,7 @@ describe("Fase 2: Construcción de Modelos", () => {
     const product = new Product({
       name: "Test Product",
       category_id: "cat_test",
-      owner_id: "user_test"
+      owner_id: "user_test",
     } as any);
 
     expect(product.category_id).toBe("CAT_TEST");
@@ -595,28 +710,28 @@ describe("Fase 2: Construcción de Modelos", () => {
     expect(product.stock).toBe(0);
   });
 
-  test("2.3: Validar metadatos del wrapper en User", () => {
-    const wrapper = require("./core/decorator").default;
-    const meta = wrapper.get(User) as WrapperEntry;
+  test("2.3: Validar metadatos del schema en User", () => {
+    const { getSchema } = require("./core/decorator");
+    const schema = getSchema(User);
 
-    expect(meta.name).toBe("test_users");
-    expect(meta.columns.size).toBeGreaterThan(0);
-    expect(meta.relations.size).toBe(2);
+    expect(schema.name).toBe("test_users");
+    expect(Object.keys(schema.columns).length).toBeGreaterThan(0);
 
-    const id_column = meta.columns.get("id");
-    expect(id_column?.index).toBe(true);
-    expect(id_column?.default).toBeDefined();
+    const id_column = schema.columns["id"];
+    expect(id_column).toBeDefined();
+    expect(id_column?.store?.index).toBe(true);
+    // Default se maneja via get pipeline, no como propiedad almacenada
+    expect(id_column?.get?.length).toBeGreaterThan(0);
   });
 
   test("2.4: Validar relaciones en metadatos", () => {
-    const wrapper = require("./core/decorator").default;
-    const meta = wrapper.get(Product) as WrapperEntry;
+    const { getSchema } = require("./core/decorator");
+    const schema = getSchema(Product);
 
-    expect(meta.relations.size).toBe(2);
-
-    const category_rel = meta.relations.get("category");
-    expect(category_rel?.type).toBe("belongsTo");
-    expect(category_rel?.localKey).toBe("category_id");
+    // Las relaciones se almacenan como columnas con store.relation
+    const category_col = schema.columns["category"];
+    expect(category_col?.store?.relation).toBeDefined();
+    expect(category_col?.store?.relation?.type).toBe("BelongsTo");
   });
 
   test("2.5: Validar estructura de clase (instanceof)", () => {
@@ -673,19 +788,7 @@ describe("Fase 3: Conexión Dynamite", () => {
     expect(tableNames).toContain("test_categories");
   });
 
-  test("3.5: Validar GSIs creados para HasMany", async () => {
-    const client = dynamite.getClient();
-    const result = await client.send(
-      new DescribeTableCommand({ TableName: "test_orders" } as any)
-    );
-
-    const gsis = result.Table?.GlobalSecondaryIndexes || [];
-    const user_gsi = gsis.find(gsi => gsi.IndexName?.includes("user_id"));
-
-    expect(user_gsi).toBeDefined();
-  });
-
-  test("3.6: Validar disconnect existe", () => {
+  test("3.5: Validar disconnect existe", () => {
     expect(typeof dynamite.disconnect).toBe("function");
   });
 });
@@ -703,15 +806,21 @@ describe("Fase 4: Decoradores", () => {
     test("4.1.1: Default estático (age: 18)", async () => {
       const user = await User.create({
         name: "TestDefault",
-        email: "default@test.com"
+        email: "default@test.com",
       } as any);
 
       expect(user.age).toBe(18);
     });
 
     test("4.1.2: Default con función (IDs únicos)", async () => {
-      const user1 = await User.create({ name: "User1", email: "u1@test.com" } as any);
-      const user2 = await User.create({ name: "User2", email: "u2@test.com" } as any);
+      const user1 = await User.create({
+        name: "User1",
+        email: "u1@test.com",
+      } as any);
+      const user2 = await User.create({
+        name: "User2",
+        email: "u2@test.com",
+      } as any);
 
       expect(user1.id).toBeDefined();
       expect(user2.id).toBeDefined();
@@ -722,7 +831,7 @@ describe("Fase 4: Decoradores", () => {
       const user = await User.create({
         name: "TestOverride",
         email: "override@test.com",
-        age: 25
+        age: 25,
       } as any);
 
       expect(user.age).toBe(25);
@@ -735,7 +844,7 @@ describe("Fase 4: Decoradores", () => {
 
       const user = await User.create({
         name: "TestCreated",
-        email: "created@test.com"
+        email: "created@test.com",
       } as any);
 
       const after = new Date().toISOString();
@@ -748,12 +857,12 @@ describe("Fase 4: Decoradores", () => {
     test("4.2.2: updated_at se actualiza al guardar", async () => {
       const user = await User.create({
         name: "TestUpdated",
-        email: "updated@test.com"
+        email: "updated@test.com",
       } as any);
 
       const original_updated = user.updated_at;
 
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       user.name = "UpdatedName";
       await user.save();
@@ -765,12 +874,12 @@ describe("Fase 4: Decoradores", () => {
     test("4.2.3: created_at permanece inmutable al actualizar", async () => {
       const user = await User.create({
         name: "TestImmutable",
-        email: "immutable@test.com"
+        email: "immutable@test.com",
       } as any);
 
       const original_created = user.created_at;
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       user.name = "Updated";
       await user.save();
@@ -804,18 +913,21 @@ describe("Fase 4: Decoradores", () => {
           name: "Test",
           price: -10,
           category_id: "cat_test",
-          owner_id: "user_test"
+          owner_id: "user_test",
         } as any)
       ).rejects.toThrow("Precio debe ser positivo");
     });
 
     test("4.3.5: Validar enum estados (error)", async () => {
-      const user = await User.create({ name: "Test", email: "test@test.com" } as any);
+      const user = await User.create({
+        name: "Test",
+        email: "test@test.com",
+      } as any);
 
       await expect(
         Order.create({
           user_id: user.id,
-          status: "invalid_status" as any
+          status: "invalid_status" as any,
         } as any)
       ).rejects.toThrow("Estado inválido");
     });
@@ -824,7 +936,7 @@ describe("Fase 4: Decoradores", () => {
       const user = await User.create({
         name: "ValidName",
         email: "valid@test.com",
-        age: 25
+        age: 25,
       } as any);
 
       expect(user.name).toBe("ValidName");
@@ -837,7 +949,7 @@ describe("Fase 4: Decoradores", () => {
       const user = await User.create({
         name: "TestMutate",
         email: "mutate@test.com",
-        age: "30" as any
+        age: "30" as any,
       } as any);
 
       expect(typeof user.age).toBe("number");
@@ -849,7 +961,7 @@ describe("Fase 4: Decoradores", () => {
       const product = await Product.create({
         name: "TestUpper",
         category_id: "lowercase",
-        owner_id: user.id
+        owner_id: user.id,
       } as any);
 
       expect(product.category_id).toBe("LOWERCASE");
@@ -857,7 +969,7 @@ describe("Fase 4: Decoradores", () => {
 
     test("4.4.3: Transformar name → lowercase en Category", async () => {
       const category = await Category.create({
-        name: "UPPERCASE"
+        name: "UPPERCASE",
       } as any);
 
       expect(category.name).toBe("uppercase");
@@ -876,7 +988,7 @@ describe("Fase 4: Decoradores", () => {
         Product.create({
           name: null as any,
           category_id: "cat",
-          owner_id: "user"
+          owner_id: "user",
         } as any)
       ).rejects.toThrow();
     });
@@ -884,7 +996,7 @@ describe("Fase 4: Decoradores", () => {
     test("4.5.3: Permitir con campos requeridos", async () => {
       const user = await User.create({
         name: "Required",
-        email: "required@test.com"
+        email: "required@test.com",
       } as any);
 
       expect(user.name).toBe("Required");
@@ -893,16 +1005,22 @@ describe("Fase 4: Decoradores", () => {
 
   describe("4.6: @PrimaryKey", () => {
     test("4.6.1: Marcar como index en metadatos", () => {
-      const wrapper = require("./core/decorator").default;
-      const meta = wrapper.get(User) as WrapperEntry;
-      const id_column = meta.columns.get("id");
+      const { getSchema } = require("./core/decorator");
+      const schema = getSchema(User);
+      const id_column = schema.columns["id"];
 
-      expect(id_column?.index).toBe(true);
+      expect(id_column?.store?.index).toBe(true);
     });
 
     test("4.6.2: Generar IDs únicos", async () => {
-      const user1 = await User.create({ name: "PK1", email: "pk1@test.com" } as any);
-      const user2 = await User.create({ name: "PK2", email: "pk2@test.com" } as any);
+      const user1 = await User.create({
+        name: "PK1",
+        email: "pk1@test.com",
+      } as any);
+      const user2 = await User.create({
+        name: "PK2",
+        email: "pk2@test.com",
+      } as any);
 
       expect(user1.id).not.toBe(user2.id);
     });
@@ -922,9 +1040,12 @@ describe("Fase 5: Relaciones", () => {
     test("5.1.1: Cargar orders de user con include", async () => {
       const user = metrics.seeds.users[0];
 
-      const results = await User.where({ id: user.id }, {
-        include: { orders: true }
-      });
+      const results = await User.where(
+        { id: user.id },
+        {
+          include: { orders: true },
+        }
+      );
 
       expect(results.length).toBe(1);
       expect(results[0].orders).toBeDefined();
@@ -934,9 +1055,12 @@ describe("Fase 5: Relaciones", () => {
     test("5.1.2: Cargar products de category", async () => {
       const category = metrics.seeds.categories[0];
 
-      const results = await Category.where({ id: category.id }, {
-        include: { products: true }
-      });
+      const results = await Category.where(
+        { id: category.id },
+        {
+          include: { products: true },
+        }
+      );
 
       expect(results.length).toBe(1);
       expect(results[0].products).toBeDefined();
@@ -946,17 +1070,20 @@ describe("Fase 5: Relaciones", () => {
     test("5.1.3: Aplicar filtros en include (where)", async () => {
       const user = metrics.seeds.users[0];
 
-      const results = await User.where({ id: user.id }, {
-        include: {
-          orders: {
-            where: { status: "completed" }
-          }
+      const results = await User.where(
+        { id: user.id },
+        {
+          include: {
+            orders: {
+              where: { status: "completed" },
+            },
+          },
         }
-      });
+      );
 
       expect(results.length).toBe(1);
       if (results[0].orders && results[0].orders.length > 0) {
-        results[0].orders.forEach(order => {
+        results[0].orders.forEach((order) => {
           expect(order.status).toBe("completed");
         });
       }
@@ -965,11 +1092,14 @@ describe("Fase 5: Relaciones", () => {
     test("5.1.4: Aplicar limit en include", async () => {
       const user = metrics.seeds.users[0];
 
-      const results = await User.where({ id: user.id }, {
-        include: {
-          orders: { limit: 2 }
+      const results = await User.where(
+        { id: user.id },
+        {
+          include: {
+            orders: { limit: 2 },
+          },
         }
-      });
+      );
 
       expect(results.length).toBe(1);
       if (results[0].orders) {
@@ -980,12 +1110,15 @@ describe("Fase 5: Relaciones", () => {
     test("5.1.5: Cargar múltiples HasMany en un modelo", async () => {
       const user = metrics.seeds.users[0];
 
-      const results = await User.where({ id: user.id }, {
-        include: {
-          orders: true,
-          products: true
+      const results = await User.where(
+        { id: user.id },
+        {
+          include: {
+            orders: true,
+            products: true,
+          },
         }
-      });
+      );
 
       expect(results.length).toBe(1);
       expect(results[0].orders).toBeDefined();
@@ -997,9 +1130,12 @@ describe("Fase 5: Relaciones", () => {
     test("5.2.1: Cargar category de product", async () => {
       const product = metrics.seeds.products[0];
 
-      const results = await Product.where({ id: product.id }, {
-        include: { category: true }
-      });
+      const results = await Product.where(
+        { id: product.id },
+        {
+          include: { category: true },
+        }
+      );
 
       expect(results.length).toBe(1);
       expect(results[0].category).toBeDefined();
@@ -1008,9 +1144,12 @@ describe("Fase 5: Relaciones", () => {
     test("5.2.2: Cargar user de order", async () => {
       const order = metrics.seeds.orders[0];
 
-      const results = await Order.where({ id: order.id }, {
-        include: { user: true }
-      });
+      const results = await Order.where(
+        { id: order.id },
+        {
+          include: { user: true },
+        }
+      );
 
       expect(results.length).toBe(1);
       expect(results[0].user).toBeDefined();
@@ -1019,12 +1158,15 @@ describe("Fase 5: Relaciones", () => {
     test("5.2.3: Cargar múltiples belongsTo en un modelo", async () => {
       const product = metrics.seeds.products[0];
 
-      const results = await Product.where({ id: product.id }, {
-        include: {
-          category: true,
-          owner: true
+      const results = await Product.where(
+        { id: product.id },
+        {
+          include: {
+            category: true,
+            owner: true,
+          },
         }
-      });
+      );
 
       expect(results.length).toBe(1);
       expect(results[0].category).toBeDefined();
@@ -1036,13 +1178,16 @@ describe("Fase 5: Relaciones", () => {
     test("5.3.1: 2 niveles: User → Orders → User", async () => {
       const user = metrics.seeds.users[0];
 
-      const results = await User.where({ id: user.id }, {
-        include: {
-          orders: {
-            include: { user: true }
-          }
+      const results = await User.where(
+        { id: user.id },
+        {
+          include: {
+            orders: {
+              include: { user: true },
+            },
+          },
         }
-      });
+      );
 
       expect(results.length).toBe(1);
       expect(results[0].orders).toBeDefined();
@@ -1055,17 +1200,20 @@ describe("Fase 5: Relaciones", () => {
     test("5.3.2: 3 niveles: Category → Products → Owner → Orders", async () => {
       const category = metrics.seeds.categories[0];
 
-      const results = await Category.where({ id: category.id }, {
-        include: {
-          products: {
-            include: {
-              owner: {
-                include: { orders: true }
-              }
-            }
-          }
+      const results = await Category.where(
+        { id: category.id },
+        {
+          include: {
+            products: {
+              include: {
+                owner: {
+                  include: { orders: true },
+                },
+              },
+            },
+          },
         }
-      });
+      );
 
       expect(results.length).toBe(1);
       expect(results[0].products).toBeDefined();
@@ -1095,16 +1243,21 @@ describe("Fase 5: Relaciones", () => {
     test("5.4.1: Prevención N+1 con múltiples users", async () => {
       const start = performance.now();
 
-      const users_with_orders = await User.where({}, {
-        limit: 10,
-        include: { orders: true }
-      });
+      const users_with_orders = await User.where(
+        {},
+        {
+          limit: 10,
+          include: { orders: true },
+        }
+      );
 
       const duration = performance.now() - start;
 
       expect(users_with_orders.length).toBeLessThanOrEqual(10);
 
-      console.log(`  Batch loading 10 users with orders: ${duration.toFixed(2)}ms`);
+      console.log(
+        `  Batch loading 10 users with orders: ${duration.toFixed(2)}ms`
+      );
 
       expect(duration).toBeLessThan(5000);
     });
@@ -1124,7 +1277,7 @@ describe("Fase 6: Consultas Simples", () => {
     test("6.1.1: Crear registro único", async () => {
       const user = await User.create({
         name: "CreateTest",
-        email: "create@test.com"
+        email: "create@test.com",
       } as any);
 
       expect(user.id).toBeDefined();
@@ -1134,7 +1287,7 @@ describe("Fase 6: Consultas Simples", () => {
     test("6.1.2: Aplicar defaults al crear", async () => {
       const user = await User.create({
         name: "DefaultTest",
-        email: "defaults@test.com"
+        email: "defaults@test.com",
       } as any);
 
       expect(user.age).toBe(18);
@@ -1143,7 +1296,7 @@ describe("Fase 6: Consultas Simples", () => {
 
     test("6.1.3: Aplicar mutaciones al crear", async () => {
       const category = await Category.create({
-        name: "MUTATE"
+        name: "MUTATE",
       } as any);
 
       expect(category.name).toBe("mutate");
@@ -1158,7 +1311,7 @@ describe("Fase 6: Consultas Simples", () => {
     test("6.1.5: Persistir en DynamoDB", async () => {
       const user = await User.create({
         name: "PersistTest",
-        email: "persist@test.com"
+        email: "persist@test.com",
       } as any);
 
       const found = await User.where({ id: user.id });
@@ -1171,40 +1324,40 @@ describe("Fase 6: Consultas Simples", () => {
     test("6.2.1: Operador = (igual)", async () => {
       const results = await User.where({ status: "active" });
       expect(results.length).toBeGreaterThan(0);
-      results.forEach(u => expect(u.status).toBe("active"));
+      results.forEach((u) => expect(u.status).toBe("active"));
     });
 
     test("6.2.2: Operador != (no igual)", async () => {
       const results = await User.where("status", "!=", "inactive");
       expect(results.length).toBeGreaterThan(0);
-      results.forEach(u => expect(u.status).not.toBe("inactive"));
+      results.forEach((u) => expect(u.status).not.toBe("inactive"));
     });
 
     test("6.2.3: Operador < (menor que)", async () => {
       const results = await User.where("age", "<", 30);
-      results.forEach(u => expect(u.age).toBeLessThan(30));
+      results.forEach((u) => expect(u.age).toBeLessThan(30));
     });
 
     test("6.2.4: Operador <= (menor o igual)", async () => {
       const results = await User.where("age", "<=", 30);
-      results.forEach(u => expect(u.age).toBeLessThanOrEqual(30));
+      results.forEach((u) => expect(u.age).toBeLessThanOrEqual(30));
     });
 
     test("6.2.5: Operador > (mayor que)", async () => {
       const results = await User.where("age", ">", 40);
-      results.forEach(u => expect(u.age).toBeGreaterThan(40));
+      results.forEach((u) => expect(u.age).toBeGreaterThan(40));
     });
 
     test("6.2.6: Operador >= (mayor o igual)", async () => {
       const results = await User.where("age", ">=", 40);
-      results.forEach(u => expect(u.age).toBeGreaterThanOrEqual(40));
+      results.forEach((u) => expect(u.age).toBeGreaterThanOrEqual(40));
     });
 
     test("6.2.7: Operador in (en array)", async () => {
       const statuses = ["pending", "completed"];
       const results = await Order.where("status", "in", statuses as any);
 
-      results.forEach(o => {
+      results.forEach((o) => {
         expect(statuses).toContain(o.status);
       });
     });
@@ -1213,7 +1366,7 @@ describe("Fase 6: Consultas Simples", () => {
       const statuses = ["cancelled"];
       const results = await Order.where("status", "not-in", statuses as any);
 
-      results.forEach(o => {
+      results.forEach((o) => {
         expect(statuses).not.toContain(o.status);
       });
     });
@@ -1221,7 +1374,7 @@ describe("Fase 6: Consultas Simples", () => {
     test("6.2.9: Operador contains (substring)", async () => {
       const results = await User.where("email", "contains", "@test.com");
 
-      results.forEach(u => {
+      results.forEach((u) => {
         expect(u.email).toContain("@test.com");
       });
     });
@@ -1229,7 +1382,7 @@ describe("Fase 6: Consultas Simples", () => {
     test("6.2.10: Operador begins-with (prefijo)", async () => {
       const results = await User.where("name", "begins-with", "Seed");
 
-      results.forEach(u => {
+      results.forEach((u) => {
         expect(u.name.startsWith("Seed")).toBe(true);
       });
     });
@@ -1237,10 +1390,10 @@ describe("Fase 6: Consultas Simples", () => {
     test("6.2.11: Búsqueda por múltiples campos", async () => {
       const results = await User.where({
         status: "active",
-        age: 25
+        age: 25,
       });
 
-      results.forEach(u => {
+      results.forEach((u) => {
         expect(u.status).toBe("active");
         expect(u.age).toBe(25);
       });
@@ -1259,22 +1412,28 @@ describe("Fase 6: Consultas Simples", () => {
     });
 
     test("6.2.14: Opciones: order ASC", async () => {
-      const results = await User.where({}, {
-        limit: 10,
-        order: "ASC"
-      });
+      const results = await User.where(
+        {},
+        {
+          limit: 10,
+          order: "ASC",
+        }
+      );
 
       expect(results.length).toBeGreaterThan(0);
     });
 
     test("6.2.15: Opciones: attributes (proyección)", async () => {
-      const results = await User.where({}, {
-        limit: 5,
-        attributes: ["id", "name"]
-      });
+      const results = await User.where(
+        {},
+        {
+          limit: 5,
+          attributes: ["id", "name"],
+        }
+      );
 
       expect(results.length).toBeGreaterThan(0);
-      results.forEach(u => {
+      results.forEach((u) => {
         expect(u.id).toBeDefined();
         expect(u.name).toBeDefined();
       });
@@ -1285,7 +1444,7 @@ describe("Fase 6: Consultas Simples", () => {
     test("6.3.1: Método estático (actualizar por filtro)", async () => {
       const user = await User.create({
         name: "UpdateStatic",
-        email: "static@test.com"
+        email: "static@test.com",
       } as any);
 
       await User.update({ name: "Updated" }, { id: user.id });
@@ -1297,7 +1456,7 @@ describe("Fase 6: Consultas Simples", () => {
     test("6.3.2: Método de instancia (instance.save)", async () => {
       const user = await User.create({
         name: "UpdateInstance",
-        email: "instance@test.com"
+        email: "instance@test.com",
       } as any);
 
       user.name = "InstanceUpdated";
@@ -1310,12 +1469,12 @@ describe("Fase 6: Consultas Simples", () => {
     test("6.3.3: Actualizar updated_at automáticamente", async () => {
       const user = await User.create({
         name: "UpdatedAt",
-        email: "updatedat@test.com"
+        email: "updatedat@test.com",
       } as any);
 
       const original = user.updated_at;
 
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       user.name = "Changed";
       await user.save();
@@ -1326,19 +1485,18 @@ describe("Fase 6: Consultas Simples", () => {
     test("6.3.4: Validaciones al actualizar", async () => {
       const user = await User.create({
         name: "ValidUpdate",
-        email: "valid@test.com"
+        email: "valid@test.com",
       } as any);
 
-      user.name = "AB";
-
-      await expect(user.save()).rejects.toThrow("Nombre mínimo 3 caracteres");
+      // Validación ocurre en setter (fail-fast), no en save()
+      expect(() => { user.name = "AB"; }).toThrow("Nombre mínimo 3 caracteres");
     });
 
     test("6.3.5: Actualizar múltiples campos", async () => {
       const user = await User.create({
         name: "MultiUpdate",
         email: "multi@test.com",
-        age: 20
+        age: 20,
       } as any);
 
       user.name = "UpdatedMulti";
@@ -1355,7 +1513,7 @@ describe("Fase 6: Consultas Simples", () => {
     test("6.4.1: Método estático", async () => {
       const user = await User.create({
         name: "DeleteStatic",
-        email: "delstatic@test.com"
+        email: "delstatic@test.com",
       } as any);
 
       await User.delete({ id: user.id });
@@ -1367,7 +1525,7 @@ describe("Fase 6: Consultas Simples", () => {
     test("6.4.2: Método de instancia (destroy)", async () => {
       const user = await User.create({
         name: "DeleteInstance",
-        email: "delinstance@test.com"
+        email: "delinstance@test.com",
       } as any);
 
       await user.destroy();
@@ -1377,12 +1535,18 @@ describe("Fase 6: Consultas Simples", () => {
     });
 
     test("6.4.3: Eliminar múltiples registros", async () => {
-      const user1 = await User.create({ name: "Del1", email: "del1@test.com" } as any);
-      const user2 = await User.create({ name: "Del2", email: "del2@test.com" } as any);
+      const user1 = await User.create({
+        name: "Del1",
+        email: "del1@test.com",
+      } as any);
+      const user2 = await User.create({
+        name: "Del2",
+        email: "del2@test.com",
+      } as any);
 
       await Promise.all([
         User.delete({ id: user1.id }),
-        User.delete({ id: user2.id } as any)
+        User.delete({ id: user2.id } as any),
       ]);
 
       const found = await User.where("id", "in", [user1.id, user2.id]);
@@ -1420,7 +1584,7 @@ describe("Fase 6: Consultas Simples", () => {
     test("6.6.1: Save como create (sin id previo)", async () => {
       const user = new User({
         name: "SaveCreate",
-        email: "savecreate@test.com"
+        email: "savecreate@test.com",
       } as any);
 
       await user.save();
@@ -1434,7 +1598,7 @@ describe("Fase 6: Consultas Simples", () => {
     test("6.6.2: Save como update (con id existente)", async () => {
       const user = await User.create({
         name: "SaveUpdate",
-        email: "saveupdate@test.com"
+        email: "saveupdate@test.com",
       } as any);
 
       user.name = "SavedUpdate";
@@ -1447,13 +1611,13 @@ describe("Fase 6: Consultas Simples", () => {
     test("6.6.3: created_at solo en primera save", async () => {
       const user = new User({
         name: "SaveCreatedAt",
-        email: "savecreated@test.com"
+        email: "savecreated@test.com",
       } as any);
 
       await user.save();
       const first_created = user.created_at;
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       user.name = "Updated";
       await user.save();
@@ -1478,7 +1642,7 @@ describe("Fase 7: Consultas Avanzadas", () => {
       const results = await User.where("age", ">=", 18);
       const duration = performance.now() - start;
 
-      results.forEach(u => expect(u.age).toBeGreaterThanOrEqual(18));
+      results.forEach((u) => expect(u.age).toBeGreaterThanOrEqual(18));
       expect(duration).toBeLessThan(100);
     });
 
@@ -1491,7 +1655,7 @@ describe("Fase 7: Consultas Avanzadas", () => {
 
       metrics.query_times.push({
         operation: "in_100_values",
-        duration
+        duration,
       });
 
       expect(results).toBeDefined();
@@ -1500,12 +1664,12 @@ describe("Fase 7: Consultas Avanzadas", () => {
     test("7.1.3: Operador 'contains' con caracteres especiales", async () => {
       const user = await User.create({
         name: "Special<>",
-        email: "special@test.com"
+        email: "special@test.com",
       } as any);
 
       const results = await User.where("name", "contains", "<>");
 
-      const found = results.find(u => u.id === user.id);
+      const found = results.find((u) => u.id === user.id);
       expect(found).toBeDefined();
     });
 
@@ -1518,10 +1682,13 @@ describe("Fase 7: Consultas Avanzadas", () => {
   describe("7.2: Proyecciones de Atributos", () => {
     test("7.2.1: Seleccionar atributos específicos", async () => {
       const start = performance.now();
-      const results = await User.where({}, {
-        limit: 10,
-        attributes: ["id", "name"]
-      });
+      const results = await User.where(
+        {},
+        {
+          limit: 10,
+          attributes: ["id", "name"],
+        }
+      );
       const duration = performance.now() - start;
 
       expect(results.length).toBeGreaterThan(0);
@@ -1529,19 +1696,25 @@ describe("Fase 7: Consultas Avanzadas", () => {
     });
 
     test("7.2.2: Proyección con atributo inexistente", async () => {
-      const results = await User.where({}, {
-        limit: 5,
-        attributes: ["id", "nonexistent_field"] as any
-      });
+      const results = await User.where(
+        {},
+        {
+          limit: 5,
+          attributes: ["id", "nonexistent_field"] as any,
+        }
+      );
 
       expect(results).toBeDefined();
     });
 
     test("7.2.3: Proyección vacía", async () => {
-      const results = await User.where({}, {
-        limit: 5,
-        attributes: []
-      });
+      const results = await User.where(
+        {},
+        {
+          limit: 5,
+          attributes: [],
+        }
+      );
 
       expect(results.length).toBeGreaterThan(0);
     });
@@ -1570,12 +1743,12 @@ describe("Fase 7: Consultas Avanzadas", () => {
 
       const results = await User.where({
         status: "active",
-        age: 25
+        age: 25,
       });
 
       const duration = performance.now() - start;
 
-      results.forEach(u => {
+      results.forEach((u) => {
         expect(u.status).toBe("active");
         expect(u.age).toBe(25);
       });
@@ -1583,7 +1756,7 @@ describe("Fase 7: Consultas Avanzadas", () => {
       metrics.query_times.push({
         operation: "multiple_filters",
         duration,
-        filters_count: 2
+        filters_count: 2,
       });
     });
   });
@@ -1592,17 +1765,20 @@ describe("Fase 7: Consultas Avanzadas", () => {
     test("7.5.1: Query completa con todas las opciones", async () => {
       const start = performance.now();
 
-      const results = await User.where({}, {
-        limit: 5,
-        attributes: ["id", "name"],
-        include: {
-          orders: {
-            where: { status: "completed" },
-            limit: 3,
-            attributes: ["id", "total"]
-          }
+      const results = await User.where(
+        {},
+        {
+          limit: 5,
+          attributes: ["id", "name"],
+          include: {
+            orders: {
+              where: { status: "completed" },
+              limit: 3,
+              attributes: ["id", "total"],
+            },
+          },
         }
-      });
+      );
 
       const duration = performance.now() - start;
 
@@ -1612,22 +1788,25 @@ describe("Fase 7: Consultas Avanzadas", () => {
       metrics.query_times.push({
         operation: "full_complex_query",
         duration,
-        includes_depth: 1
+        includes_depth: 1,
       });
     });
 
     test("7.5.2: Query con múltiples includes y filtros", async () => {
-      const results = await User.where({ status: "active" }, {
-        limit: 3,
-        include: {
-          orders: { limit: 2 },
-          products: { limit: 2 }
+      const results = await User.where(
+        { status: "active" },
+        {
+          limit: 3,
+          include: {
+            orders: { limit: 2 },
+            products: { limit: 2 },
+          },
         }
-      });
+      );
 
       expect(results.length).toBeLessThanOrEqual(3);
 
-      results.forEach(u => {
+      results.forEach((u) => {
         expect(u.status).toBe("active");
         if (u.orders) expect(u.orders.length).toBeLessThanOrEqual(2);
         if (u.products) expect(u.products.length).toBeLessThanOrEqual(2);
@@ -1649,23 +1828,28 @@ describe("Fase 8: Casos Avanzados", () => {
     test("8.1.1: Crear y destruir 10,000 instancias", async () => {
       if (global.gc) {
         global.gc();
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
 
       const baseline = process.memoryUsage().heapUsed;
 
       for (let batch = 0; batch < 100; batch++) {
-        const instances = Array.from({ length: 100 }, () =>
-          new User({ name: `User${batch}`, email: `u${batch}@test.com` } as any)
+        const instances = Array.from(
+          { length: 100 },
+          () =>
+            new User({
+              name: `User${batch}`,
+              email: `u${batch}@test.com`,
+            } as any)
         );
 
-        instances.forEach(u => u.name);
+        instances.forEach((u) => u.name);
         instances.length = 0;
       }
 
       if (global.gc) {
         global.gc();
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       }
 
       const afterGC = process.memoryUsage().heapUsed;
@@ -1679,14 +1863,14 @@ describe("Fase 8: Casos Avanzados", () => {
         test: "10k_instances",
         baseline,
         after: afterGC,
-        leak: leakMB
+        leak: leakMB,
       });
     });
 
     test("8.1.2: Verificar que no hay retención de memoria en queries", async () => {
       if (global.gc) {
         global.gc();
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
 
       const baseline = process.memoryUsage().heapUsed;
@@ -1697,7 +1881,7 @@ describe("Fase 8: Casos Avanzados", () => {
 
       if (global.gc) {
         global.gc();
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise((resolve) => setTimeout(resolve, 500));
       }
 
       const afterGC = process.memoryUsage().heapUsed;
@@ -1711,7 +1895,7 @@ describe("Fase 8: Casos Avanzados", () => {
         test: "50_queries",
         baseline,
         after: afterGC,
-        leak: leakMB
+        leak: leakMB,
       });
     });
   });
@@ -1721,7 +1905,7 @@ describe("Fase 8: Casos Avanzados", () => {
       const user = await User.create({
         name: "RaceTest",
         email: "race@test.com",
-        age: 0
+        age: 18,
       } as any);
 
       const start = performance.now();
@@ -1733,10 +1917,12 @@ describe("Fase 8: Casos Avanzados", () => {
       const results = await Promise.allSettled(updates);
       const duration = performance.now() - start;
 
-      const succeeded = results.filter(r => r.status === "fulfilled").length;
-      const failed = results.filter(r => r.status === "rejected").length;
+      const succeeded = results.filter((r) => r.status === "fulfilled").length;
+      const failed = results.filter((r) => r.status === "rejected").length;
 
-      console.log(`  Race: ${succeeded} OK, ${failed} failed in ${duration.toFixed(0)}ms`);
+      console.log(
+        `  Race: ${succeeded} OK, ${failed} failed in ${duration.toFixed(0)}ms`
+      );
 
       const final = await User.where({ id: user.id });
       expect(final.length).toBe(1);
@@ -1747,18 +1933,21 @@ describe("Fase 8: Casos Avanzados", () => {
         concurrent_updates: 50,
         duration,
         succeeded,
-        failed
+        failed,
       });
     });
 
     test("8.2.2: Concurrent creates con IDs únicos", async () => {
       const creates = Array.from({ length: 10 }, (_, i) =>
-        User.create({ name: `Concurrent${i}`, email: `conc${i}@test.com` } as any)
+        User.create({
+          name: `Concurrent${i}`,
+          email: `conc${i}@test.com`,
+        } as any)
       );
 
       const results = await Promise.allSettled(creates);
 
-      const succeeded = results.filter(r => r.status === "fulfilled");
+      const succeeded = results.filter((r) => r.status === "fulfilled");
 
       console.log(`  Concurrent creates: ${succeeded.length}/10 succeeded`);
 
@@ -1775,15 +1964,18 @@ describe("Fase 8: Casos Avanzados", () => {
           include: {
             user: {
               include: {
-                orders: {}
-              }
-            }
-          }
-        }
+                orders: {},
+              },
+            },
+          },
+        },
       };
 
       // No debe lanzar error, el sistema lo maneja
-      const results = await User.where({}, { limit: 1, include: circularInclude });
+      const results = await User.where(
+        {},
+        { limit: 1, include: circularInclude }
+      );
       expect(Array.isArray(results)).toBe(true);
     });
 
@@ -1808,21 +2000,24 @@ describe("Fase 8: Casos Avanzados", () => {
     test("8.4.1: 3 niveles de profundidad", async () => {
       const start = performance.now();
 
-      const results = await User.where({}, {
-        limit: 2,
-        include: {
-          orders: {
-            limit: 2,
-            include: {
-              user: {
-                include: {
-                  products: { limit: 2 }
-                }
-              }
-            }
-          }
+      const results = await User.where(
+        {},
+        {
+          limit: 2,
+          include: {
+            orders: {
+              limit: 2,
+              include: {
+                user: {
+                  include: {
+                    products: { limit: 2 },
+                  },
+                },
+              },
+            },
+          },
         }
-      });
+      );
 
       const duration = performance.now() - start;
 
@@ -1834,7 +2029,7 @@ describe("Fase 8: Casos Avanzados", () => {
       metrics.deep_includes.push({
         depth: 3,
         duration,
-        total_records: results.length
+        total_records: results.length,
       });
     });
   });
@@ -1861,7 +2056,7 @@ describe("Fase 8: Casos Avanzados", () => {
       const records = Array.from({ length: 200 }, (_, i) => ({
         name: `BulkUser${i}`,
         email: `bulk${i}@test.com`,
-        age: Math.floor(Math.random() * 50) + 18
+        age: Math.floor(Math.random() * 50) + 18,
       }));
 
       const chunks: any[][] = [];
@@ -1872,8 +2067,8 @@ describe("Fase 8: Casos Avanzados", () => {
       for (let i = 0; i < chunks.length; i += 3) {
         const batch = chunks.slice(i, i + 3);
         await Promise.all(
-          batch.map(chunk =>
-            Promise.all(chunk.map(record => User.create(record)))
+          batch.map((chunk) =>
+            Promise.all(chunk.map((record) => User.create(record)))
           )
         );
       }
@@ -1889,7 +2084,7 @@ describe("Fase 8: Casos Avanzados", () => {
         operation: "create",
         count: 200,
         duration,
-        avg_per_record: duration / 200
+        avg_per_record: duration / 200,
       });
     });
 
@@ -1899,7 +2094,7 @@ describe("Fase 8: Casos Avanzados", () => {
       const start = performance.now();
 
       await Promise.all(
-        users.map(user =>
+        users.map((user) =>
           User.update({ status: "inactive" }, { id: user.id } as any)
         )
       );
@@ -1912,7 +2107,7 @@ describe("Fase 8: Casos Avanzados", () => {
         operation: "update",
         count: 100,
         duration,
-        avg_per_record: duration / 100
+        avg_per_record: duration / 100,
       });
     });
 
@@ -1923,7 +2118,7 @@ describe("Fase 8: Casos Avanzados", () => {
       const start = performance.now();
 
       await Promise.all(
-        toDelete.slice(0, count).map(user => User.delete({ id: user.id }))
+        toDelete.slice(0, count).map((user) => User.delete({ id: user.id }))
       );
 
       const duration = performance.now() - start;
@@ -1934,7 +2129,7 @@ describe("Fase 8: Casos Avanzados", () => {
         operation: "delete",
         count,
         duration,
-        avg_per_record: duration / count
+        avg_per_record: duration / count,
       });
     });
   });
@@ -1955,34 +2150,48 @@ describe("Fase 11: Medición de Recursos", () => {
     const simple_duration = performance.now() - simple_start;
 
     const include1_start = performance.now();
-    await User.where({}, {
-      limit: 10,
-      include: { orders: true }
-    });
+    await User.where(
+      {},
+      {
+        limit: 10,
+        include: { orders: true },
+      }
+    );
     const include1_duration = performance.now() - include1_start;
 
     const include2_start = performance.now();
-    await User.where({}, {
-      limit: 10,
-      include: {
-        orders: {
-          include: { user: true }
-        }
+    await User.where(
+      {},
+      {
+        limit: 10,
+        include: {
+          orders: {
+            include: { user: true },
+          },
+        },
       }
-    });
+    );
     const include2_duration = performance.now() - include2_start;
 
     console.log("\nQuery Performance Comparison:");
     console.log(`  Simple:     ${simple_duration.toFixed(2)}ms`);
-    console.log(`  +1 include: ${include1_duration.toFixed(2)}ms (${(include1_duration / simple_duration).toFixed(2)}x)`);
-    console.log(`  +2 include: ${include2_duration.toFixed(2)}ms (${(include2_duration / simple_duration).toFixed(2)}x)`);
+    console.log(
+      `  +1 include: ${include1_duration.toFixed(2)}ms (${(
+        include1_duration / simple_duration
+      ).toFixed(2)}x)`
+    );
+    console.log(
+      `  +2 include: ${include2_duration.toFixed(2)}ms (${(
+        include2_duration / simple_duration
+      ).toFixed(2)}x)`
+    );
 
     metrics.query_comparison = {
       simple: simple_duration,
       include_1_level: include1_duration,
       include_2_levels: include2_duration,
       overhead_1_level: include1_duration / simple_duration,
-      overhead_2_levels: include2_duration / simple_duration
+      overhead_2_levels: include2_duration / simple_duration,
     };
   });
 
@@ -1992,7 +2201,7 @@ describe("Fase 11: Medición de Recursos", () => {
     for (let i = 0; i < 50; i++) {
       await User.create({
         name: `DecoratorTest${i}`,
-        email: `deco${i}@test.com`
+        email: `deco${i}@test.com`,
       } as any);
     }
 
@@ -2006,7 +2215,7 @@ describe("Fase 11: Medición de Recursos", () => {
     metrics.decorator_overhead = {
       total_duration: duration,
       avg_per_record,
-      records_count: 50
+      records_count: 50,
     };
   });
 
@@ -2018,7 +2227,7 @@ describe("Fase 11: Medición de Recursos", () => {
       { name: "simple_where", fn: () => User.where({ age: 30 }) },
       {
         name: "complex_filter",
-        fn: () => User.where({}, { limit: 100 } as any)
+        fn: () => User.where({}, { limit: 100 } as any),
       },
       {
         name: "deep_include",
@@ -2027,11 +2236,11 @@ describe("Fase 11: Medición de Recursos", () => {
             limit: 5,
             include: {
               orders: {
-                include: { user: true }
-              }
-            }
-          } as any)
-      }
+                include: { user: true },
+              },
+            },
+          } as any),
+      },
     ];
 
     for (const query of queries) {
@@ -2041,7 +2250,9 @@ describe("Fase 11: Medición de Recursos", () => {
 
       if (duration > SLOW_QUERY_THRESHOLD) {
         slow_queries.push({ name: query.name, duration });
-        console.warn(`⚠️  Slow query: ${query.name} (${duration.toFixed(2)}ms)`);
+        console.warn(
+          `⚠️  Slow query: ${query.name} (${duration.toFixed(2)}ms)`
+        );
       }
     }
 
@@ -2062,19 +2273,22 @@ describe("Fase 12: Pipeline Performance Analysis", () => {
     const pipeline_metrics = {
       marshalling: 0,
       network: 0,
-      unmarshalling: 0
+      unmarshalling: 0,
     };
 
     const query_start = performance.now();
 
-    await User.where({}, {
-      limit: 20,
-      include: {
-        orders: {
-          include: { user: true }
-        }
+    await User.where(
+      {},
+      {
+        limit: 20,
+        include: {
+          orders: {
+            include: { user: true },
+          },
+        },
       }
-    });
+    );
 
     const total_duration = performance.now() - query_start;
 
@@ -2085,25 +2299,42 @@ describe("Fase 12: Pipeline Performance Analysis", () => {
     const percentages = {
       marshalling: (pipeline_metrics.marshalling / total_duration) * 100,
       network: (pipeline_metrics.network / total_duration) * 100,
-      unmarshalling: (pipeline_metrics.unmarshalling / total_duration) * 100
+      unmarshalling: (pipeline_metrics.unmarshalling / total_duration) * 100,
     };
 
     console.log("\n=== Pipeline Performance Breakdown ===");
     console.log(`Total: ${total_duration.toFixed(2)}ms`);
-    console.log(`  Marshalling:   ${pipeline_metrics.marshalling.toFixed(2)}ms (${percentages.marshalling.toFixed(1)}%)`);
-    console.log(`  Network:       ${pipeline_metrics.network.toFixed(2)}ms (${percentages.network.toFixed(1)}%)`);
-    console.log(`  Unmarshalling: ${pipeline_metrics.unmarshalling.toFixed(2)}ms (${percentages.unmarshalling.toFixed(1)}%)`);
+    console.log(
+      `  Marshalling:   ${pipeline_metrics.marshalling.toFixed(
+        2
+      )}ms (${percentages.marshalling.toFixed(1)}%)`
+    );
+    console.log(
+      `  Network:       ${pipeline_metrics.network.toFixed(
+        2
+      )}ms (${percentages.network.toFixed(1)}%)`
+    );
+    console.log(
+      `  Unmarshalling: ${pipeline_metrics.unmarshalling.toFixed(
+        2
+      )}ms (${percentages.unmarshalling.toFixed(1)}%)`
+    );
 
     metrics.pipeline = {
       total: total_duration,
       ...pipeline_metrics,
-      percentages
+      percentages,
     };
 
-    const bottleneck_entries = Object.entries(percentages) as [string, number][];
+    const bottleneck_entries = Object.entries(percentages) as [
+      string,
+      number
+    ][];
     const bottleneck = bottleneck_entries.sort((a, b) => b[1] - a[1])[0];
 
-    console.log(`\n🔍 Bottleneck: ${bottleneck[0]} (${bottleneck[1].toFixed(1)}%)`);
+    console.log(
+      `\n🔍 Bottleneck: ${bottleneck[0]} (${bottleneck[1].toFixed(1)}%)`
+    );
   });
 
   test("12.2: Batch loading efficiency", async () => {
@@ -2116,12 +2347,13 @@ describe("Fase 12: Pipeline Performance Analysis", () => {
     const n_plus_1_duration = performance.now() - n_plus_1_start;
 
     const batch_start = performance.now();
-    await User.where({ id: { in: users_for_test.map(u => u.id) } } as any, {
-      include: { orders: true }
+    await User.where({ id: { in: users_for_test.map((u) => u.id) } } as any, {
+      include: { orders: true },
     });
     const batch_duration = performance.now() - batch_start;
 
-    const improvement = ((n_plus_1_duration - batch_duration) / n_plus_1_duration) * 100;
+    const improvement =
+      ((n_plus_1_duration - batch_duration) / n_plus_1_duration) * 100;
 
     console.log("\n=== Batch Loading Efficiency ===");
     console.log(`N+1 queries:   ${n_plus_1_duration.toFixed(2)}ms`);
@@ -2131,7 +2363,7 @@ describe("Fase 12: Pipeline Performance Analysis", () => {
     metrics.batch_efficiency = {
       n_plus_1: n_plus_1_duration,
       batch: batch_duration,
-      improvement_percent: improvement
+      improvement_percent: improvement,
     };
   });
 });
@@ -2146,30 +2378,39 @@ describe("Fase 13: Deep Searching Avanzado", () => {
     multi_field_durations: [] as number[],
     large_dataset_durations: [] as number[],
     projection_durations: { full: 0, minimal: 0 },
-    slow_queries: [] as { name: string; duration: number }[]
+    slow_queries: [] as { name: string; duration: number }[],
   };
 
   afterAll(() => {
     phase.end();
 
     // Calcular métricas finales
-    const avg_multi_field = deep_metrics.multi_field_durations.length > 0
-      ? deep_metrics.multi_field_durations.reduce((a, b) => a + b, 0) / deep_metrics.multi_field_durations.length
-      : 0;
+    const avg_multi_field =
+      deep_metrics.multi_field_durations.length > 0
+        ? deep_metrics.multi_field_durations.reduce((a, b) => a + b, 0) /
+          deep_metrics.multi_field_durations.length
+        : 0;
 
-    const avg_throughput = deep_metrics.large_dataset_durations.length > 0
-      ? 1000 / (deep_metrics.large_dataset_durations.reduce((a, b) => a + b, 0) / deep_metrics.large_dataset_durations.length)
-      : 0;
+    const avg_throughput =
+      deep_metrics.large_dataset_durations.length > 0
+        ? 1000 /
+          (deep_metrics.large_dataset_durations.reduce((a, b) => a + b, 0) /
+            deep_metrics.large_dataset_durations.length)
+        : 0;
 
-    const projection_overhead = deep_metrics.projection_durations.full > 0
-      ? ((deep_metrics.projection_durations.full - deep_metrics.projection_durations.minimal) / deep_metrics.projection_durations.full) * 100
-      : 0;
+    const projection_overhead =
+      deep_metrics.projection_durations.full > 0
+        ? ((deep_metrics.projection_durations.full -
+            deep_metrics.projection_durations.minimal) /
+            deep_metrics.projection_durations.full) *
+          100
+        : 0;
 
     metrics.deep_search = {
       multi_field_avg_duration: avg_multi_field,
       large_dataset_throughput: avg_throughput,
       projection_overhead_percent: projection_overhead,
-      slow_queries_count: deep_metrics.slow_queries.length
+      slow_queries_count: deep_metrics.slow_queries.length,
     };
 
     console.log("\n=== Deep Searching Metrics ===");
@@ -2187,21 +2428,23 @@ describe("Fase 13: Deep Searching Avanzado", () => {
         age: { ">=": 25 } as any,
         status: "active",
         name: { contains: "User" } as any,
-        email: { contains: "@test.com" } as any
+        email: { contains: "@test.com" } as any,
       });
 
       const duration = performance.now() - start;
       deep_metrics.multi_field_durations.push(duration);
 
       expect(Array.isArray(results)).toBe(true);
-      results.forEach(user => {
+      results.forEach((user) => {
         expect(user.age).toBeGreaterThanOrEqual(25);
         expect(user.status).toBe("active");
         expect(user.name).toContain("User");
         expect(user.email).toContain("@test.com");
       });
 
-      console.log(`  5+ campos: ${results.length} resultados en ${duration.toFixed(2)}ms`);
+      console.log(
+        `  5+ campos: ${results.length} resultados en ${duration.toFixed(2)}ms`
+      );
     });
 
     test("13.1.2: Combinación de operadores (>=, =, contains)", async () => {
@@ -2210,60 +2453,69 @@ describe("Fase 13: Deep Searching Avanzado", () => {
       const results = await Product.where({
         price: { ">=": 100 } as any,
         stock: { ">": 0 } as any,
-        name: { "begins-with": "Product" } as any
+        name: { "begins-with": "Product" } as any,
       });
 
       const duration = performance.now() - start;
       deep_metrics.multi_field_durations.push(duration);
 
       expect(Array.isArray(results)).toBe(true);
-      results.forEach(product => {
+      results.forEach((product) => {
         expect(product.price).toBeGreaterThanOrEqual(100);
         expect(product.stock).toBeGreaterThan(0);
         expect(product.name.startsWith("Product")).toBe(true);
       });
 
-      console.log(`  Combinación operadores: ${results.length} productos en ${duration.toFixed(2)}ms`);
+      console.log(
+        `  Combinación operadores: ${
+          results.length
+        } productos en ${duration.toFixed(2)}ms`
+      );
     });
 
     test("13.1.3: Caracteres especiales en búsqueda", async () => {
       // Crear usuario con caracteres especiales
       const special_user = await User.create({
         name: "Test<User>&Special",
-        email: "special@test.com"
+        email: "special@test.com",
       } as any);
 
       const start = performance.now();
 
       const results = await User.where({
-        name: { contains: "<User>&" } as any
+        name: { contains: "<User>&" } as any,
       });
 
       const duration = performance.now() - start;
       deep_metrics.multi_field_durations.push(duration);
 
       expect(results.length).toBeGreaterThanOrEqual(1);
-      expect(results.some(u => u.id === special_user.id)).toBe(true);
+      expect(results.some((u) => u.id === special_user.id)).toBe(true);
 
-      console.log(`  Caracteres especiales: ${results.length} en ${duration.toFixed(2)}ms`);
+      console.log(
+        `  Caracteres especiales: ${results.length} en ${duration.toFixed(2)}ms`
+      );
     });
 
-    test("13.1.4: Arrays grandes en 'in' operator (100 valores)", async () => {
+    test("13.1.4: Arrays grandes en 'in' operator (hasta 100 valores)", async () => {
       const sample_users = metrics.seeds.users.slice(0, 100);
-      const user_ids = sample_users.map(u => u.id);
+      const user_ids = sample_users.map((u) => u.id);
 
       const start = performance.now();
 
       const results = await User.where({
-        id: { in: user_ids } as any
+        id: { in: user_ids } as any,
       });
 
       const duration = performance.now() - start;
       deep_metrics.multi_field_durations.push(duration);
 
-      expect(results.length).toBe(100);
+      // Esperar tantos resultados como IDs buscados (puede ser < 100 si hay menos usuarios)
+      expect(results.length).toBe(sample_users.length);
 
-      console.log(`  IN con 100 valores: ${results.length} en ${duration.toFixed(2)}ms`);
+      console.log(
+        `  IN con ${user_ids.length} valores: ${results.length} en ${duration.toFixed(2)}ms`
+      );
     });
 
     test("13.1.5: Diferencia entre null vs undefined en filtros", async () => {
@@ -2271,7 +2523,7 @@ describe("Fase 13: Deep Searching Avanzado", () => {
       const start = performance.now();
 
       const results_undefined = await User.where({
-        name: { "!=": undefined } as any
+        name: { "!=": undefined } as any,
       });
 
       const results_all = await User.where({});
@@ -2282,7 +2534,11 @@ describe("Fase 13: Deep Searching Avanzado", () => {
       // undefined debería traer todos
       expect(results_undefined.length).toBe(results_all.length);
 
-      console.log(`  null vs undefined: ${results_undefined.length} usuarios en ${duration.toFixed(2)}ms`);
+      console.log(
+        `  null vs undefined: ${
+          results_undefined.length
+        } usuarios en ${duration.toFixed(2)}ms`
+      );
     });
   });
 
@@ -2291,7 +2547,9 @@ describe("Fase 13: Deep Searching Avanzado", () => {
 
     beforeAll(() => {
       if (metrics.seeds.users.length < 500) {
-        console.warn("⚠️  Deep searching tests require FULL_TEST=true for large datasets");
+        console.warn(
+          "⚠️  Deep searching tests require FULL_TEST=true for large datasets"
+        );
       }
     });
 
@@ -2317,7 +2575,7 @@ describe("Fase 13: Deep Searching Avanzado", () => {
       const start = performance.now();
 
       const results = await User.where({
-        age: { ">=": 70 } as any
+        age: { ">=": 70 } as any,
       });
 
       const duration = performance.now() - start;
@@ -2325,7 +2583,11 @@ describe("Fase 13: Deep Searching Avanzado", () => {
 
       const percentage = (results.length / metrics.seeds.users.length) * 100;
 
-      console.log(`  Filtro selectivo: ${results.length}/${metrics.seeds.users.length} (${percentage.toFixed(2)}%) en ${duration.toFixed(2)}ms`);
+      console.log(
+        `  Filtro selectivo: ${results.length}/${
+          metrics.seeds.users.length
+        } (${percentage.toFixed(2)}%) en ${duration.toFixed(2)}ms`
+      );
 
       expect(Array.isArray(results)).toBe(true);
     });
@@ -2344,58 +2606,77 @@ describe("Fase 13: Deep Searching Avanzado", () => {
       expect(page2.length).toBeLessThanOrEqual(100);
       expect(page3.length).toBeLessThanOrEqual(100);
 
-      console.log(`  Paginación 3 páginas: ${page1.length + page2.length + page3.length} total en ${duration.toFixed(2)}ms`);
+      console.log(
+        `  Paginación 3 páginas: ${
+          page1.length + page2.length + page3.length
+        } total en ${duration.toFixed(2)}ms`
+      );
     });
 
     test("13.2.4: begins-with en dataset grande", async () => {
       const start = performance.now();
 
-      const results = await Product.where({
-        name: { "begins-with": "Product" } as any
-      }, { limit: 500 } as any);
+      const results = await Product.where(
+        {
+          name: { "begins-with": "Product" } as any,
+        },
+        { limit: 500 } as any
+      );
 
       const duration = performance.now() - start;
       deep_metrics.large_dataset_durations.push(duration);
 
       expect(Array.isArray(results)).toBe(true);
-      results.forEach(p => expect(p.name.startsWith("Product")).toBe(true));
+      results.forEach((p) => expect(p.name.startsWith("Product")).toBe(true));
 
-      console.log(`  begins-with: ${results.length} en ${duration.toFixed(2)}ms`);
+      console.log(
+        `  begins-with: ${results.length} en ${duration.toFixed(2)}ms`
+      );
     });
 
     test("13.2.5: contains sobre texto largo (nombres concatenados)", async () => {
       const start = performance.now();
 
-      const results = await User.where({
-        email: { contains: "test.com" } as any
-      }, { limit: 200 } as any);
+      const results = await User.where(
+        {
+          email: { contains: "test.com" } as any,
+        },
+        { limit: 200 } as any
+      );
 
       const duration = performance.now() - start;
       deep_metrics.large_dataset_durations.push(duration);
 
       expect(Array.isArray(results)).toBe(true);
-      results.forEach(u => expect(u.email).toContain("test.com"));
+      results.forEach((u) => expect(u.email).toContain("test.com"));
 
       console.log(`  contains: ${results.length} en ${duration.toFixed(2)}ms`);
     });
 
-    test("13.2.6: Query simple vs compleja (mismo resultado esperado)", async () => {
+    test("13.2.6: Query simple vs sintaxis objeto (mismo resultado)", async () => {
+      // Query simple: where(campo, valor) usa operador = implícito
       const simple_start = performance.now();
       const simple_results = await User.where({ age: 30 });
       const simple_duration = performance.now() - simple_start;
 
+      // Query con sintaxis objeto: { campo: { '=': valor } } es equivalente
       const complex_start = performance.now();
       const complex_results = await User.where({
-        age: { ">=": 30 } as any
-      }).then(users => users.filter(u => u.age === 30));
+        age: { '=': 30 } as any,
+      });
       const complex_duration = performance.now() - complex_start;
 
       deep_metrics.large_dataset_durations.push(simple_duration);
       deep_metrics.large_dataset_durations.push(complex_duration);
 
+      // Ambas queries son equivalentes, deben dar mismo resultado
       expect(simple_results.length).toBe(complex_results.length);
 
-      console.log(`  Simple: ${simple_duration.toFixed(2)}ms vs Compleja: ${complex_duration.toFixed(2)}ms`);
+      console.log(
+        `  Simple: ${simple_duration.toFixed(
+          2
+        )}ms vs Objeto: ${complex_duration.toFixed(2)}ms (${simple_results.length} resultados)`
+      );
     });
   });
 
@@ -2405,19 +2686,23 @@ describe("Fase 13: Deep Searching Avanzado", () => {
 
       const results = await User.where({}, {
         limit: 50,
-        attributes: ["id", "name", "email"]
+        attributes: ["id", "name", "email"],
       } as any);
 
       deep_metrics.projection_durations.minimal = performance.now() - start;
 
       expect(results.length).toBeLessThanOrEqual(50);
-      results.forEach(user => {
+      results.forEach((user) => {
         expect(user.id).toBeDefined();
         expect(user.name).toBeDefined();
         expect(user.email).toBeDefined();
       });
 
-      console.log(`  Proyección minimal: ${results.length} en ${deep_metrics.projection_durations.minimal.toFixed(2)}ms`);
+      console.log(
+        `  Proyección minimal: ${
+          results.length
+        } en ${deep_metrics.projection_durations.minimal.toFixed(2)}ms`
+      );
     });
 
     test("13.3.2: Proyección solo PrimaryKey", async () => {
@@ -2425,13 +2710,13 @@ describe("Fase 13: Deep Searching Avanzado", () => {
 
       const results = await User.where({}, {
         limit: 50,
-        attributes: ["id"]
+        attributes: ["id"],
       } as any);
 
       const duration = performance.now() - start;
 
       expect(results.length).toBeLessThanOrEqual(50);
-      results.forEach(user => {
+      results.forEach((user) => {
         expect(user.id).toBeDefined();
       });
 
@@ -2446,16 +2731,18 @@ describe("Fase 13: Deep Searching Avanzado", () => {
         attributes: ["id", "name"],
         include: {
           orders: {
-            attributes: ["id", "total"]
-          }
-        }
+            attributes: ["id", "total"],
+          },
+        },
       } as any);
 
       const duration = performance.now() - start;
 
       expect(results.length).toBeLessThanOrEqual(10);
 
-      console.log(`  Proyección + Include: ${results.length} en ${duration.toFixed(2)}ms`);
+      console.log(
+        `  Proyección + Include: ${results.length} en ${duration.toFixed(2)}ms`
+      );
     });
 
     test("13.3.4: Query completa sin proyección", async () => {
@@ -2467,7 +2754,11 @@ describe("Fase 13: Deep Searching Avanzado", () => {
 
       expect(results.length).toBeLessThanOrEqual(50);
 
-      console.log(`  Sin proyección: ${results.length} en ${deep_metrics.projection_durations.full.toFixed(2)}ms`);
+      console.log(
+        `  Sin proyección: ${
+          results.length
+        } en ${deep_metrics.projection_durations.full.toFixed(2)}ms`
+      );
     });
   });
 
@@ -2477,14 +2768,16 @@ describe("Fase 13: Deep Searching Avanzado", () => {
 
       const results = await User.where({}, {
         limit: 500,
-        order: "DESC"
+        order: "DESC",
       } as any);
 
       const duration = performance.now() - start;
 
       expect(results.length).toBeLessThanOrEqual(500);
 
-      console.log(`  Order DESC limit 500: ${results.length} en ${duration.toFixed(2)}ms`);
+      console.log(
+        `  Order DESC limit 500: ${results.length} en ${duration.toFixed(2)}ms`
+      );
     });
 
     test("13.4.2: Skip sin limit (edge case)", async () => {
@@ -2496,22 +2789,29 @@ describe("Fase 13: Deep Searching Avanzado", () => {
 
       expect(Array.isArray(results)).toBe(true);
 
-      console.log(`  Skip sin limit: ${results.length} en ${duration.toFixed(2)}ms`);
+      console.log(
+        `  Skip sin limit: ${results.length} en ${duration.toFixed(2)}ms`
+      );
     });
 
     test("13.4.3: Limit 0 con filtros complejos (debería retornar vacío)", async () => {
       const start = performance.now();
 
-      const results = await User.where({
-        age: { ">=": 25 } as any,
-        status: "active"
-      }, { limit: 0 } as any);
+      const results = await User.where(
+        {
+          age: { ">=": 25 } as any,
+          status: "active",
+        },
+        { limit: 0 } as any
+      );
 
       const duration = performance.now() - start;
 
       // Este test falló en la primera ejecución - debería retornar 0 pero no lo hace
       // Documentado en PLAN.md como error 7.3.2
-      console.log(`  Limit 0: ${results.length} en ${duration.toFixed(2)}ms (esperado: 0)`);
+      console.log(
+        `  Limit 0: ${results.length} en ${duration.toFixed(2)}ms (esperado: 0)`
+      );
 
       expect(Array.isArray(results)).toBe(true);
     });

@@ -1,8 +1,8 @@
 /**
  * @file index.ts
- * @descripcion Punto de entrada público de la librería
+ * @description Punto de entrada público de la librería - Arquitectura Minimalista
  * @autor Miguel Alejandro
- * @fecha 2025-08-07
+ * @fecha 2025-01-28
  */
 
 // Clases núcleo
@@ -10,15 +10,7 @@ export { Dynamite } from "./core/client";
 export { default as Table } from "./core/table";
 
 // Factory para crear decoradores personalizados
-export { decorator, relationDecorator } from "./core/decorator";
-
-// Sistema de métodos extensibles
-export {
-  registerStaticMethod,
-  registerInstanceMethod,
-  type StaticMethodHandler,
-  type InstanceMethodHandler,
-} from "./core/method";
+export { decorator, relationDecorator, SCHEMA, VALUES } from "./core/decorator";
 
 // Decoradores - Índices
 export { Index, IndexSort, PrimaryKey } from "./decorators/indexes";
@@ -30,32 +22,14 @@ export { CreatedAt, UpdatedAt, DeleteAt } from "./decorators/timestamps";
 export { Default, Mutate, Validate, Serialize, NotNull, Name } from "./decorators/transforms";
 
 // Decoradores - Relaciones
-export { HasMany, BelongsTo } from "./decorators/relations";
+export { HasMany, BelongsTo, HasOne } from "./decorators/relations";
 
-// Utils - Procesamiento de relaciones
-export { belongsTo, hasMany } from "./utils/relations";
-
-// Tipos avanzados (reexportados desde @types)
+// Tipos simplificados (sin @types complejos)
 export type {
-  // Relaciones branded
-  BelongsTo as BelongsToType,
-  HasMany as HasManyType,
-  // Atributos
-  CreationOptional,
-  FilterableAttributes,
-  InferAttributes,
-  NonAttribute,
-  // Queries
-  QueryOperator,
   QueryOptions,
-  QueryFilters,
-  WhereOptions,
   IncludeRelationOptions,
-  // Metadatos (para decoradores custom)
-  Column,
-  RelationMetadata,
-  ValidatorEntry,
-  SerializeConfig,
-  // Deprecated (mantener para compatibilidad)
-  WhereOptionsWithoutWhere,
-} from "@type/index";
+  QueryOperator,
+} from "./core/table";
+
+// Re-exportar TransactionContext para compatibilidad
+export { TransactionContext } from "./core/client";

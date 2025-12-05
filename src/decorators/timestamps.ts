@@ -1,13 +1,15 @@
 /**
  * @file timestamps.ts
  * @description Decoradores de timestamps: @CreatedAt, @UpdatedAt, @DeleteAt
+ * @autor Miguel Alejandro
+ * @fecha 2025-01-28
  */
 
 import { decorator } from "../core/decorator";
 
 /**
  * @description Decorador que establece automáticamente la fecha/hora de creación.
- * Es una composición de @Default con timestamp ISO.
+ * El valor se genera solo si no existe uno previo.
  * @example
  * ```typescript
  * class User extends Table<User> {
@@ -16,9 +18,9 @@ import { decorator } from "../core/decorator";
  * }
  * ```
  */
-export const CreatedAt = decorator((col) => {
-  col.createdAt = true;
-  col.set((_, next) => next ?? new Date().toISOString());
+export const CreatedAt = decorator((_schema, col) => {
+  col.store.createdAt = true;
+  col.get.push((value: any) => value ?? new Date().toISOString());
 });
 
 /**
@@ -33,8 +35,8 @@ export const CreatedAt = decorator((col) => {
  * }
  * ```
  */
-export const UpdatedAt = decorator((col) => {
-  col.updatedAt = true;
+export const UpdatedAt = decorator((_schema, col) => {
+  col.store.updatedAt = true;
 });
 
 /**
@@ -59,7 +61,7 @@ export const UpdatedAt = decorator((col) => {
  * await User.withTrashed({ status: "active" });
  * ```
  */
-export const DeleteAt = decorator((col) => {
-  col.softDelete = true;
-  col.nullable = true;
+export const DeleteAt = decorator((_schema, col) => {
+  col.store.softDelete = true;
+  col.store.nullable = true;
 });

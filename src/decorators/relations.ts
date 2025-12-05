@@ -1,42 +1,84 @@
 /**
  * @file relations.ts
- * @description Decoradores de relaciones: @HasMany, @BelongsTo
+ * @description Decoradores de relaciones: @HasMany, @HasOne, @BelongsTo
+ * @autor Miguel Alejandro
+ * @fecha 2025-01-28
  */
 
-import { relationDecorator } from "../core/decorator";
+import { decorator } from "../core/decorator";
 
 /**
- * @description Decorador para definir relación One-to-Many (tiene muchos).
- * @param targetModel Función que retorna el modelo relacionado (lazy para evitar deps circulares)
- * @param foreignKey Clave foránea en el modelo hijo
- * @param localKey Clave local referenciada (default: "id")
+ * @description Decorador para relaciones uno a muchos (1:N)
+ * @param model Función que retorna la clase del modelo relacionado
+ * @param foreignKey Clave foránea en el modelo relacionado
+ * @param localKey Clave local (por defecto 'id')
  * @example
  * ```typescript
  * class User extends Table<User> {
  *   @PrimaryKey() id: string;
- *   name: string;
  *
- *   @HasMany(() => Post, "user_id", "id")
- *   posts: HasMany<Post>;
+ *   @HasMany(() => Post, 'id_user', 'id')
+ *   declare posts: HasMany<Post>;
  * }
  * ```
  */
-export const HasMany = relationDecorator("hasMany");
+export const HasMany = decorator((_schema, col, params) => {
+  const [model, foreignKey, localKey = 'id'] = params;
+  col.store.relation = {
+    type: 'HasMany',
+    model,
+    foreignKey,
+    localKey
+  };
+});
 
 /**
- * @description Decorador para definir relación Many-to-One (pertenece a).
- * @param targetModel Función que retorna el modelo relacionado (lazy para evitar deps circulares)
+ * @description Decorador para relaciones uno a uno (1:1)
+ * @param model Función que retorna la clase del modelo relacionado
+ * @param foreignKey Clave foránea en el modelo relacionado
+ * @param localKey Clave local (por defecto 'id')
+ * @example
+ * ```typescript
+ * class User extends Table<User> {
+ *   @PrimaryKey() id: string;
+ *
+ *   @HasOne(() => Profile, 'id_user', 'id')
+ *   declare profile: HasOne<Profile>;
+ * }
+ * ```
+ */
+export const HasOne = decorator((_schema, col, params) => {
+  const [model, foreignKey, localKey = 'id'] = params;
+  col.store.relation = {
+    type: 'HasOne',
+    model,
+    foreignKey,
+    localKey
+  };
+});
+
+/**
+ * @description Decorador para relaciones muchos a uno (N:1)
+ * @param model Función que retorna la clase del modelo relacionado
  * @param localKey Clave local que referencia al modelo padre
- * @param foreignKey Clave foránea en el modelo padre (default: "id")
+ * @param foreignKey Clave en el modelo padre (por defecto 'id')
  * @example
  * ```typescript
  * class Post extends Table<Post> {
  *   @PrimaryKey() id: string;
- *   user_id: string;
+ *   id_user: string;
  *
- *   @BelongsTo(() => User, "user_id", "id")
- *   author: BelongsTo<User>;
+ *   @BelongsTo(() => User, 'id_user', 'id')
+ *   declare author: BelongsTo<User>;
  * }
  * ```
  */
-export const BelongsTo = relationDecorator("belongsTo");
+export const BelongsTo = decorator((_schema, col, params) => {
+  const [model, localKey, foreignKey = 'id'] = params;
+  col.store.relation = {
+    type: 'BelongsTo',
+    model,
+    foreignKey,
+    localKey
+  };
+});
