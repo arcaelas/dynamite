@@ -16,20 +16,28 @@ export { decorator, relationDecorator, SCHEMA, VALUES } from "./core/decorator";
 export { Index, IndexSort, PrimaryKey } from "./decorators/indexes";
 
 // Decoradores - Timestamps
-export { CreatedAt, UpdatedAt, DeleteAt } from "./decorators/timestamps";
+export { CreatedAt, DeleteAt, UpdatedAt } from "./decorators/timestamps";
 
 // Decoradores - Transformación
-export { Default, Mutate, Validate, Serialize, NotNull, Name } from "./decorators/transforms";
+export {
+  Default,
+  Mutate,
+  Name,
+  NotNull,
+  Serialize,
+  Validate,
+} from "./decorators/transforms";
 
 // Decoradores - Relaciones
-export { HasMany, BelongsTo, HasOne } from "./decorators/relations";
+export { BelongsTo, HasMany, HasOne } from "./decorators/relations";
 
 // Tipos simplificados (sin @types complejos)
 export type {
-  QueryOptions,
   IncludeRelationOptions,
   QueryOperator,
+  QueryOptions,
 } from "./core/table";
 
 // Re-exportar TransactionContext para compatibilidad
+export * from "./@types/index";
 export { TransactionContext } from "./core/client";
