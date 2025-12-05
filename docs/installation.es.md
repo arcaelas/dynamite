@@ -288,29 +288,29 @@ Crea un archivo de configuración para inicializar Dynamite:
 
 ```typescript
 import { Dynamite } from "@arcaelas/dynamite";
+import { User, Order } from "./models"; // Importa tus clases de modelo
 
-export function ConfigureDatabase() {
-  // Development configuration (DynamoDB Local)
-  if (process.env.NODE_ENV === "development") {
-    Dynamite.config({
-      region: "us-east-1",
-      endpoint: "http://localhost:8000",
-      credentials: {
-        accessKeyId: "test",
-        secretAccessKey: "test"
+export async function ConfigureDatabase() {
+  const config = process.env.NODE_ENV === "development"
+    ? {
+        region: "us-east-1",
+        endpoint: "http://localhost:8000",
+        tables: [User, Order],
+        credentials: { accessKeyId: "test", secretAccessKey: "test" }
       }
-    });
-  }
-  // Production configuration (AWS DynamoDB)
-  else {
-    Dynamite.config({
-      region: process.env.AWS_REGION || "us-east-1",
-      credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
-      }
-    });
-  }
+    : {
+        region: process.env.AWS_REGION || "us-east-1",
+        tables: [User, Order],
+        credentials: {
+          accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
+        }
+      };
+
+  const dynamite = new Dynamite(config);
+  dynamite.connect();
+  await dynamite.sync();
+  return dynamite;
 }
 ```
 
@@ -318,29 +318,29 @@ export function ConfigureDatabase() {
 
 ```javascript
 const { Dynamite } = require("@arcaelas/dynamite");
+const { User, Order } = require("./models"); // Importa tus clases de modelo
 
-function ConfigureDatabase() {
-  // Development configuration (DynamoDB Local)
-  if (process.env.NODE_ENV === "development") {
-    Dynamite.config({
-      region: "us-east-1",
-      endpoint: "http://localhost:8000",
-      credentials: {
-        accessKeyId: "test",
-        secretAccessKey: "test"
+async function ConfigureDatabase() {
+  const config = process.env.NODE_ENV === "development"
+    ? {
+        region: "us-east-1",
+        endpoint: "http://localhost:8000",
+        tables: [User, Order],
+        credentials: { accessKeyId: "test", secretAccessKey: "test" }
       }
-    });
-  }
-  // Production configuration (AWS DynamoDB)
-  else {
-    Dynamite.config({
-      region: process.env.AWS_REGION || "us-east-1",
-      credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-      }
-    });
-  }
+    : {
+        region: process.env.AWS_REGION || "us-east-1",
+        tables: [User, Order],
+        credentials: {
+          accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+        }
+      };
+
+  const dynamite = new Dynamite(config);
+  dynamite.connect();
+  await dynamite.sync();
+  return dynamite;
 }
 
 module.exports = { ConfigureDatabase };
@@ -513,24 +513,34 @@ Crea un archivo de prueba simple:
 import dotenv from "dotenv";
 dotenv.config();
 
-import { Dynamite } from "@arcaelas/dynamite";
+import { Dynamite, Table, PrimaryKey, Default } from "@arcaelas/dynamite";
+
+// Define un modelo de prueba
+class TestModel extends Table<TestModel> {
+  @PrimaryKey()
+  @Default(() => "test-id")
+  declare id: string;
+}
 
 async function TestConnection() {
   try {
-    Dynamite.config({
+    const dynamite = new Dynamite({
       region: "us-east-1",
       endpoint: process.env.DYNAMODB_ENDPOINT || "http://localhost:8000",
+      tables: [TestModel],
       credentials: {
         accessKeyId: process.env.AWS_ACCESS_KEY_ID || "test",
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "test"
       }
     });
+    dynamite.connect();
+    await dynamite.sync();
 
-    console.log("✓ Dynamite configured successfully");
-    console.log("✓ Connection test passed");
+    console.log("✓ Dynamite configurado correctamente");
+    console.log("✓ Prueba de conexión exitosa");
 
   } catch (error) {
-    console.error("✗ Connection failed:", error);
+    console.error("✗ Conexión fallida:", error);
     process.exit(1);
   }
 }

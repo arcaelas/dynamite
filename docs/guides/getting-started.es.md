@@ -20,29 +20,35 @@ npm install @aws-sdk/client-dynamodb @aws-sdk/lib-dynamodb
 
 ## Configuración
 
-Primero, configura tu conexión a DynamoDB:
+Primero, define tus modelos (ver Paso 1), luego configura tu conexión a DynamoDB:
 
 ```typescript
 import { Dynamite } from "@arcaelas/dynamite";
 
 // Para desarrollo local
-Dynamite.config({
+const dynamite = new Dynamite({
   region: "us-east-1",
   endpoint: "http://localhost:8000",
+  tables: [User, Order], // Tus clases de modelo
   credentials: {
     accessKeyId: "test",
     secretAccessKey: "test"
   }
 });
+dynamite.connect();
+await dynamite.sync();
 
 // Para producción en AWS
-Dynamite.config({
+const dynamite = new Dynamite({
   region: "us-east-1",
+  tables: [User, Order],
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
   }
 });
+dynamite.connect();
+await dynamite.sync();
 ```
 
 ## Paso 1: Tu Primer Modelo
@@ -223,11 +229,11 @@ if (user) {
 ### Usando el método estático `update()`
 
 ```typescript
-// Actualizar por ID
-await User.update("user-123", {
-  name: "John Smith",
-  role: "premium"
-});
+// Actualizar por filtro - retorna número de registros actualizados
+await User.update(
+  { name: "John Smith", role: "premium" },  // actualizaciones
+  { id: "user-123" }                        // filtros
+);
 ```
 
 ### Actualizaciones en lote
@@ -338,17 +344,7 @@ import {
   Dynamite
 } from "@arcaelas/dynamite";
 
-// Configurar conexión a DynamoDB
-Dynamite.config({
-  region: "us-east-1",
-  endpoint: "http://localhost:8000",
-  credentials: {
-    accessKeyId: "test",
-    secretAccessKey: "test"
-  }
-});
-
-// Definir modelo Task
+// Definir modelo Task primero
 class Task extends Table<Task> {
   // ID autogenerado
   @PrimaryKey()
@@ -395,6 +391,19 @@ class Task extends Table<Task> {
     });
   }
 }
+
+// Configurar y conectar a DynamoDB
+const dynamite = new Dynamite({
+  region: "us-east-1",
+  endpoint: "http://localhost:8000",
+  tables: [Task],
+  credentials: {
+    accessKeyId: "test",
+    secretAccessKey: "test"
+  }
+});
+dynamite.connect();
+await dynamite.sync();
 
 // Aplicación principal
 async function main() {
@@ -658,12 +667,12 @@ const user = await User.first({ id: "123" });
 user.name = "Jane";
 await user.save();
 // o
-await User.update("123", { name: "Jane" });
+await User.update({ name: "Jane" }, { id: "123" });
 
 // Eliminar
 await user.destroy();
 // o
-await User.delete("123");
+await User.delete({ id: "123" });
 ```
 
 ## Obtener Ayuda

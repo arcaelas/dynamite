@@ -46,14 +46,21 @@ class Post extends Table {
 }
 ```
 
-### Leistungsstarker Query Builder
-Intuitive Query-Schnittstelle mit vollständiger TypeScript-Unterstützung:
+### Einfache Query-API
+Direkte async-Methoden mit vollständiger TypeScript-Unterstützung:
 
 ```typescript
-const active_users = await User.where('status', '=', 'active')
-  .where('created_at', '>', new Date('2024-01-01'))
-  .include('posts')
-  .get();
+// Einfache Gleichheit
+const active_users = await User.where('status', 'active');
+
+// Mit Operator
+const recent = await User.where('created_at', '>', '2024-01-01');
+
+// Mehrere Filter mit Optionen
+const users = await User.where(
+  { status: 'active' },
+  { include: { posts: true }, limit: 10 }
+);
 ```
 
 ### Validierung & Transformation
@@ -82,31 +89,34 @@ yarn add @arcaelas/dynamite
 ### Grundlegende Verwendung
 
 ```typescript
-import { Dynamite, Table, PrimaryKey } from '@arcaelas/dynamite';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-
-// DynamoDB-Client konfigurieren
-const client = new DynamoDBClient({ region: 'us-east-1' });
-Dynamite.configure({ client });
+import { Dynamite, Table, PrimaryKey, Default } from '@arcaelas/dynamite';
 
 // Definieren Sie Ihr Modell
-class User extends Table {
+class User extends Table<User> {
   @PrimaryKey()
-  id: string;
+  @Default(() => crypto.randomUUID())
+  declare id: string;
 
-  name: string;
-  email: string;
+  declare name: string;
+  declare email: string;
 }
+
+// Konfigurieren und verbinden
+const dynamite = new Dynamite({
+  region: 'us-east-1',
+  tables: [User]
+});
+dynamite.connect();
+await dynamite.sync();
 
 // Neuen Benutzer erstellen
 const user = await User.create({
-  id: '123',
   name: 'Max Mustermann',
   email: 'max@beispiel.de'
 });
 
 // Benutzer abfragen
-const users = await User.where('name', '=', 'Max Mustermann').get();
+const users = await User.where('name', 'Max Mustermann');
 
 // Aktualisieren
 user.email = 'neueemail@beispiel.de';

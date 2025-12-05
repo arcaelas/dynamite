@@ -9,8 +9,10 @@ import {
   CreateTableCommand,
   DynamoDBClient,
   DynamoDBClientConfig,
+  TransactWriteItemsCommand,
 } from "@aws-sdk/client-dynamodb";
-import wrapper from "./wrapper";
+import { marshall } from "@aws-sdk/util-dynamodb";
+import { SCHEMA } from "./decorator";
 
 /**
  * Configuration for Dynamite client initialization
@@ -87,39 +89,49 @@ export class Dynamite {
   }
 
   /**
+   * Ejecutar operaciones en una transacción atómica.
+   * Si cualquier operación falla, todas se revierten automáticamente.
+   *
+   * @param callback Función que recibe el contexto de transacción
+   * @returns Resultado del callback
+   *
+   * @example
+   * await dynamite.tx(async (tx) => {
+   *   const user = await User.create({ name: "Juan" }, tx);
+   *   await Order.create({ user_id: user.id, total: 100 }, tx);
+   * });
+   */
+  async tx<R>(callback: (tx: TransactionContext) => Promise<R>): Promise<R> {
+    const ctx = new TransactionContext(this.client);
+    const result = await callback(ctx);
+    await ctx.commit();
+    return result;
+  }
+
+  /**
    * Create table with automatic GSI detection and creation
    * @param ctor Table class constructor
    */
   private async createTableWithGSI(ctor: Function): Promise<void> {
-    const meta = wrapper.get(ctor);
-    if (!meta) throw new Error(`Class ${ctor.name} not registered in wrapper`);
+    const meta: any = (ctor as any)[SCHEMA];
+    if (!meta) throw new Error(`Class ${ctor.name} not registered. Use decorators.`);
 
-    const cols = [...meta.columns.values()];
-    const pk = cols.find((c) => c.index);
+    const cols = Object.values(meta.columns);
+    const pk = cols.find((c: any) => c.store?.index);
     if (!pk) throw new Error(`PartitionKey missing in ${ctor.name}`);
 
-    const sk = cols.find((c) => c.indexSort);
+    const sk = cols.find((c: any) => c.store?.indexSort);
     const attr = new Map<string, "S" | "N" | "B">();
-    attr.set(pk.name, "S");
-    if (sk) attr.set(sk.name, "S");
+    attr.set((pk as any).name || 'id', "S");
+    if (sk) attr.set((sk as any).name || 'id', "S");
 
-    let gsiIndex = 1;
-    const gsiDefinitions = [...meta.relations.values()]
-      .filter((relation) => relation.type === "hasMany")
-      .map((relation) => {
-        const { foreignKey } = relation;
-        if (!attr.has(foreignKey)) attr.set(foreignKey, "S");
-        return {
-          IndexName: `GSI${gsiIndex++}_${foreignKey}`,
-          KeySchema: [{ AttributeName: foreignKey, KeyType: "HASH" as const }],
-          Projection: { ProjectionType: "ALL" as const },
-        };
-      });
+    // Temporalmente deshabilitamos la creación automática de GSI hasta implementar relaciones
+    const gsiDefinitions: any[] = [];
 
     const schema: Array<{ AttributeName: string; KeyType: "HASH" | "RANGE" }> =
-      [{ AttributeName: pk.name, KeyType: "HASH" }];
-    if (sk && sk.name !== pk.name)
-      schema.push({ AttributeName: sk.name, KeyType: "RANGE" });
+      [{ AttributeName: (pk as any).name || 'id', KeyType: "HASH" }];
+    if (sk && (sk as any).name !== (pk as any).name)
+      schema.push({ AttributeName: (sk as any).name || 'id', KeyType: "RANGE" });
 
     try {
       await this.client.send(
@@ -183,3 +195,64 @@ export const requireClient = (): DynamoDBClient => {
   }
   return globalClient;
 };
+
+/**
+ * Contexto de transacción para agrupar operaciones atómicas.
+ * Máximo 25 operaciones por transacción (límite DynamoDB).
+ */
+export class TransactionContext {
+  private operations: TransactionItem[] = [];
+  private client: DynamoDBClient;
+
+  constructor(client: DynamoDBClient) {
+    this.client = client;
+  }
+
+  /**
+   * Agregar operación Put a la transacción
+   */
+  addPut(table_name: string, item: Record<string, any>): void {
+    this.operations.push({
+      Put: {
+        TableName: table_name,
+        Item: marshall(item, { removeUndefinedValues: true }),
+      },
+    });
+  }
+
+  /**
+   * Agregar operación Delete a la transacción
+   */
+  addDelete(table_name: string, key: Record<string, any>): void {
+    this.operations.push({
+      Delete: {
+        TableName: table_name,
+        Key: marshall(key),
+      },
+    });
+  }
+
+  /**
+   * Confirmar todas las operaciones de la transacción.
+   * Si alguna falla, todas se revierten.
+   */
+  async commit(): Promise<void> {
+    if (this.operations.length === 0) return;
+
+    if (this.operations.length > 25) {
+      throw new Error(
+        `Transacción excede el límite de 25 operaciones (tiene ${this.operations.length})`
+      );
+    }
+
+    await this.client.send(
+      new TransactWriteItemsCommand({
+        TransactItems: this.operations,
+      })
+    );
+  }
+}
+
+type TransactionItem =
+  | { Put: { TableName: string; Item: Record<string, any> } }
+  | { Delete: { TableName: string; Key: Record<string, any> } };

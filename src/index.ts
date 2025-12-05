@@ -1,41 +1,35 @@
 /**
  * @file index.ts
- * @descripcion Punto de entrada público de la librería
+ * @description Punto de entrada público de la librería - Arquitectura Minimalista
  * @autor Miguel Alejandro
- * @fecha 2025-08-07
+ * @fecha 2025-01-28
  */
 
 // Clases núcleo
 export { Dynamite } from "./core/client";
 export { default as Table } from "./core/table";
 
-// Decoradores
-export { default as BelongsTo } from "./decorators/belongs_to";
-export { default as CreatedAt } from "./decorators/created_at";
-export { default as Default } from "./decorators/default";
-export { default as HasMany } from "./decorators/has_many";
-export { default as Index } from "./decorators/index";
-export { default as IndexSort } from "./decorators/index_sort";
-export { default as Mutate } from "./decorators/mutate";
-export { default as Name } from "./decorators/name";
-export { default as NotNull } from "./decorators/not_null";
-export { default as PrimaryKey } from "./decorators/primary_key";
-export { default as UpdatedAt } from "./decorators/updated_at";
-export { default as Validate } from "./decorators/validate";
+// Factory para crear decoradores personalizados
+export { decorator, relationDecorator, SCHEMA, VALUES } from "./core/decorator";
 
-// Relaciones
-export { belongsTo, hasMany } from "./utils/relations";
+// Decoradores - Índices
+export { Index, IndexSort, PrimaryKey } from "./decorators/indexes";
 
-// Tipos avanzados (reexportados desde @types)
+// Decoradores - Timestamps
+export { CreatedAt, UpdatedAt, DeleteAt } from "./decorators/timestamps";
+
+// Decoradores - Transformación
+export { Default, Mutate, Validate, Serialize, NotNull, Name } from "./decorators/transforms";
+
+// Decoradores - Relaciones
+export { HasMany, BelongsTo, HasOne } from "./decorators/relations";
+
+// Tipos simplificados (sin @types complejos)
 export type {
-  BelongsTo as BelongsToType,
-  CreationOptional,
-  FilterableAttributes,
-  HasMany as HasManyType,
-  InferAttributes,
-  NonAttribute,
+  QueryOptions,
+  IncludeRelationOptions,
   QueryOperator,
-  QueryResult,
-  WhereOptions,
-  WhereOptionsWithoutWhere,
-} from "@type/index";
+} from "./core/table";
+
+// Re-exportar TransactionContext para compatibilidad
+export { TransactionContext } from "./core/client";

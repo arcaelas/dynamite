@@ -8,65 +8,16 @@
 // Brands para tipos especiales
 export declare const HasManyBrand: unique symbol;
 export declare const BelongsToBrand: unique symbol;
+export declare const HasOneBrand: unique symbol;
 export declare const NonAttributeBrand: unique symbol;
 export declare const CreationOptionalBrand: unique symbol;
 
 // Relaciones y atributos especiales
 export type HasMany<T> = T[] & { [HasManyBrand]?: true };
 export type BelongsTo<T> = (T | null) & { [BelongsToBrand]?: true };
+export type HasOne<T> = (T | null) & { [HasOneBrand]?: true };
 export type NonAttribute<T> = T & { [NonAttributeBrand]?: true };
 export type CreationOptional<T> = T & { [CreationOptionalBrand]?: true };
-
-// Utilidades internas de tipos
-type IsBranded<
-  T,
-  Brand extends symbol
-> = keyof NonNullable<T> extends keyof Omit<NonNullable<T>, Brand>
-  ? false
-  : true;
-
-type KeepNullish<T> = {
-  [K in keyof T as undefined extends T[K] ? K : never]: T[K];
-};
-
-type KeepFunction<T> = {
-  [K in keyof T as T[K] extends (...args: any[]) => any ? K : never]: T[K];
-};
-
-type KeepBranded<T, Brand extends symbol> = {
-  [K in keyof T as IsBranded<T[K], Brand> extends true ? K : never]: T[K];
-};
-
-// Detectores de relaciones
-type KeepHasMany<T> = {
-  [K in keyof T as T[K] extends HasMany<any> ? K : never]: T[K];
-};
-
-type KeepBelongsTo<T> = {
-  [K in keyof T as T[K] extends BelongsTo<any> ? K : never]: T[K];
-};
-
-type KeepRelation<T> = {
-  [K in keyof T as T[K] extends HasMany<any> | BelongsTo<any>
-    ? K
-    : never]: T[K];
-};
-
-// Limpieza de tipos
-type RemoveNullish<T> = Omit<T, keyof KeepNullish<T>>;
-
-type RemoveFunction<T> = Omit<T, keyof KeepFunction<T>>;
-
-type RemoveBranded<T, Brand extends symbol> = Omit<
-  T,
-  keyof KeepBranded<T, Brand>
->;
-
-type RemoveHasMany<T> = Omit<T, keyof KeepHasMany<T>>;
-
-type RemoveBelongsTo<T> = Omit<T, keyof KeepBelongsTo<T>>;
-
-type RemoveRelation<T> = Omit<T, keyof KeepRelation<T>>;
 
 // Atributos inferidos (excluye relaciones, non-attributes y funciones)
 export type InferAttributes<T> = {
@@ -75,6 +26,8 @@ export type InferAttributes<T> = {
     : T[K] extends { [HasManyBrand]?: true }
     ? never
     : T[K] extends { [BelongsToBrand]?: true }
+    ? never
+    : T[K] extends { [HasOneBrand]?: true }
     ? never
     : T[K] extends { [NonAttributeBrand]?: true }
     ? never
@@ -85,32 +38,6 @@ export type FilterableAttributes<T> = {
   [K in keyof InferAttributes<T>]: InferAttributes<T>[K];
 };
 
-// Resultados y opciones de include
-type SelectResult<T, A extends keyof T> = Pick<T, A>;
-
-type ResolveIncludeType<T, K extends keyof T> = T[K] extends HasMany<infer U>
-  ? U[]
-  : T[K] extends BelongsTo<infer U>
-  ? U | null
-  : never;
-
-export type IncludeOptions = {
-  where?: Record<string, any>;
-  attributes?: string[];
-  limit?: number;
-  skip?: number;
-  order?: "ASC" | "DESC";
-};
-
-export type QueryResult<
-  T,
-  A extends keyof T = keyof T,
-  I extends Record<string, any> = {}
-> = SelectResult<
-  T & { [K in keyof I]: K extends keyof T ? ResolveIncludeType<T, K> : never },
-  A
->;
-
 export type WhereOptions<T> = {
   where?: Partial<FilterableAttributes<T>>;
   skip?: number;
@@ -118,13 +45,17 @@ export type WhereOptions<T> = {
   order?: "ASC" | "DESC";
   attributes?: (keyof FilterableAttributes<T>)[];
   include?: {
-    [K in keyof T]?: T[K] extends HasMany<any> | BelongsTo<any>
-      ? IncludeOptions | {}
+    [K in keyof T]?: T[K] extends HasMany<any> | BelongsTo<any> | HasOne<any>
+      ? IncludeRelationOptions | true
       : never;
   };
 };
 
-export type WhereOptionsWithoutWhere<T> = Omit<WhereOptions<T>, "where">;
+/** Filtros de query sin cláusula where */
+export type QueryFilters<T> = Omit<WhereOptions<T>, "where">;
+
+/** @deprecated Usa QueryFilters */
+export type WhereOptionsWithoutWhere<T> = QueryFilters<T>;
 
 export type QueryOperator =
   | "="
@@ -138,12 +69,15 @@ export type QueryOperator =
   | "contains"
   | "begins-with";
 
+/** Entrada de validador con soporte lazy */
+export interface ValidatorEntry {
+  fn: (value: any) => boolean | string;
+  lazy?: boolean;
+}
+
 // Tipos para core/wrapper
 export interface Column {
   name: string;
-  default?: any | (() => any);
-  mutate?: ((value: any) => any)[];
-  validate?: ((value: any) => boolean | string)[];
   index?: true;
   indexSort?: true;
   primaryKey?: boolean;
@@ -151,10 +85,13 @@ export interface Column {
   unique?: true;
   createdAt?: boolean;
   updatedAt?: boolean;
+  softDelete?: boolean;
+  lazy_validators?: ((value: any) => boolean | string)[];
+  relation?: RelationMetadata;
 }
 
 export interface RelationMetadata {
-  type: "hasMany" | "belongsTo";
+  type: "hasMany" | "belongsTo" | "hasOne";
   targetModel: () => any;
   foreignKey: string;
   localKey?: string;
@@ -166,6 +103,9 @@ export interface WrapperEntry {
   relations: Map<string | symbol, RelationMetadata>;
 }
 
+/** Alias para WrapperEntry (usado internamente con SCHEMA symbol) */
+export type SchemaEntry = WrapperEntry;
+
 // Tipos internos del where de Table
 export type IncludeRelationOptions = {
   where?: Record<string, any>;
@@ -176,17 +116,21 @@ export type IncludeRelationOptions = {
   include?: Record<string, IncludeRelationOptions | true>;
 };
 
-export type WhereQueryOptions<T> = {
+/** Opciones de query para métodos where(), first(), last(), etc. */
+export type QueryOptions<T> = {
   order?: "ASC" | "DESC";
   skip?: number;
   limit?: number;
   attributes?: (keyof InferAttributes<T>)[];
   include?: {
-    [K in keyof T]?: T[K] extends HasMany<any> | BelongsTo<any>
+    [K in keyof T]?: T[K] extends HasMany<any> | BelongsTo<any> | HasOne<any>
       ? IncludeRelationOptions | true
       : never;
   };
 };
+
+/** @deprecated Usa QueryOptions */
+export type WhereQueryOptions<T> = QueryOptions<T>;
 
 // Tipos utilitarios para decoradores
 export type Mutate = (value: any) => any;

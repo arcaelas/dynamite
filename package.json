@@ -47,7 +47,38 @@
     "docs": "mkdocs gh-deploy --force",
     "deploy": "npm version patch && npm publish --access=public",
     "prepublishOnly": "yarn build",
-    "postpublish": "find src -type f \\( -name '*.js' -o -name '*.d.ts' -o -name '*.map' \\) -delete"
+    "postpublish": "find src -type f \\( -name '*.js' -o -name '*.d.ts' -o -name '*.map' \\) -delete",
+    "test": "yarn test:db:start && yarn test:run; yarn test:db:stop",
+    "test:run": "node --expose-gc ./node_modules/.bin/jest src/index.test.ts --runInBand --verbose",
+    "test:watch": "yarn test:db:start && node --expose-gc ./node_modules/.bin/jest src/index.test.ts --watch --runInBand",
+    "test:db:start": "docker run -d -p 8000:8000 --name dynamite-test-db amazon/dynamodb-local -jar DynamoDBLocal.jar -sharedDb || echo 'DynamoDB ya está corriendo'",
+    "test:db:stop": "docker stop dynamite-test-db && docker rm dynamite-test-db || true",
+    "test:db:clean": "docker stop dynamite-test-db && docker rm dynamite-test-db; docker run -d -p 8000:8000 --name dynamite-test-db amazon/dynamodb-local -jar DynamoDBLocal.jar -sharedDb"
   },
-  "version": "1.0.17"
+  "version": "1.0.17",
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "roots": ["<rootDir>/src"],
+    "testMatch": ["**/*.test.ts"],
+    "moduleNameMapper": {
+      "^~/(.*)$": "<rootDir>/src/$1",
+      "^@type/(.*)$": "<rootDir>/src/@types/$1"
+    },
+    "transform": {
+      "^.+\\.ts$": ["ts-jest", {
+        "tsconfig": {
+          "experimentalDecorators": true,
+          "emitDecoratorMetadata": true,
+          "esModuleInterop": true,
+          "target": "ES2022",
+          "module": "commonjs"
+        }
+      }]
+    },
+    "testTimeout": 60000,
+    "maxWorkers": 1,
+    "detectOpenHandles": false,
+    "forceExit": true
+  }
 }

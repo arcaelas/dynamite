@@ -1,236 +1,177 @@
 /**
  * @file relations.ts
- * @descripcion Sistema de relaciones optimizado
+ * @description Sistema de carga de relaciones con batch loading
  * @autor Miguel Alejandro
  * @fecha 2025-01-28
  */
 
-// =============================================================================
-// IMPORTS
-// =============================================================================
-import { RelationMetadata } from "@type/index";
-import { ensureConfig, mustMeta } from "../core/wrapper";
-import { toSnakePlural } from "./naming";
+import { SCHEMA } from "../core/decorator";
 
-// =============================================================================
-// TYPES
-// =============================================================================
+/**
+ * @description Opciones para include de relaciones
+ */
+interface IncludeOptions {
+  where?: Record<string, any>;
+  limit?: number;
+  offset?: number;
+  order?: 'asc' | 'desc';
+  include?: Record<string, IncludeOptions | boolean>;
+}
 
-type BatchLoadResult = Map<string, any | any[]>;
-
-// =============================================================================
-// DECORATORS
-// =============================================================================
-
-/** Decorador @hasMany para relaciones 1:N */
-export const hasMany =
-  (targetModel: () => any, foreignKey: string, localKey = "id") =>
-  (target: any, propertyKey: string): void => {
-    ensureConfig(
-      target.constructor,
-      toSnakePlural(target.constructor.name)
-    ).relations.set(propertyKey, {
-      type: "hasMany",
-      targetModel,
-      foreignKey,
-      localKey,
-    });
-
-    Object.defineProperty(target, propertyKey, {
-      get(): any[] {
-        const cached = this[`_${propertyKey}`];
-        return cached !== undefined
-          ? cached
-          : (console.warn(
-              `Relación ${propertyKey} no cargada. Use includes en la consulta.`
-            ),
-            []);
-      },
-      configurable: true,
-      enumerable: false,
-    });
-  };
-
-/** Decorador @belongsTo para relaciones N:1 */
-export const belongsTo =
-  (targetModel: () => any, localKey: string, foreignKey = "id") =>
-  (target: any, propertyKey: string): void => {
-    ensureConfig(
-      target.constructor,
-      toSnakePlural(target.constructor.name)
-    ).relations.set(propertyKey, {
-      type: "belongsTo",
-      targetModel,
-      localKey,
-      foreignKey,
-    });
-
-    Object.defineProperty(target, propertyKey, {
-      get(): any {
-        const cached = this[`_${propertyKey}`];
-        return cached !== undefined
-          ? cached
-          : (console.warn(
-              `Relación ${propertyKey} no cargada. Use includes en la consulta.`
-            ),
-            null);
-      },
-      configurable: true,
-      enumerable: false,
-    });
-  };
-
-// =============================================================================
-// FUNCTIONS
-// =============================================================================
-
-/** Batch loading para relaciones hasMany */
+/**
+ * @description Batch load para HasMany/HasOne
+ * Obtiene items relacionados donde foreignKey IN parent_ids
+ */
 const batchLoadHasMany = async (
-  Model: any,
   items: any[],
-  relation: RelationMetadata,
-  options: any = {}
-): Promise<BatchLoadResult> => {
-  const { targetModel, foreignKey, localKey = "id" } = relation;
-  const parent_keys = items.map((item) => item[localKey]).filter(Boolean);
+  relation: { model: () => any; foreignKey: string; localKey: string },
+  options: IncludeOptions = {}
+): Promise<Map<string, any[]>> => {
+  const parent_ids = items.map(i => i[relation.localKey]).filter(Boolean);
+  if (!parent_ids.length) return new Map();
 
-  if (!parent_keys.length) return new Map();
+  // Obtener clase del modelo relacionado
+  const RelatedModel = relation.model();
 
-  // Build query with relation options
-  let query = targetModel().where(foreignKey, "in", parent_keys);
+  // Query básico
+  let related = await RelatedModel.where(relation.foreignKey, 'in', parent_ids);
 
-  // Apply additional filters if specified
+  // Aplicar filtros adicionales
   if (options.where) {
-    const additionalFilters = Object.entries(options.where);
-    for (const [key, value] of additionalFilters) {
-      const currentResults = await query;
-      query = Promise.resolve(
-        currentResults.filter((item: any) => item[key] === value)
-      );
+    related = related.filter((item: any) =>
+      Object.entries(options.where!).every(([k, v]) => item[k] === v)
+    );
+  }
+
+  // Ordenar
+  if (options.order) {
+    related.sort((a: any, b: any) => {
+      const aId = String(a.id ?? '');
+      const bId = String(b.id ?? '');
+      return options.order === 'asc' ? aId.localeCompare(bId) : bId.localeCompare(aId);
+    });
+  }
+
+  // Agrupar por foreignKey
+  const grouped = new Map<string, any[]>();
+  for (const item of related) {
+    const key = String(item[relation.foreignKey]);
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key)!.push(item);
+  }
+
+  // Aplicar limit por grupo
+  if (options.limit) {
+    for (const [key, groupItems] of grouped) {
+      grouped.set(key, groupItems.slice(options.offset ?? 0, (options.offset ?? 0) + options.limit));
     }
   }
-
-  const related_items = await query;
-
-  // TODO: Apply attributes selection
-  // For now, skip attributes filtering to ensure basic relations work
-  let processedItems = related_items;
-
-  // Apply other options like limit, order
-  let filteredItems = processedItems;
-
-  if (options.order === "DESC") {
-    filteredItems.sort((a: any, b: any) => b.id.localeCompare(a.id));
-  } else if (options.order === "ASC") {
-    filteredItems.sort((a: any, b: any) => a.id.localeCompare(b.id));
-  }
-
-  if (options.limit) {
-    filteredItems = filteredItems.slice(0, options.limit);
-  }
-  const grouped = new Map<string, any[]>();
-
-  filteredItems.forEach((item: any) => {
-    const key = item[foreignKey];
-    grouped.has(key) ? grouped.get(key)!.push(item) : grouped.set(key, [item]);
-  });
 
   return grouped;
 };
 
-/** Batch loading para relaciones belongsTo */
+/**
+ * @description Batch load para BelongsTo
+ * Obtiene items donde id IN local_keys
+ */
 const batchLoadBelongsTo = async (
-  Model: any,
   items: any[],
-  relation: RelationMetadata,
-  options: any = {}
-): Promise<BatchLoadResult> => {
-  const { targetModel, localKey, foreignKey = "id" } = relation;
-  // Para BelongsTo: obtener valores de localKey (ej: category_id) de los items
-  const keys = items
-    .map((item) => (localKey ? item[localKey] : null))
-    .filter(Boolean);
+  relation: { model: () => any; foreignKey: string; localKey: string },
+  _options: IncludeOptions = {}
+): Promise<Map<string, any>> => {
+  const local_keys = items.map(i => i[relation.localKey]).filter(Boolean);
+  if (!local_keys.length) return new Map();
 
-  if (!keys.length) return new Map();
+  const RelatedModel = relation.model();
+  const related = await RelatedModel.where(relation.foreignKey, 'in', local_keys);
 
-  // Buscar en targetModel donde foreignKey (ej: id) esté en los keys
-  const fetched_items = await targetModel().where(foreignKey, "in", keys);
+  const result = new Map<string, any>();
+  for (const item of related) {
+    result.set(String(item[relation.foreignKey]), item);
+  }
 
-  // TODO: Apply attributes selection
-  // For now, skip attributes filtering to ensure basic relations work
-  let processedItems = fetched_items;
-
-  const results = new Map<string, any>();
-  // Mapear por foreignKey para que coincida con localKey de los items
-  processedItems.forEach((item: any) => results.set(item[foreignKey], item));
-
-  return results;
+  return result;
 };
 
-/** Procesamiento optimizado de includes con batch loading transparente */
+/**
+ * @description Procesa includes recursivamente para cargar relaciones
+ * @param items Array de instancias a poblar
+ * @param include Objeto con relaciones a incluir
+ * @param TableClass Clase de la tabla actual
+ * @param depth Profundidad actual (máximo 10)
+ * @returns Items con relaciones pobladas
+ * @example
+ * ```typescript
+ * // Uso interno en Table.where()
+ * await processIncludes(users, {
+ *   posts: {
+ *     where: { published: true },
+ *     limit: 5,
+ *     include: {
+ *       comments: true
+ *     }
+ *   }
+ * }, User);
+ * ```
+ */
 export const processIncludes = async (
-  Model: any,
   items: any[],
-  include: Record<string, any>,
+  include: Record<string, IncludeOptions | boolean>,
+  TableClass: any,
   depth = 0
 ): Promise<any[]> => {
   if (!include || depth > 10 || !items.length) return items;
 
-  const meta = mustMeta(Model);
-  const relation_promises = Object.entries(include).map(
-    async ([relation_key, relation_options]: [string, any]) => {
-      const relation = meta.relations.get(relation_key);
-      if (!relation) return;
+  const schema = TableClass[SCHEMA];
+  if (!schema) return items;
 
-      const related_data =
-        relation.type === "hasMany"
-          ? await batchLoadHasMany(Model, items, relation, relation_options)
-          : await batchLoadBelongsTo(Model, items, relation, relation_options);
+  const promises = Object.entries(include).map(async ([relation_key, options]) => {
+    const column = schema.columns[relation_key];
+    if (!column?.store?.relation) return;
 
-      items.forEach((item) => {
-        let key;
-        if (relation.type === "hasMany") {
-          // Para HasMany: usar localKey (ej: "id") del item actual
-          key = item[relation.localKey || "id"];
-        } else {
-          // Para BelongsTo: usar localKey (ej: "category_id") del item actual
-          key = relation.localKey ? item[relation.localKey] : null;
-        }
-        const related = related_data.get(key);
-        // Usar una propiedad temporal para evitar conflictos con getters
-        Object.defineProperty(item, relation_key, {
-          value: relation.type === "hasMany" ? related || [] : related || null,
-          writable: true,
-          enumerable: true,
-          configurable: true,
-        });
+    const relation = column.store.relation;
+    const opts: IncludeOptions = typeof options === 'boolean' ? {} : options;
+
+    // Batch load según tipo
+    let data: Map<string, any>;
+
+    if (relation.type === 'HasMany') {
+      data = await batchLoadHasMany(items, relation, opts);
+    } else if (relation.type === 'HasOne') {
+      const hasMany = await batchLoadHasMany(items, relation, { ...opts, limit: 1 });
+      data = new Map();
+      for (const [k, v] of hasMany) {
+        data.set(k, v[0] ?? null);
+      }
+    } else {
+      // BelongsTo
+      data = await batchLoadBelongsTo(items, relation, opts);
+    }
+
+    // Asignar datos relacionados a cada item
+    for (const item of items) {
+      const key = String(item[relation.localKey]);
+      const value = relation.type === 'HasMany'
+        ? data.get(key) ?? []
+        : data.get(key) ?? null;
+
+      Object.defineProperty(item, relation_key, {
+        value,
+        writable: true,
+        enumerable: true,
+        configurable: true
       });
+    }
 
-      if (relation_options?.include && related_data.size) {
-        const all_related = Array.from(related_data.values())
-          .flat()
-          .filter(Boolean);
-        await processIncludes(
-          relation.targetModel(),
-          all_related,
-          relation_options.include,
-          depth + 1
-        );
+    // Recursión para includes anidados
+    if (opts.include && data.size) {
+      const all_related = Array.from(data.values()).flat().filter(Boolean);
+      if (all_related.length) {
+        await processIncludes(all_related, opts.include, relation.model(), depth + 1);
       }
     }
-  );
+  });
 
-  await Promise.all(relation_promises);
+  await Promise.all(promises);
   return items;
-};
-
-/** Separar opciones de query e include */
-export const separateQueryOptions = (
-  options: Record<string, any>
-): {
-  queryOptions: Record<string, any>;
-  includeOptions: Record<string, any> | undefined;
-} => {
-  const { include, ...queryOptions } = options;
-  return { queryOptions, includeOptions: include };
 };
