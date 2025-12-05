@@ -12,7 +12,7 @@ import {
   TransactWriteItemsCommand,
 } from "@aws-sdk/client-dynamodb";
 import { marshall } from "@aws-sdk/util-dynamodb";
-import wrapper from "./decorator";
+import { SCHEMA } from "./decorator";
 
 /**
  * Configuration for Dynamite client initialization
@@ -113,35 +113,25 @@ export class Dynamite {
    * @param ctor Table class constructor
    */
   private async createTableWithGSI(ctor: Function): Promise<void> {
-    const meta = wrapper.get(ctor);
-    if (!meta) throw new Error(`Class ${ctor.name} not registered in wrapper`);
+    const meta: any = (ctor as any)[SCHEMA];
+    if (!meta) throw new Error(`Class ${ctor.name} not registered. Use decorators.`);
 
-    const cols = [...meta.columns.values()];
-    const pk = cols.find((c) => c.index);
+    const cols = Object.values(meta.columns);
+    const pk = cols.find((c: any) => c.store?.index);
     if (!pk) throw new Error(`PartitionKey missing in ${ctor.name}`);
 
-    const sk = cols.find((c) => c.indexSort);
+    const sk = cols.find((c: any) => c.store?.indexSort);
     const attr = new Map<string, "S" | "N" | "B">();
-    attr.set(pk.name, "S");
-    if (sk) attr.set(sk.name, "S");
+    attr.set((pk as any).name || 'id', "S");
+    if (sk) attr.set((sk as any).name || 'id', "S");
 
-    let gsiIndex = 1;
-    const gsiDefinitions = [...meta.relations.values()]
-      .filter((relation) => relation.type === "hasMany")
-      .map((relation) => {
-        const { foreignKey } = relation;
-        if (!attr.has(foreignKey)) attr.set(foreignKey, "S");
-        return {
-          IndexName: `GSI${gsiIndex++}_${foreignKey}`,
-          KeySchema: [{ AttributeName: foreignKey, KeyType: "HASH" as const }],
-          Projection: { ProjectionType: "ALL" as const },
-        };
-      });
+    // Temporalmente deshabilitamos la creación automática de GSI hasta implementar relaciones
+    const gsiDefinitions: any[] = [];
 
     const schema: Array<{ AttributeName: string; KeyType: "HASH" | "RANGE" }> =
-      [{ AttributeName: pk.name, KeyType: "HASH" }];
-    if (sk && sk.name !== pk.name)
-      schema.push({ AttributeName: sk.name, KeyType: "RANGE" });
+      [{ AttributeName: (pk as any).name || 'id', KeyType: "HASH" }];
+    if (sk && (sk as any).name !== (pk as any).name)
+      schema.push({ AttributeName: (sk as any).name || 'id', KeyType: "RANGE" });
 
     try {
       await this.client.send(
