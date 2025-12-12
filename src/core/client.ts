@@ -41,51 +41,103 @@ export class Dynamite {
   }
 
   /**
-   * Synchronize all declared tables and their GSIs
+   * Connect client and synchronize all declared tables and their GSIs (upsert pattern)
    */
-  async sync(): Promise<void> {
+  async connect(): Promise<void> {
     if (this.synced && this.connected) return;
+
+    // Set global client for Table operations
+    setGlobalClient(this.client);
+    this.connected = true;
+
+    // Crear tablas principales con GSIs
     await Promise.all(
       this.tables.map((table) => this.createTableWithGSI(table))
     );
+
+    // Crear pivot tables para relaciones ManyToMany
+    await this.createPivotTables();
+
     this.synced = true;
   }
 
   /**
-   * Connect the client for Table operations
+   * Auto-crear pivot tables para relaciones ManyToMany
    */
-  connect(): void {
-    if (this.connected) return;
-    setGlobalClient(this.client);
-    this.connected = true;
-  }
+  private async createPivotTables(): Promise<void> {
+    const pivot_tables = new Map<string, { foreignKey: string, relatedKey: string }>();
 
-  /**
-   * Get the underlying DynamoDB client
-   */
-  getClient(): DynamoDBClient {
-    return this.client;
-  }
+    // Recolectar nombres de pivot tables con metadata
+    for (const table_class of this.tables) {
+      const schema = (table_class as any)[SCHEMA];
+      if (!schema) continue;
 
-  /**
-   * Check if client is connected and tables are synced
-   */
-  isReady(): boolean {
-    return this.connected && this.synced;
-  }
+      for (const col_name in schema.columns) {
+        const col = schema.columns[col_name];
+        const relation = col.store?.relation;
 
-  /**
-   * Disconnect and cleanup DynamoDB client
-   */
-  disconnect(): void {
-    try {
-      this.client.destroy();
-      this.connected = false;
-      this.synced = false;
-      if (globalClient === this.client) globalClient = undefined;
-    } catch (error) {
-      console.warn("Error during Dynamite disconnect:", error);
+        if (relation?.type === "ManyToMany" && relation.pivotTable) {
+          pivot_tables.set(relation.pivotTable, {
+            foreignKey: relation.foreignKey || "source_id",
+            relatedKey: relation.relatedKey || "target_id"
+          });
+        }
+      }
     }
+
+    // Crear cada pivot table con GSIs usando los nombres de columna correctos
+    const { CreateTableCommand } = await import("@aws-sdk/client-dynamodb");
+
+    await Promise.all(
+      Array.from(pivot_tables.entries()).map(async ([pivot_name, metadata]) => {
+        const { foreignKey, relatedKey } = metadata;
+
+        try {
+          await this.client.send(
+            new CreateTableCommand({
+              TableName: pivot_name,
+              KeySchema: [{ AttributeName: "id", KeyType: "HASH" }],
+              AttributeDefinitions: [
+                { AttributeName: "id", AttributeType: "S" },
+                { AttributeName: foreignKey, AttributeType: "S" },
+                { AttributeName: relatedKey, AttributeType: "S" },
+              ],
+              GlobalSecondaryIndexes: [
+                {
+                  IndexName: `${foreignKey}_index`,
+                  KeySchema: [{ AttributeName: foreignKey, KeyType: "HASH" }],
+                  Projection: { ProjectionType: "ALL" },
+                  ProvisionedThroughput: {
+                    ReadCapacityUnits: 5,
+                    WriteCapacityUnits: 5,
+                  },
+                },
+                {
+                  IndexName: `${relatedKey}_index`,
+                  KeySchema: [{ AttributeName: relatedKey, KeyType: "HASH" }],
+                  Projection: { ProjectionType: "ALL" },
+                  ProvisionedThroughput: {
+                    ReadCapacityUnits: 5,
+                    WriteCapacityUnits: 5,
+                  },
+                },
+              ],
+              ProvisionedThroughput: {
+                ReadCapacityUnits: 5,
+                WriteCapacityUnits: 5,
+              },
+            })
+          );
+          console.log(`✓ Pivot table '${pivot_name}' created`);
+        } catch (error: any) {
+          if (error.name === "ResourceInUseException") {
+            console.log(`✓ Pivot table '${pivot_name}' already exists`);
+          } else {
+            throw error;
+          }
+        }
+      })
+    );
   }
 
   /**
@@ -112,9 +164,10 @@ export class Dynamite {
    * Create table with automatic GSI detection and creation
    * @param ctor Table class constructor
    */
-  private async createTableWithGSI(ctor: Function): Promise<void> {
+  private async createTableWithGSI(ctor: new (...args: any[]) => any): Promise<void> {
     const meta: any = (ctor as any)[SCHEMA];
-    if (!meta) throw new Error(`Class ${ctor.name} not registered. Use decorators.`);
+    if (!meta)
+      throw new Error(`Class ${ctor.name} not registered. Use decorators.`);
 
     const cols = Object.values(meta.columns);
     const pk = cols.find((c: any) => c.store?.index);
@@ -122,16 +175,19 @@ export class Dynamite {
 
     const sk = cols.find((c: any) => c.store?.indexSort);
     const attr = new Map<string, "S" | "N" | "B">();
-    attr.set((pk as any).name || 'id', "S");
-    if (sk) attr.set((sk as any).name || 'id', "S");
+    attr.set((pk as any).name || "id", "S");
+    if (sk) attr.set((sk as any).name || "id", "S");
 
     // Temporalmente deshabilitamos la creación automática de GSI hasta implementar relaciones
     const gsiDefinitions: any[] = [];
 
     const schema: Array<{ AttributeName: string; KeyType: "HASH" | "RANGE" }> =
-      [{ AttributeName: (pk as any).name || 'id', KeyType: "HASH" }];
+      [{ AttributeName: (pk as any).name || "id", KeyType: "HASH" }];
     if (sk && (sk as any).name !== (pk as any).name)
-      schema.push({ AttributeName: (sk as any).name || 'id', KeyType: "RANGE" });
+      schema.push({
+        AttributeName: (sk as any).name || "id",
+        KeyType: "RANGE",
+      });
 
     try {
       await this.client.send(

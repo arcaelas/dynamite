@@ -902,11 +902,11 @@ Herzlichen Glückwunsch! Sie haben @arcaelas/dynamite erfolgreich installiert un
 
 ### Empfohlene nächste Schritte
 
-1. **Grundlagen lernen**: Lesen Sie den [Einstiegsleitfaden](./guides/getting-started.md)
-2. **Funktionen erkunden**: Sehen Sie sich den [Decorator-Leitfaden](./guides/decorators.md) an
-3. **Beziehungen verstehen**: Lernen Sie über [Beziehungen](./guides/relationships.md)
-4. **Abfragen meistern**: Studieren Sie [Erweiterte Abfragen](./examples/advanced-queries.md)
-5. **TypeScript-Typen**: Überprüfen Sie [Typen-Referenz](./api/types.md)
+1. **Grundlagen lernen**: Lesen Sie den [Einstiegsleitfaden](./getting-started.md)
+2. **Funktionen erkunden**: Sehen Sie sich den [Decorator-Leitfaden](./references/decorators.md) an
+3. **Beziehungen verstehen**: Lernen Sie über [Beziehungen](./examples/relations.md)
+4. **Abfragen meistern**: Studieren Sie [Erweiterte Abfragen](./examples/advanced.md)
+5. **TypeScript-Typen**: Überprüfen Sie [Typen-Referenz](./references/types.md)
 
 ### Beispielprojekte
 

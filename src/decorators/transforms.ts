@@ -5,10 +5,10 @@
  * @fecha 2025-01-28
  */
 
-import { decorator, ensureSchema } from "../core/decorator";
+import { decorator, SCHEMA } from "../core/decorator";
 
 /**
- * @description Decorador para establecer valor por defecto
+ * @description Decorador para establecer valor por defecto usando pipeline de getter
  * @param factory Valor por defecto o función que lo genera
  * @example
  * ```typescript
@@ -23,6 +23,7 @@ import { decorator, ensureSchema } from "../core/decorator";
  */
 export const Default = decorator((_schema, col, params) => {
   const fallback = params[0];
+  // Usar pipeline de getter con ?? para valores nullish
   col.get.push((value: any) => value ?? (typeof fallback === 'function' ? fallback() : fallback));
 });
 
@@ -39,46 +40,40 @@ export const Default = decorator((_schema, col, params) => {
  */
 export const Mutate = decorator((_schema, col, params) => {
   const fn = params[0];
-  col.set.push((value: any) => fn(value));
+  col.set.push((current: any, next: any) => fn(next));
 });
 
 /**
- * @description Decorador para validar valores
+ * @description Decorador para validar valores (se ejecuta en el setter)
  * @param validators Función o array de funciones validadoras
- * @param options Opciones de validación (lazy: true para validar en save())
  * @example
  * ```typescript
  * class User extends Table<User> {
  *   @Validate((v) => v.length > 0 || 'Email requerido')
  *   declare email: string;
  *
- *   @Validate([isEmail, isNotEmpty], { lazy: true })
+ *   @Validate([isEmail, isNotEmpty])
  *   declare email2: string;
  * }
  * ```
  */
 export const Validate = decorator((_schema, col, params) => {
-  const [validators, options] = params;
+  const validators = params[0];
   const list = Array.isArray(validators) ? validators : [validators];
-  const is_lazy = options?.lazy ?? false;
 
   if (!list.length || list.some((v: any) => typeof v !== 'function')) {
     throw new TypeError('@Validate requiere funciones');
   }
 
-  if (is_lazy) {
-    col.store.lazy_validators = list;
-  } else {
-    col.set.push((value: any) => {
-      for (const fn of list) {
-        const result = fn(value);
-        if (result !== true) {
-          throw new Error(typeof result === 'string' ? result : 'Validación fallida');
-        }
+  col.set.push((current: any, next: any) => {
+    for (const fn of list) {
+      const result = fn(next);
+      if (result !== true) {
+        throw new Error(typeof result === 'string' ? result : 'Validación fallida');
       }
-      return value;
-    });
-  }
+    }
+    return next;
+  });
 });
 
 /**
@@ -96,7 +91,7 @@ export const Validate = decorator((_schema, col, params) => {
 export const Serialize = decorator((_schema, col, params) => {
   const [fromDB, toDB] = params;
   if (fromDB) col.get.push((v: any) => v !== null && v !== undefined ? fromDB(v) : v);
-  if (toDB) col.set.push((v: any) => v !== null && v !== undefined ? toDB(v) : v);
+  if (toDB) col.set.push((current: any, next: any) => next !== null && next !== undefined ? toDB(next) : next);
 });
 
 /**
@@ -109,14 +104,16 @@ export const Serialize = decorator((_schema, col, params) => {
  * }
  * ```
  */
-export const NotNull = decorator((_schema, col) => {
+export const NotNull = decorator((_schema, col, params) => {
+  const custom_message = params[0];
   col.store.nullable = false;
-  col.set.push((value: any) => {
-    const is_empty = value === null || value === undefined || (typeof value === 'string' && value.trim() === '');
+  col.store.notNullMessage = custom_message;
+  col.set.push((current: any, next: any) => {
+    const is_empty = next === null || next === undefined || (typeof next === 'string' && next.trim() === '');
     if (is_empty) {
-      throw new Error(`El campo ${col.name} no puede estar vacío`);
+      throw new Error(custom_message || `El campo ${col.name} no puede estar vacío`);
     }
-    return value;
+    return next;
   });
 });
 
@@ -139,7 +136,7 @@ export function Name(label: string): ClassDecorator & PropertyDecorator {
 
   return (target: any, prop?: string | symbol): void => {
     const ctor = prop === undefined ? target : target.constructor;
-    const schema = ensureSchema(ctor);
+    const schema = (ctor as any)[SCHEMA];
 
     if (prop === undefined) {
       // @Name en clase - renombrar tabla
@@ -156,3 +153,20 @@ export function Name(label: string): ClassDecorator & PropertyDecorator {
     }
   };
 }
+
+/**
+ * @description Decorador para marcar una propiedad como columna sin agregar comportamiento especial
+ * @example
+ * ```typescript
+ * class Product extends Table<Product> {
+ *   @Column()
+ *   price!: number;
+ *
+ *   @Column()
+ *   category_id!: string;
+ * }
+ * ```
+ */
+export const Column = decorator((_schema, _col) => {
+  // No hace nada, solo marca la propiedad como columna en schema.columns
+});

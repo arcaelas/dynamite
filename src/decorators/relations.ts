@@ -1,6 +1,6 @@
 /**
  * @file relations.ts
- * @description Decoradores de relaciones: @HasMany, @HasOne, @BelongsTo
+ * @description Decoradores de relaciones: @HasMany, @HasOne, @BelongsTo, @ManyToMany
  * @autor Miguel Alejandro
  * @fecha 2025-01-28
  */
@@ -80,5 +80,36 @@ export const BelongsTo = decorator((_schema, col, params) => {
     model,
     foreignKey,
     localKey
+  };
+});
+
+/**
+ * @description Decorador para relaciones muchos a muchos (N:M)
+ * @param model Función que retorna la clase del modelo relacionado
+ * @param pivotTable Nombre de la tabla pivot
+ * @param foreignKey Clave foránea en la tabla pivot que apunta al modelo actual
+ * @param relatedKey Clave foránea en la tabla pivot que apunta al modelo relacionado
+ * @param localKey Clave local (por defecto 'id')
+ * @param relatedPK Clave primaria del modelo relacionado (por defecto 'id')
+ * @example
+ * ```typescript
+ * class User extends Table<User> {
+ *   @PrimaryKey() id: string;
+ *
+ *   @ManyToMany(() => Role, 'users_roles', 'user_id', 'role_id')
+ *   declare roles: NonAttribute<Role[]>;
+ * }
+ * ```
+ */
+export const ManyToMany = decorator((_schema, col, params) => {
+  const [model, pivotTable, foreignKey, relatedKey, localKey = 'id', relatedPK = 'id'] = params;
+  col.store.relation = {
+    type: 'ManyToMany',
+    model,
+    foreignKey,
+    relatedKey,
+    pivotTable,
+    localKey,
+    relatedPK
   };
 });

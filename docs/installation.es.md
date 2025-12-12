@@ -902,11 +902,11 @@ const users = await User.where({}, {
 
 ### Próximos Pasos Recomendados
 
-1. **Aprende lo Básico**: Lee la [Guía de Inicio](./guides/getting-started.md)
-2. **Explora Características**: Revisa la [Guía de Decoradores](./guides/decorators.md)
-3. **Entiende las Relaciones**: Aprende sobre [Relaciones](./guides/relationships.md)
-4. **Domina las Consultas**: Estudia las [Consultas Avanzadas](./examples/advanced-queries.md)
-5. **Tipos TypeScript**: Revisa los [Tipos](./api/types.md)
+1. **Aprende lo Básico**: Lee la [Guía de Inicio](./getting-started.md)
+2. **Explora Características**: Revisa la [Guía de Decoradores](./references/decorators.md)
+3. **Entiende las Relaciones**: Aprende sobre [Ejemplo de Relaciones](./examples/relations.md)
+4. **Domina las Consultas**: Estudia las [Consultas Avanzadas](./examples/advanced.md)
+5. **Tipos TypeScript**: Revisa los [Tipos](./references/types.md)
 
 ### Proyectos de Ejemplo
 
