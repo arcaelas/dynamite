@@ -168,10 +168,17 @@ Dynamite is built on three core concepts:
 
 ## Next Steps
 
+- **[Getting Started](getting-started.md)** - Your first Dynamite model
 - **[Installation Guide](installation.md)** - Set up Dynamite in your project
-- **[Getting Started](guides/getting-started.md)** - Your first Dynamite model
-- **[Core Concepts](guides/core-concepts.md)** - Understanding the fundamentals
-- **[API Reference](api/table.md)** - Complete API documentation
+- **[Examples](examples/basic.md)** - Practical examples
+  - [Basic](examples/basic.md) - CRUD operations
+  - [Relations](examples/relations.md) - HasMany, BelongsTo, ManyToMany
+  - [Advanced](examples/advanced.md) - Complex queries and patterns
+- **[References](references/table.md)** - Complete API documentation
+  - [Table API](references/table.md)
+  - [Decorators](references/decorators.md)
+  - [Types](references/types.md)
+- **[Changelog](changelog.md)** - Version history
 
 ## Community
 

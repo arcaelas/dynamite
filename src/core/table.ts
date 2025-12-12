@@ -4,306 +4,169 @@
  * @autor Miguel Alejandro
  * @fecha 2025-01-28
  */
-
 import {
   DeleteItemCommand,
   PutItemCommand,
   ScanCommand,
 } from "@aws-sdk/client-dynamodb";
 import { marshall, unmarshall } from "@aws-sdk/util-dynamodb";
-import { requireClient, TransactionContext } from "./client";
-import { SCHEMA, VALUES } from "./decorator";
+import type {
+  InferAttributes,
+  QueryOperator,
+  WhereOptions,
+} from "../@types/index";
 import { processIncludes } from "../utils/relations";
+import { requireClient, TransactionContext } from "./client";
+import { SCHEMA } from "./decorator";
 
-// Tipos simples inline (sin @types complejos)
-interface QueryOptions<T> {
-  order?: 'ASC' | 'DESC';
+type SimpleWhereOptions<M> = {
+  order?: "ASC" | "DESC" | { [key: string]: "ASC" | "DESC" };
+  offset?: number;
   skip?: number;
   limit?: number;
-  attributes?: (keyof T)[];
-  include?: IncludeRelationOptions;
+  attributes?: (keyof InferAttributes<M>)[];
+  include?: NonNullable<WhereOptions<M>["include"]>;
   _includeTrashed?: boolean;
-}
-
-interface IncludeRelationOptions {
-  [relationName: string]: boolean | {
-    where?: any;
-    limit?: number;
-  };
-}
-
-type QueryOperator = "=" | "!=" | "<" | "<=" | ">" | ">=" | "in" | "not-in" | "contains" | "begins-with";
-
-// Alias de operadores para sintaxis objeto
-const OPERATOR_ALIASES: Record<string, QueryOperator> = {
-  '$eq': '=',
-  '$ne': '!=',
-  '$lt': '<',
-  '$lte': '<=',
-  '$gt': '>',
-  '$gte': '>=',
-  '$in': 'in',
-  '$nin': 'not-in',
-  'contains': 'contains',
-  'begins-with': 'begins-with',
-  'beginsWith': 'begins-with',
-  // Operadores directos también soportados
-  '=': '=',
-  '!=': '!=',
-  '<': '<',
-  '<=': '<=',
-  '>': '>',
-  '>=': '>=',
-  'in': 'in',
-  'not-in': 'not-in',
 };
 
-// =============================================================================
-// FUNCIONES UTILITARIAS SIMPLIFICADAS
-// =============================================================================
-
-function validateOperator(operator: string): QueryOperator {
-  const validOps: QueryOperator[] = ["=", "!=", "<", "<=", ">", ">=", "in", "not-in", "contains", "begins-with"];
-  if (!validOps.includes(operator as QueryOperator)) {
-    throw new Error(`Operador inválido: ${operator}. Válidos: ${validOps.join(", ")}`);
-  }
-  return operator as QueryOperator;
-}
-
-/**
- * @description Detecta si un valor es un objeto con operadores
- */
-function isOperatorObject(value: any): boolean {
-  if (value === null || value === undefined || typeof value !== 'object' || Array.isArray(value)) {
-    return false;
-  }
-  // Es objeto con operadores si alguna key es un operador conocido
-  return Object.keys(value).some(key => key in OPERATOR_ALIASES);
-}
-
-/**
- * @description Genera expresión para un operador y valor específico
- */
-function buildSingleExpression(
-  nameKey: string,
-  valueKeyPrefix: string,
-  op: QueryOperator,
-  val: any,
-  names: Record<string, string>,
-  values: Record<string, any>,
-  fieldName: string
-): string | null {
-  // Manejar arrays vacíos
-  if (op === "in" && Array.isArray(val) && val.length === 0) {
-    return "1 = 0"; // Ningún resultado coincide
-  }
-  if (op === "not-in" && Array.isArray(val) && val.length === 0) {
-    return null; // Excluir nada = todo pasa
-  }
-
-  names[nameKey] = fieldName;
-
-  if (op === "in" && Array.isArray(val)) {
-    const inValues = val.map((v, i) => {
-      const inValueKey = `${valueKeyPrefix}_${i}`;
-      values[inValueKey] = v;
-      return inValueKey;
-    });
-    return `${nameKey} IN (${inValues.join(", ")})`;
-  } else if (op === "not-in" && Array.isArray(val)) {
-    const notInValues = val.map((v, i) => {
-      const notInValueKey = `${valueKeyPrefix}_${i}`;
-      values[notInValueKey] = v;
-      return notInValueKey;
-    });
-    return `NOT ${nameKey} IN (${notInValues.join(", ")})`;
-  } else if (op === "contains") {
-    values[valueKeyPrefix] = val;
-    return `contains(${nameKey}, ${valueKeyPrefix})`;
-  } else if (op === "begins-with") {
-    values[valueKeyPrefix] = val;
-    return `begins_with(${nameKey}, ${valueKeyPrefix})`;
-  } else if (op === "!=") {
-    values[valueKeyPrefix] = val;
-    return `${nameKey} <> ${valueKeyPrefix}`;
-  } else {
-    values[valueKeyPrefix] = val;
-    return `${nameKey} ${op} ${valueKeyPrefix}`;
-  }
-}
-
-function buildConditionExpression(
-  filters: Record<string, any>,
-  defaultOperator: QueryOperator = "="
-): {
-  expression: string;
-  names: Record<string, string>;
-  values: Record<string, any>;
-} {
-  const expressions: string[] = [];
-  const names: Record<string, string> = {};
-  const values: Record<string, any> = {};
-
-  let index = 0;
-
-  for (const [fieldName, filterValue] of Object.entries(filters)) {
-    // Ignorar valores undefined
-    if (filterValue === undefined) continue;
-
-    // Detectar sintaxis objeto con operadores: { campo: { operador: valor } }
-    if (isOperatorObject(filterValue)) {
-      // Procesar cada operador en el objeto
-      for (const [opKey, opValue] of Object.entries(filterValue)) {
-        // Ignorar valores undefined dentro del objeto
-        if (opValue === undefined) continue;
-
-        const resolvedOp = OPERATOR_ALIASES[opKey];
-        if (!resolvedOp) continue; // Ignorar keys desconocidas
-
-        const nameKey = `#attr${index}`;
-        const valueKey = `:val${index}`;
-
-        const expr = buildSingleExpression(
-          nameKey, valueKey, resolvedOp, opValue, names, values, fieldName
-        );
-
-        if (expr) expressions.push(expr);
-        index++;
-      }
-    } else {
-      // Valor simple: usar operador default
-      // Ignorar null solo si no hay operador explícito
-      if (filterValue === null) continue;
-
-      const nameKey = `#attr${index}`;
-      const valueKey = `:val${index}`;
-
-      const expr = buildSingleExpression(
-        nameKey, valueKey, defaultOperator, filterValue, names, values, fieldName
-      );
-
-      if (expr) expressions.push(expr);
-      index++;
-    }
-  }
-
-  return {
-    expression: expressions.join(" AND "),
-    names,
-    values,
+type Noop = (...args: any) => any;
+interface Schema {
+  name: string;
+  primary_key: string;
+  columns: {
+    [K: string]: {
+      get: Noop;
+      set: Noop;
+      store: {
+        [K: string]: any;
+        relation: {
+          type: "HasMany" | "HasOne" | "BelognsTo" | "ManyToMany";
+          local: string;
+          foreign: string;
+          pivot?: string;
+        };
+      };
+    };
   };
 }
 
-// =============================================================================
-// CLASE TABLE AUTOCONTENIDA
-// =============================================================================
-
 export default class Table<T = any> {
-  // Valores de instancia
-  private readonly [VALUES]!: Partial<T>;
+  static [SCHEMA]: Schema; // Declaración sin inicialización
+
+  // Cache para instancias de relaciones (único Map necesario)
+  private readonly _relationCache: Map<string, any> = new Map();
 
   constructor(props: Partial<T> = {} as Partial<T>) {
     requireClient();
     const schema = (this.constructor as any)[SCHEMA];
 
-    // Inicializar VALUES
-    (this as any)[VALUES] = {};
+    // Flag de persistencia con closure (no enumerable)
+    let __isPersisted = false;
+    Object.defineProperty(this, "__isPersisted", {
+      enumerable: false,
+      configurable: false,
+      get: () => __isPersisted,
+      set: (v: boolean) => {
+        __isPersisted = v;
+      },
+    });
 
-    // Procesar cada columna del schema
     for (const column_name in schema.columns) {
       const column = schema.columns[column_name];
 
       if (column.store?.relation) {
-        // ═══════════════════════════════════════════════════════════════
-        // RELACIONES: getter lazy que convierte a instancias, setter bloqueado
-        // ═══════════════════════════════════════════════════════════════
-        let relation_data = (props as any)[column_name] ?? undefined;
+        // Relación con closure
+        let relation_value = (props as any)[column_name] ?? undefined;
 
         Object.defineProperty(this, column_name, {
           enumerable: true,
-          configurable: true, // Permite reconfigurar cuando processIncludes carga datos
-          set: () => undefined, // Relaciones son read-only
+          configurable: true,
+          set: (v: any) => {
+            relation_value = v;
+          },
           get: () => {
-            if (relation_data === undefined) return undefined;
+            if (relation_value === undefined) return undefined;
+
+            // Cachear instancias para evitar recreación
+            const cache_key = `${column_name}:${JSON.stringify(
+              relation_value
+            )}`;
+            if (this._relationCache.has(cache_key)) {
+              return this._relationCache.get(cache_key);
+            }
 
             const RelatedModel = column.store.relation.model();
             const type = column.store.relation.type;
 
-            if (type === 'HasMany') {
-              // HasMany: Array de instancias
-              return [].concat(relation_data ?? [])
+            let result: any;
+            if (type === "HasMany" || type === "ManyToMany") {
+              result = []
+                .concat(relation_value ?? [])
                 .filter(Boolean)
-                .map((item: any) => item instanceof RelatedModel ? item : new RelatedModel(item));
+                .map((item: any) =>
+                  item instanceof RelatedModel ? item : new RelatedModel(item)
+                );
             } else {
-              // HasOne / BelongsTo: Instancia única o null
-              if (relation_data === null) return null;
-              return relation_data instanceof RelatedModel
-                ? relation_data
-                : new RelatedModel(relation_data);
+              if (relation_value === null) return null;
+              result =
+                relation_value instanceof RelatedModel
+                  ? relation_value
+                  : new RelatedModel(relation_value);
             }
+
+            // Guardar en caché
+            this._relationCache.set(cache_key, result);
+            return result;
           },
         });
       } else {
-        // ═══════════════════════════════════════════════════════════════
-        // COLUMNAS REGULARES: getter/setter con pipelines via reduce
-        // ═══════════════════════════════════════════════════════════════
-        const has_initial_value = column_name in props;
-        let value = has_initial_value ? (props as any)[column_name] : null;
-
-        // Aplicar set pipeline en inicialización (solo si usuario proporciona valor)
-        if (has_initial_value) {
-          value = column.set.reduce((v: any, fn: any) => fn(v), value);
-        }
-
-        // Almacenar en VALUES para compatibilidad con métodos existentes
-        (this[VALUES] as any)[column_name] = value;
+        // Columna normal con closure
+        let value = (props as any)[column_name];
 
         Object.defineProperty(this, column_name, {
           enumerable: true,
           configurable: true,
           get: () => {
-            // Aplicar get pipeline
-            let v = column.get.reduce((val: any, fn: any) => fn(val), value);
-            // Almacenar si se generó default (para consistencia)
-            if (value === null && v !== null) {
-              value = v;
-              (this[VALUES] as any)[column_name] = v;
+            const computed = column.get.reduce((v: any, fn: any) => fn(v), value);
+            // Cache default values so they don't regenerate on each access
+            if (value == null && computed != null) {
+              value = computed;
             }
-            return v;
+            return computed;
           },
-          set: (new_value: any) => {
-            // Aplicar set pipeline
-            value = column.set.reduce((v: any, fn: any) => fn(v), new_value ?? null);
-            (this[VALUES] as any)[column_name] = value;
+          set: (next: any) => {
+            // Pipeline de setters recibe (current, accumulated)
+            value = column.set.reduce(
+              (accumulated: any, fn: any) => fn(value, accumulated),
+              next
+            );
           },
         });
+
+        // Asignar valor inicial a través del setter para que se procese
+        if (column_name in props) {
+          (this as any)[column_name] = (props as any)[column_name];
+        }
       }
     }
   }
 
-  // **Métodos de instancia con API preservada**
-
-  /**
-   * @description Serializa la instancia a JSON incluyendo relaciones recursivamente
-   * @returns Objeto JSON con todas las propiedades y relaciones
-   */
   public toJSON(): Record<string, unknown> {
     const schema = (this.constructor as any)[SCHEMA];
     const result: Record<string, unknown> = {};
 
-    for(const column_name in schema.columns) {
+    for (const column_name in schema.columns) {
       const column = schema.columns[column_name];
       const value = (this as any)[column_name];
 
       if (value === null || value === undefined) continue;
 
       if (column.store?.relation) {
-        // Serializar relaciones recursivamente
-        if (Array.isArray(value)) {
-          result[column_name] = value.map(item => item?.toJSON ? item.toJSON() : item);
-        } else {
-          result[column_name] = value?.toJSON ? value.toJSON() : value;
-        }
+        result[column_name] = Array.isArray(value)
+          ? value.map((item) => (item?.toJSON ? item.toJSON() : item))
+          : value?.toJSON
+          ? value.toJSON()
+          : value;
       } else {
         result[column_name] = value;
       }
@@ -313,140 +176,412 @@ export default class Table<T = any> {
   }
 
   /**
-   * @description Serializa la instancia a string JSON
-   * @returns String JSON con todas las propiedades y relaciones
+   * @description Mapea nombres de propiedades TypeScript a nombres de columnas de DB
+   * @param data Objeto con propiedades TypeScript
+   * @returns Objeto con nombres de columnas de DB
    */
+  private _mapPropertiesToDB(data: Record<string, any>): Record<string, any> {
+    const schema = (this.constructor as any)[SCHEMA];
+    const mapped: Record<string, any> = {};
+
+    for (const prop_name in data) {
+      const column = schema.columns[prop_name];
+      if (!column) {
+        mapped[prop_name] = data[prop_name];
+        continue;
+      }
+      const db_name = column.name || prop_name;
+      mapped[db_name] = data[prop_name];
+    }
+
+    return mapped;
+  }
+
+  /**
+   * @description Mapea nombres de columnas de DB a nombres de propiedades TypeScript
+   * @param data Objeto con nombres de columnas de DB
+   * @returns Objeto con propiedades TypeScript
+   */
+  private static _mapDBToProperties(data: Record<string, any>): Record<string, any> {
+    const schema = (this as any)[SCHEMA];
+    const mapped: Record<string, any> = {};
+
+    // Crear índice inverso: db_name → prop_name
+    const db_to_prop: Record<string, string> = {};
+    for (const prop_name in schema.columns) {
+      const db_name = schema.columns[prop_name].name;
+      db_to_prop[db_name] = prop_name;
+    }
+
+    // Mapear datos de DB a propiedades
+    for (const db_name in data) {
+      const prop_name = db_to_prop[db_name] || db_name;
+      mapped[prop_name] = data[db_name];
+    }
+
+    return mapped;
+  }
+
+  /**
+   * @description Convierte la instancia a un payload listo para DynamoDB
+   * @returns Objeto con nombres de columnas de DB y valores apropiados
+   */
+  private _toDBPayload(): Record<string, any> {
+    const schema = (this.constructor as any)[SCHEMA];
+    const payload: Record<string, any> = {};
+
+    for (const prop_name in schema.columns) {
+      const column = schema.columns[prop_name];
+
+      // Skip relations
+      if (column.store?.relation) {
+        continue;
+      }
+
+      const value = (this as any)[prop_name];
+      const db_name = column.name || prop_name;
+
+      // Skip undefined values (DynamoDB doesn't support them)
+      if (value !== undefined) {
+        payload[db_name] = value;
+      }
+    }
+
+    return payload;
+  }
+
   public toString(): string {
     return JSON.stringify(this);
   }
 
-  /**
-   * @description Genera payload para operaciones de DB (excluye relaciones)
-   */
-  private _toDBPayload(): Record<string, unknown> {
+  public async save(): Promise<boolean> {
     const schema = (this.constructor as any)[SCHEMA];
-    const result: Record<string, unknown> = {};
+    const primary_key_name = schema.primary_key || "id";
+    const primary_key_value = (this as any)[primary_key_name];
 
-    for(const column_name in schema.columns) {
+    const data: any = {};
+    for (const column_name in schema.columns) {
       const column = schema.columns[column_name];
-      if (column.store?.relation) continue;
-
-      const value = (this as any)[column_name];
-      if (value !== null && value !== undefined) {
-        result[column_name] = value;
+      if (!column.store?.relation) {
+        data[column_name] = (this as any)[column_name];
       }
     }
 
-    return result;
-  }
+    // Intentar UPDATE primero
+    const updated = await this.update(data);
 
-  public async save(): Promise<this> {
-    const schema = (this.constructor as any)[SCHEMA];
-    const id = (this[VALUES] as any)[schema.primary_key];
-    const is_new = id === undefined || id === null;
+    // Si no actualizó nada (registro no existe), hacer INSERT
+    if (!updated && primary_key_value) {
+      // Verificar si el registro existe
+      const existing = await (this.constructor as any).where({
+        [primary_key_name]: primary_key_value,
+      });
 
-    // Validación lazy
-    for(const column_name in schema.columns) {
-      const column = schema.columns[column_name];
-
-      if (column.store?.lazy_validators && !column.store?.relation) {
-        const value = (this[VALUES] as any)[column_name];
-        for(const validator of column.store.lazy_validators) {
-          const result = validator(value);
-          if (result !== true) {
-            throw new Error(typeof result === "string" ? result : "Validación fallida");
+      if (existing.length === 0) {
+        // No existe, crear nuevo registro
+        const created = await (this.constructor as any).create(data);
+        // Sincronizar propiedades desde el registro creado
+        for (const key in created) {
+          if (Object.prototype.hasOwnProperty.call(created, key)) {
+            (this as any)[key] = created[key];
           }
         }
+        (this as any).__isPersisted = true;
+        return true;
       }
     }
 
-    // Timestamps automáticos (updatedAt solamente, createdAt se genera via pipeline)
-    const now = new Date().toISOString();
-    for(const column_name in schema.columns) {
-      const column = schema.columns[column_name];
+    if (updated) {
+      (this as any).__isPersisted = true;
+    }
 
-      if (column.store?.updatedAt) {
-        // Usar setter para sincronizar closure y VALUES
-        (this as any)[column_name] = now;
+    return updated;
+  }
+
+  public async update(data: Partial<InferAttributes<T>>): Promise<boolean> {
+    const schema = (this.constructor as any)[SCHEMA];
+
+    // Filtrar relaciones (ignorarlas) en vez de lanzar error
+    const filtered_data: any = {};
+    for (const key in data) {
+      const column = schema.columns[key];
+      // Solo incluir campos que NO son relaciones
+      if (!column?.store?.relation) {
+        filtered_data[key] = data[key];
       }
     }
 
-    // Preparar datos para DB (omitir relaciones)
-    const db_data = this._toDBPayload();
+    const affected = await (this.constructor as any).update(filtered_data, {
+      [schema.primary_key]: (this as any)[schema.primary_key],
+    });
 
-    if (is_new) {
-      // Insertar nuevo registro
-      await this.insertIntoDynamoDB(db_data);
-    } else {
-      // Actualizar registro existente
-      await this.updateInDynamoDB(db_data);
+    if (affected > 0) {
+      // Actualizar la instancia con los nuevos valores (incluyendo updated_at)
+      for (const key in filtered_data) {
+        (this as any)[key] = filtered_data[key];
+      }
     }
 
-    return this;
+    return affected > 0;
   }
 
   public async destroy(): Promise<null> {
     const schema = (this.constructor as any)[SCHEMA];
-    const id = (this[VALUES] as any)[schema.primary_key];
+    const id = (this as any)[schema.primary_key];
 
-    if (!id) {
-      throw new Error('Cannot destroy record without ID');
-    }
+    if (!id) throw new Error("Cannot destroy record without ID");
 
-    // Buscar si hay soft delete configurado
-    let softDeleteColumn: string | null = null;
-    for(const column_name in schema.columns) {
-      const column = schema.columns[column_name];
-      if (column.store?.softDelete) {
-        softDeleteColumn = column_name;
-        break;
+    for (const column_name in schema.columns) {
+      if (schema.columns[column_name].store?.softDelete) {
+        (this as any)[column_name] = new Date().toISOString();
+        await this.save();
+        return null;
       }
     }
 
-    if (softDeleteColumn) {
-      // Soft delete
-      (this[VALUES] as any)[softDeleteColumn] = new Date().toISOString();
-      await this.save();
-    } else {
-      // Hard delete
-      await this.deleteFromDynamoDB(id);
-    }
-
-    return null;
+    return this.forceDestroy();
   }
 
   public async forceDestroy(): Promise<null> {
     const schema = (this.constructor as any)[SCHEMA];
-    const id = (this[VALUES] as any)[schema.primary_key];
+    const id = (this as any)[schema.primary_key];
 
-    if (!id) {
-      throw new Error('Cannot destroy record without ID');
-    }
+    if (!id) throw new Error("Cannot destroy record without ID");
 
-    await this.deleteFromDynamoDB(id);
+    await requireClient().send(
+      new DeleteItemCommand({
+        TableName: schema.name,
+        Key: marshall({ [schema.primary_key]: id }),
+      })
+    );
+
     return null;
   }
 
-  // **Métodos estáticos con API preservada**
+  public async attach<R>(
+    RelatedModel: new () => R,
+    related_id: string,
+    pivot_data?: Record<string, any>
+  ): Promise<void> {
+    const schema = (this.constructor as any)[SCHEMA];
+    const primary_key = schema.primary_key || "id";
 
-  static async create<T extends Table>(
-    this: new (data: any) => T,
-    data: any,
+    // VALIDACIÓN PRIORITARIA: Verificar que la instancia esté persistida
+    const local_id = (this as any)[primary_key];
+    const is_persisted = (this as any).__isPersisted;
+
+    if (!local_id || !is_persisted) {
+      throw new Error(
+        "No se puede attach sin ID: la instancia debe persistirse primero con save() o create()"
+      );
+    }
+
+    const related_table_name = (RelatedModel as any)[SCHEMA]?.name;
+
+    if (!related_table_name) {
+      throw new Error("Related model no tiene SCHEMA definido");
+    }
+
+    let relation: any = null;
+    for (const column_name in schema.columns) {
+      const rel = schema.columns[column_name].store?.relation;
+      if (
+        rel?.type === "ManyToMany" &&
+        rel.model()[SCHEMA]?.name === related_table_name
+      ) {
+        relation = rel;
+        break;
+      }
+    }
+
+    if (!relation) {
+      throw new Error(
+        `No se encontró relación ManyToMany entre ${schema.name} y ${related_table_name}`
+      );
+    }
+
+    const foreign_key_value = (this as any)[relation.localKey];
+
+    const result = await requireClient().send(
+      new ScanCommand({
+        TableName: relation.pivotTable,
+        FilterExpression: "#fk = :local_id AND #rk = :related_id",
+        ExpressionAttributeNames: {
+          "#fk": relation.foreignKey,
+          "#rk": relation.relatedKey,
+        },
+        ExpressionAttributeValues: marshall({
+          ":local_id": foreign_key_value,
+          ":related_id": related_id,
+        }),
+      })
+    );
+
+    if (result.Items && result.Items.length > 0) return;
+
+    await requireClient().send(
+      new PutItemCommand({
+        TableName: relation.pivotTable,
+        Item: marshall(
+          {
+            id: `${foreign_key_value}_${related_id}`,
+            [relation.foreignKey]: foreign_key_value,
+            [relation.relatedKey]: related_id,
+            created_at: new Date().toISOString(),
+            ...pivot_data,
+          },
+          { removeUndefinedValues: true }
+        ),
+      })
+    );
+  }
+
+  public async detach<R>(
+    RelatedModel: new () => R,
+    related_id: string
+  ): Promise<void> {
+    const schema = (this.constructor as any)[SCHEMA];
+    const related_table_name = (RelatedModel as any)[SCHEMA]?.name;
+
+    if (!related_table_name) return;
+
+    let relation: any = null;
+    for (const column_name in schema.columns) {
+      const rel = schema.columns[column_name].store?.relation;
+      if (
+        rel?.type === "ManyToMany" &&
+        rel.model()[SCHEMA]?.name === related_table_name
+      ) {
+        relation = rel;
+        break;
+      }
+    }
+
+    if (!relation) return;
+
+    const local_id = (this as any)[relation.localKey];
+    if (!local_id) return;
+
+    const result = await requireClient().send(
+      new ScanCommand({
+        TableName: relation.pivotTable,
+        FilterExpression: "#fk = :local_id AND #rk = :related_id",
+        ExpressionAttributeNames: {
+          "#fk": relation.foreignKey,
+          "#rk": relation.relatedKey,
+        },
+        ExpressionAttributeValues: marshall({
+          ":local_id": local_id,
+          ":related_id": related_id,
+        }),
+      })
+    );
+
+    if (!result.Items || result.Items.length === 0) return;
+
+    await requireClient().send(
+      new DeleteItemCommand({
+        TableName: relation.pivotTable,
+        Key: marshall({ id: unmarshall(result.Items[0]).id }),
+      })
+    );
+  }
+
+  /**
+   * Sincronizar relación ManyToMany reemplazando todas las relaciones existentes
+   * @param RelatedModel Modelo relacionado
+   * @param related_ids Array de IDs a sincronizar
+   */
+  public async sync<R>(
+    RelatedModel: new () => R,
+    related_ids: string[]
+  ): Promise<void> {
+    const schema = (this.constructor as any)[SCHEMA];
+    const related_table_name = (RelatedModel as any)[SCHEMA]?.name;
+
+    if (!related_table_name) {
+      throw new Error(`No se encontró schema para el modelo relacionado`);
+    }
+
+    // Buscar la relación ManyToMany
+    let relation: any = null;
+    for (const column_name in schema.columns) {
+      const rel = schema.columns[column_name].store?.relation;
+      if (
+        rel?.type === "ManyToMany" &&
+        rel.model()[SCHEMA]?.name === related_table_name
+      ) {
+        relation = rel;
+        break;
+      }
+    }
+
+    if (!relation) {
+      throw new Error(
+        `No se encontró relación ManyToMany entre ${schema.name} y ${related_table_name}`
+      );
+    }
+
+    const local_id = (this as any)[relation.localKey];
+    if (!local_id) {
+      throw new Error(`El valor de ${relation.localKey} no está definido`);
+    }
+
+    // 1. Obtener todas las relaciones existentes
+    const scan_result = await requireClient().send(
+      new ScanCommand({
+        TableName: relation.pivotTable,
+        FilterExpression: "#fk = :local_id",
+        ExpressionAttributeNames: { "#fk": relation.foreignKey },
+        ExpressionAttributeValues: marshall({ ":local_id": local_id }),
+      })
+    );
+
+    const existing_ids = new Set(
+      (scan_result.Items || []).map(
+        (item) => unmarshall(item)[relation.relatedKey]
+      )
+    );
+    const target_ids = new Set(related_ids);
+
+    // 2. Detach relaciones que no están en la lista objetivo
+    for (const existing_id of existing_ids) {
+      if (!target_ids.has(existing_id)) {
+        await this.detach(RelatedModel, existing_id);
+      }
+    }
+
+    // 3. Attach nuevas relaciones que no existen
+    for (const target_id of target_ids) {
+      if (!existing_ids.has(target_id)) {
+        await this.attach(RelatedModel, target_id);
+      }
+    }
+  }
+
+  static async create<M extends Table>(
+    this: new (data: any) => M,
+    data: Partial<InferAttributes<M>>,
     tx?: TransactionContext
-  ): Promise<T> {
+  ): Promise<M> {
     const instance = new this(data);
-
-    // Establecer timestamps si corresponde
     const schema = (this as any)[SCHEMA];
-    const now = new Date().toISOString();
 
-    // Solo updatedAt, createdAt se genera via pipeline
-    for(const column_name in schema.columns) {
+    // Validar campos @NotNull antes de guardar
+    for (const column_name in schema.columns) {
       const column = schema.columns[column_name];
-
-      if (column.store?.updatedAt) {
-        // Usar setter para sincronizar closure y VALUES
-        (instance as any)[column_name] = now;
+      if (column.store?.nullable === false) {
+        const value = (instance as any)[column_name];
+        const is_empty =
+          value === null ||
+          value === undefined ||
+          (typeof value === "string" && value.trim() === "");
+        if (is_empty) {
+          const message =
+            column.store.notNullMessage ||
+            `El campo ${column_name} no puede estar vacío`;
+          throw new Error(message);
+        }
       }
     }
 
@@ -464,373 +599,563 @@ export default class Table<T = any> {
       );
     }
 
+    // Marcar instancia como persistida
+    (instance as any).__isPersisted = true;
+
     return instance;
   }
 
-  static async update<T extends Table>(
-    this: new (data: any) => T,
-    updates: any,
-    filters: any,
+  static async update<M extends Table>(
+    this: new (data: any) => M,
+    updates: Partial<InferAttributes<M>>,
+    filters: Partial<InferAttributes<M>>,
     tx?: TransactionContext
   ): Promise<number> {
-    const records = await (this as any).where(filters);
+    const schema = (this as any)[SCHEMA];
 
-    if (records.length === 0) {
-      return 0;
+    // Filtrar solo campos que no son relaciones
+    const parsed_updates: any = {};
+    for (const key in updates) {
+      const column = schema.columns[key];
+      if (!column?.store?.relation) {
+        parsed_updates[key] = updates[key];
+      }
     }
 
-    let updatedCount = 0;
-    const schema = (this as any)[SCHEMA];
-    const client = tx ? null : requireClient();
+    const records = await (this as any).where(filters);
+    if (records.length === 0) return 0;
 
-    for(const record of records) {
-      // Aplicar actualizaciones
-      for(const [key, value] of Object.entries(updates)) {
+    for (const record of records) {
+      // Asignar valores - los setters de la instancia procesarán automáticamente
+      for (const [key, value] of Object.entries(parsed_updates)) {
         (record as any)[key] = value;
       }
 
-      // Actualizar timestamp
-      const now = new Date().toISOString();
-      for(const column_name in schema.columns) {
-        const column = schema.columns[column_name];
-        if (column.store?.updatedAt) {
-          // Usar setter para sincronizar closure y VALUES
-          (record as any)[column_name] = now;
-          break;
-        }
-      }
-
-      const updated_data = (record as any)._toDBPayload();
-
       if (tx) {
-        tx.addPut(schema.name, updated_data);
+        tx.addPut(schema.name, (record as any)._toDBPayload());
       } else {
-        await client!.send(
+        await requireClient().send(
           new PutItemCommand({
             TableName: schema.name,
-            Item: marshall(updated_data, { removeUndefinedValues: true }),
+            Item: marshall((record as any)._toDBPayload(), {
+              removeUndefinedValues: true,
+            }),
           })
         );
       }
-
-      updatedCount++;
     }
 
-    return updatedCount;
+    return records.length;
   }
 
-  static async delete<T extends Table>(
-    this: new (data: any) => T,
-    filters: any,
+  static async delete<M extends Table>(
+    this: new (data: any) => M,
+    filters: Partial<InferAttributes<M>>,
     tx?: TransactionContext
   ): Promise<number> {
     const records = await (this as any).where(filters);
-
-    if (records.length === 0) {
-      return 0;
-    }
+    if (records.length === 0) return 0;
 
     const schema = (this as any)[SCHEMA];
-    const client = tx ? null : requireClient();
-    let deletedCount = 0;
 
-    for(const record of records) {
-      const id = (record as any)[VALUES][schema.primary_key];
+    for (const record of records) {
+      const id = (record as any)[schema.primary_key];
 
       if (id) {
         if (tx) {
           tx.addDelete(schema.name, { [schema.primary_key]: id });
         } else {
-          await client!.send(
+          await requireClient().send(
             new DeleteItemCommand({
               TableName: schema.name,
               Key: marshall({ [schema.primary_key]: id }),
             })
           );
         }
-        deletedCount++;
       }
     }
 
-    return deletedCount;
+    return records.length;
   }
 
-  static async where<T extends Table>(
-    this: new (props?: any) => T,
+  static where<M extends Table>(
+    this: new (props?: any) => M,
+    key: keyof InferAttributes<M>,
+    value: any,
+    options?: SimpleWhereOptions<M>
+  ): Promise<M[]>;
+  static where<M extends Table>(
+    this: new (props?: any) => M,
+    key: keyof InferAttributes<M>,
+    operator: QueryOperator,
+    value: any,
+    options?: SimpleWhereOptions<M>
+  ): Promise<M[]>;
+  static where<M extends Table>(
+    this: new (props?: any) => M,
+    query: object,
+    options?: SimpleWhereOptions<M>
+  ): Promise<M[]>;
+  static async where<M extends Table>(
+    this: new (props?: any) => M,
     field_or_filters: any,
     operator_or_value?: any,
     value?: any,
-    options?: QueryOptions<T>
-  ): Promise<T[]> {
-    const client = requireClient();
+    options?: WhereOptions<M>
+  ): Promise<M[]> {
     const schema = (this as any)[SCHEMA];
 
-    // Parsear argumentos dinámicamente (como el original)
+    // ========================================================================
+    // FASE 1: NORMALIZACIÓN DE ARGUMENTOS
+    // Transforma las 3 sobrecargas en un formato unificado (filters + options)
+    // ========================================================================
     let filters: any;
-    let queryOptions: QueryOptions<T>;
+    let queryOptions: WhereOptions<M>;
     let operator: QueryOperator = "=";
 
-    if (typeof operator_or_value === 'string') {
-      // where(field, operator, value, options?)
-      operator = validateOperator(operator_or_value);
-      filters = { [field_or_filters]: value };
+    if (
+      typeof operator_or_value === "string" &&
+      [
+        "=",
+        "<>",
+        "!=",
+        "<",
+        "<=",
+        ">",
+        ">=",
+        "in",
+        "$eq",
+        "$ne",
+        "$lt",
+        "$lte",
+        "$gt",
+        "$gte",
+        "$in",
+        "$include",
+        "include",
+      ].includes(operator_or_value)
+    ) {
+      operator = operator_or_value as QueryOperator;
+      // Normalizar operadores para DynamoDB
+      if (operator === "!=" || operator === "$ne") {
+        operator = "<>";
+      }
+      // Wrap value in operator object for proper processing
+      if (operator !== "=") {
+        filters = { [field_or_filters]: { [operator]: value } };
+      } else {
+        filters = { [field_or_filters]: value };
+      }
       queryOptions = options || {};
     } else if (value !== undefined) {
-      // where(field, value, options?)
-      filters = { [field_or_filters]: Array.isArray(operator_or_value) ? { in: operator_or_value } : operator_or_value };
+      filters = {
+        [field_or_filters]: Array.isArray(operator_or_value)
+          ? { in: operator_or_value }
+          : operator_or_value,
+      };
       queryOptions = value || {};
-    } else if (operator_or_value !== undefined && typeof operator_or_value === 'object') {
-      // where(filters, options?)
+    } else if (
+      operator_or_value !== undefined &&
+      typeof operator_or_value === "object"
+    ) {
       filters = field_or_filters;
       queryOptions = operator_or_value;
     } else {
-      // where(filters?)
       filters = field_or_filters;
       queryOptions = {};
     }
 
-    // Validar opciones
-    if (queryOptions.limit === 0) return [];
-    if (queryOptions.limit && queryOptions.limit < 0) {
-      throw new Error("limit debe ser mayor o igual a 0");
+    // Validaciones de paginación
+    if (queryOptions.limit !== undefined) {
+      if (queryOptions.limit < 0)
+        throw new Error("limit debe ser mayor o igual a 0");
+      if (queryOptions.limit === 0) return []; // Retorno temprano optimizado
     }
-    if (queryOptions.skip && queryOptions.skip < 0) {
-      throw new Error("skip debe ser mayor o igual a 0");
-    }
-    if (queryOptions.order && !["ASC", "DESC"].includes(queryOptions.order)) {
-      throw new Error('order debe ser "ASC" o "DESC"');
+    if (queryOptions.offset !== undefined && queryOptions.offset < 0)
+      throw new Error("offset debe ser mayor o igual a 0");
+
+    // Validar order: puede ser string "ASC"|"DESC" o objeto { field: "ASC"|"DESC" }
+    if (queryOptions.order) {
+      if (typeof queryOptions.order === "string") {
+        if (!["ASC", "DESC"].includes(queryOptions.order)) {
+          throw new Error('order debe ser "ASC" o "DESC"');
+        }
+      } else if (typeof queryOptions.order === "object") {
+        const keys = Object.keys(queryOptions.order);
+        if (keys.length !== 1) {
+          throw new Error("order object debe tener exactamente un campo");
+        }
+        const direction = queryOptions.order[keys[0]];
+        if (!["ASC", "DESC"].includes(direction)) {
+          throw new Error('order direction debe ser "ASC" o "DESC"');
+        }
+      }
     }
 
-    // Auto-excluir soft deleted
     if (!queryOptions._includeTrashed) {
-      for(const column_name in schema.columns) {
-        const column = schema.columns[column_name];
-        if (column.store?.softDelete && !(column_name in filters)) {
-          filters[column_name] = null;
+      for (const column_name in schema.columns) {
+        if (
+          schema.columns[column_name].store?.softDelete &&
+          !(column_name in filters)
+        ) {
+          // Filtrar registros soft-deleted: donde el campo NO existe (registros activos)
+          filters[column_name] = { $notExists: true };
           break;
         }
       }
     }
 
-    // Construir consulta DynamoDB
-    const { expression, names, values } = buildConditionExpression(filters, operator);
+    // ========================================================================
+    // FASE 2: CONSTRUCCIÓN DE COMANDO DYNAMODB
+    // Construye FilterExpression, ProjectionExpression y parámetros del comando
+    // ========================================================================
+    const expressions: string[] = [];
+    const names: Record<string, string> = {};
+    const values: Record<string, any> = {};
+    const aliases: Record<string, string> = {
+      // Literal operators (identity mapping)
+      "=": "=",
+      "<>": "<>",
+      "!=": "<>",
+      "<": "<",
+      "<=": "<=",
+      ">": ">",
+      ">=": ">=",
+      in: "in",
+      include: "include",
+      contains: "include",
+      // Sugar syntax
+      $eq: "=",
+      $ne: "<>",
+      $lt: "<",
+      $lte: "<=",
+      $gt: ">",
+      $gte: ">=",
+      $in: "in",
+      $include: "include",
+      $contains: "include",
+      "attribute-not-exists": "attribute_not_exists",
+      "attribute-exists": "attribute_exists",
+      $exists: "attribute_exists",
+      $notExists: "attribute_not_exists",
+    };
+    let idx = 0;
+
+    for (const [field, filter_val] of Object.entries(filters)) {
+      if (filter_val === undefined) continue;
+
+      // Mapear nombre de propiedad TS → nombre de columna DB
+      const column = schema.columns[field];
+      const db_field_name = column?.name || field;
+
+      const is_obj =
+        filter_val !== null &&
+        typeof filter_val === "object" &&
+        !Array.isArray(filter_val) &&
+        Object.keys(filter_val).some((k) => k in aliases);
+
+      if (is_obj) {
+        for (const [op_key, op_val] of Object.entries(filter_val)) {
+          if (op_val === undefined) continue;
+          const op = aliases[op_key] || op_key;
+          if (
+            ![
+              "=",
+              "<>",
+              "!=",
+              "<",
+              "<=",
+              ">",
+              ">=",
+              "in",
+              "include",
+              "attribute_not_exists",
+              "attribute_exists",
+            ].includes(op)
+          )
+            continue;
+
+          const name_key = `#attr${idx}`;
+          const val_key = `:val${idx}`;
+          names[name_key] = db_field_name;
+
+          if (op === "in" && Array.isArray(op_val)) {
+            if (op_val.length === 0) {
+              throw new Error(
+                `Operador 'in' requiere un array no vacío. Para buscar sin filtro, omite el operador.`
+              );
+            }
+            // DynamoDB no soporta IN nativo, usar OR chain
+            const or_conditions = op_val.map((v, i) => {
+              const k = `${val_key}_${i}`;
+              values[k] = v;
+              return `${name_key} = ${k}`;
+            });
+            expressions.push(`(${or_conditions.join(" OR ")})`);
+          } else if (op === "include") {
+            values[val_key] = op_val;
+            // $include: if field is array, checks includes; if string, checks contains (LIKE)
+            expressions.push(`contains(${name_key}, ${val_key})`);
+          } else if (op === "attribute_not_exists") {
+            expressions.push(`attribute_not_exists(${name_key})`);
+          } else if (op === "attribute_exists") {
+            expressions.push(`attribute_exists(${name_key})`);
+          } else if (op === "!=" || op === "<>") {
+            if (op_val === null) {
+              expressions.push(`attribute_exists(${name_key})`);
+            } else {
+              values[val_key] = op_val;
+              expressions.push(`${name_key} <> ${val_key}`);
+            }
+          } else {
+            values[val_key] = op_val;
+            expressions.push(`${name_key} ${op} ${val_key}`);
+          }
+          idx++;
+        }
+      } else if (filter_val === null) {
+        const name_key = `#attr${idx}`;
+        names[name_key] = db_field_name;
+        expressions.push(`attribute_not_exists(${name_key})`);
+        idx++;
+      } else if (filter_val !== null) {
+        const name_key = `#attr${idx}`;
+        const val_key = `:val${idx}`;
+        names[name_key] = db_field_name;
+        values[val_key] = filter_val;
+        expressions.push(`${name_key} ${operator} ${val_key}`);
+        idx++;
+      }
+    }
 
     const scanParams: any = {
       TableName: schema.name,
-      ExpressionAttributeNames: names || {},
+      ExpressionAttributeNames: names,
     };
 
-    if (expression) {
-      scanParams.FilterExpression = expression;
-      scanParams.ExpressionAttributeValues = marshall(values || {}, { removeUndefinedValues: true });
+    if (expressions.length > 0) {
+      scanParams.FilterExpression = expressions.join(" AND ");
+      // Only add ExpressionAttributeValues if there are actual values
+      if (Object.keys(values).length > 0) {
+        scanParams.ExpressionAttributeValues = marshall(values, {
+          removeUndefinedValues: true,
+        });
+      }
     }
 
-    // Proyección solo si hay atributos específicos (ignorar array vacío)
     if (queryOptions.attributes && queryOptions.attributes.length > 0) {
-      const projectionExpressions = queryOptions.attributes.map((attr, index) => {
-        const aliasKey = `#proj${index}`;
-        scanParams.ExpressionAttributeNames[aliasKey] = String(attr);
-        return aliasKey;
-      });
+      const projectionExpressions = queryOptions.attributes.map(
+        (attr, index) => {
+          const aliasKey = `#proj${index}`;
+          // Mapear nombre de propiedad TS → nombre de columna DB
+          const column = schema.columns[String(attr)];
+          const db_attr_name = column?.name || String(attr);
+          scanParams.ExpressionAttributeNames[aliasKey] = db_attr_name;
+          return aliasKey;
+        }
+      );
       scanParams.ProjectionExpression = projectionExpressions.join(", ");
     }
 
-    // Limpiar ExpressionAttributeNames si está vacío (DynamoDB lo rechaza)
     if (Object.keys(scanParams.ExpressionAttributeNames).length === 0) {
       delete scanParams.ExpressionAttributeNames;
     }
 
-    // Ejecutar consulta con paginación
+    // ========================================================================
+    // FASE 3: EJECUCIÓN Y MAPEO
+    // Ejecuta comando(s), ordena resultados completos y aplica paginación
+    // ========================================================================
     let allItems: any[] = [];
     let lastEvaluatedKey: any = undefined;
-    let scannedCount = 0;
-    const targetSkip = queryOptions.skip || 0;
-    const targetLimit = queryOptions.limit ?? 100;
 
+    // 1. Escanear TODOS los items que coinciden con el filtro
     do {
-      if (lastEvaluatedKey) {
-        scanParams.ExclusiveStartKey = lastEvaluatedKey;
-      }
+      if (lastEvaluatedKey) scanParams.ExclusiveStartKey = lastEvaluatedKey;
 
-      const result = await client.send(new ScanCommand(scanParams));
+      const result = await requireClient().send(new ScanCommand(scanParams));
 
       if (result.Items) {
         const items = result.Items.map((item) => {
           const raw = unmarshall(item);
-          // Limpiar null/undefined
           for (const k of Object.keys(raw)) {
-            if (raw[k] === null || raw[k] === undefined) {
-              delete raw[k];
-            }
+            if (raw[k] === null || raw[k] === undefined) delete raw[k];
           }
           return raw;
         });
-
-        for (const item of items) {
-          if (scannedCount < targetSkip) {
-            scannedCount++;
-            continue;
-          }
-          if (allItems.length >= targetLimit) break;
-
-          allItems.push(item);
-          scannedCount++;
-        }
+        allItems.push(...items);
       }
 
       lastEvaluatedKey = result.LastEvaluatedKey;
-    } while (lastEvaluatedKey && allItems.length < targetLimit);
+    } while (lastEvaluatedKey);
 
-    // Aplicar ordenamiento
+    // 2. Ordenar ANTES de aplicar paginación (para resultados determinísticos)
     if (queryOptions.order) {
+      let sortField = schema.primary_key;
+      let sortDirection: "ASC" | "DESC" = "ASC";
+
+      // Determinar campo y dirección de ordenamiento
+      if (typeof queryOptions.order === "string") {
+        // Sintaxis string: usar created_at o primary_key
+        sortDirection = queryOptions.order;
+        for (const column_name in schema.columns) {
+          if (schema.columns[column_name].store?.createdAt) {
+            sortField = column_name;
+            break;
+          }
+        }
+      } else {
+        // Sintaxis objeto: { fieldName: "ASC"|"DESC" }
+        const fieldName = Object.keys(queryOptions.order)[0];
+        sortField = fieldName;
+        sortDirection = queryOptions.order[fieldName];
+      }
+
       allItems.sort((a, b) => {
-        const sortField = Object.keys(filters)[0] || schema.primary_key;
         const aVal = a[sortField];
         const bVal = b[sortField];
-
-        if (aVal < bVal) return queryOptions.order === "ASC" ? -1 : 1;
-        if (aVal > bVal) return queryOptions.order === "ASC" ? 1 : -1;
+        if (aVal < bVal) return sortDirection === "ASC" ? -1 : 1;
+        if (aVal > bVal) return sortDirection === "ASC" ? 1 : -1;
         return 0;
       });
     }
 
-    // Convertir a instancias (schema ya definido arriba)
-    const instances = allItems.map((item) => {
-      if (queryOptions.attributes) {
-        // Proyección parcial: crear instancia con solo los atributos solicitados
-        const instance = Object.create(this.prototype);
-        (instance as any)[VALUES] = item;
+    // 3. Aplicar paginación DESPUÉS de ordenar (soporta skip como alias de offset)
+    const targetSkip = queryOptions.skip ?? queryOptions.offset ?? 0;
+    const targetLimit = queryOptions.limit ?? allItems.length;
+    allItems = allItems.slice(targetSkip, targetSkip + targetLimit);
 
-        // Definir getters para los atributos proyectados
+    const instances = allItems.map((item) => {
+      // Mapear nombres de DB → propiedades TS
+      const mapped_item = (this as any)._mapDBToProperties(item);
+
+      if (queryOptions.attributes) {
+        const instance = Object.create(this.prototype);
         for (const attr of queryOptions.attributes) {
           const column = schema.columns[attr];
           if (column) {
+            const value = mapped_item[attr] ?? null;
             Object.defineProperty(instance, attr, {
               enumerable: true,
               configurable: true,
-              get: () => {
-                let value = (instance[VALUES] as any)[attr] ?? null;
-                // Aplicar get pipeline
-                for (const fn of column.get) {
-                  value = fn(value);
-                }
-                return value;
-              }
+              get: () => column.get.reduce((v: any, fn: any) => fn(v), value),
             });
           }
         }
         return instance;
-      } else {
-        return new this(item);
       }
+      const instance = new this(mapped_item);
+      (instance as any).__isPersisted = true;
+      return instance;
     });
 
-    // Procesar includes para cargar relaciones
     if (queryOptions.include) {
-      await processIncludes(instances, queryOptions.include, this);
+      await processIncludes(instances, queryOptions.include as any, this);
     }
 
     return instances;
   }
 
-  static async first<T extends Table>(
-    this: new (props?: any) => T,
+  static async first<M extends Table>(
+    this: new (props?: any) => M,
     field_or_filters: any,
     operator_or_value?: any,
     value_or_options?: any
-  ): Promise<T | undefined> {
-    const results = await (this as any).where(field_or_filters, operator_or_value, value_or_options, { limit: 1 });
+  ): Promise<M | undefined> {
+    // Detect call pattern and merge options appropriately
+    let results: M[];
+
+    if (
+      arguments.length === 2 &&
+      typeof operator_or_value === "object" &&
+      !Array.isArray(operator_or_value) &&
+      operator_or_value !== null
+    ) {
+      // Called as first(query, options) - 2 args
+      const options = { ...operator_or_value, limit: 1 };
+      results = await (this as any).where(field_or_filters, options);
+    } else {
+      // Called as first(field, operator, value, options) - 3-4 args
+      const options =
+        typeof value_or_options === "object" && !Array.isArray(value_or_options)
+          ? { ...value_or_options, limit: 1 }
+          : { limit: 1 };
+      results = await (this as any).where(
+        field_or_filters,
+        operator_or_value,
+        value_or_options,
+        options
+      );
+    }
+
     return results[0];
   }
 
-  static async last<T extends Table>(
-    this: new (props?: any) => T,
+  static async last<M extends Table>(
+    this: new (props?: any) => M,
     field_or_filters?: any,
     operator_or_value?: any
-  ): Promise<T | undefined> {
+  ): Promise<M | undefined> {
     if (field_or_filters === undefined) {
-      const results = await (this as any).where({}, { order: 'DESC', limit: 1 });
+      // Called as last() or last(options)
+      const options =
+        typeof operator_or_value === "object" &&
+        !Array.isArray(operator_or_value)
+          ? { ...operator_or_value, order: "DESC", limit: 1 }
+          : { order: "DESC", limit: 1 };
+      const results = await (this as any).where({}, options);
+      return results[0];
+    }
+
+    // Called as last(query) or last(query, options) - 1-2 args
+    if (
+      typeof operator_or_value === "object" &&
+      !Array.isArray(operator_or_value) &&
+      operator_or_value !== null
+    ) {
+      // 2 args: last(query, options)
+      const options = { ...operator_or_value, order: "DESC", limit: 1 };
+      const results = await (this as any).where(field_or_filters, options);
       return results[0];
     } else {
-      const results = await (this as any).where(field_or_filters, operator_or_value, undefined, { order: 'DESC', limit: 1 });
+      // 1 arg: last(query) - no options provided
+      const results = await (this as any).where(field_or_filters, {
+        order: "DESC",
+        limit: 1,
+      });
       return results[0];
     }
   }
 
-  static async withTrashed<T extends Table>(
-    this: new (props?: any) => T,
+  static async withTrashed<M extends Table>(
+    this: new (props?: any) => M,
     filters?: any,
-    options?: QueryOptions<T>
-  ): Promise<T[]> {
-    return await (this as any).where(filters ?? {}, { ...options, _includeTrashed: true });
+    options?: WhereOptions<M>
+  ): Promise<M[]> {
+    return await (this as any).where(filters ?? {}, {
+      ...options,
+      _includeTrashed: true,
+    });
   }
 
-  static async onlyTrashed<T extends Table>(
-    this: new (props?: any) => T,
+  static async onlyTrashed<M extends Table>(
+    this: new (props?: any) => M,
     filters?: any,
-    options?: QueryOptions<T>
-  ): Promise<T[]> {
+    options?: WhereOptions<M>
+  ): Promise<M[]> {
     const schema = (this as any)[SCHEMA];
-    let softDeleteColumn: string | null = null;
 
-    for(const column_name in schema.columns) {
-      const column = schema.columns[column_name];
-      if (column.store?.softDelete) {
-        softDeleteColumn = column_name;
-        break;
+    for (const column_name in schema.columns) {
+      if (schema.columns[column_name].store?.softDelete) {
+        return await (this as any).where(
+          {
+            ...filters,
+            [column_name]: { "!=": null },
+          },
+          { ...options, _includeTrashed: true }
+        );
       }
     }
 
-    if (!softDeleteColumn) {
-      throw new Error("onlyTrashed() requiere un campo @SoftDelete configurado");
-    }
-
-    const merged_filters = {
-      ...filters,
-      [softDeleteColumn]: { "!=": null },
-    };
-
-    return await (this as any).where(merged_filters, { ...options, _includeTrashed: true });
-  }
-
-  // **Métodos privados para DynamoDB**
-
-  private async insertIntoDynamoDB(data: any): Promise<void> {
-    const client = requireClient();
-    const schema = (this.constructor as any)[SCHEMA];
-
-    await client.send(
-      new PutItemCommand({
-        TableName: schema.name,
-        Item: marshall(data, { removeUndefinedValues: true }),
-      })
-    );
-  }
-
-  private async updateInDynamoDB(data: any): Promise<void> {
-    const client = requireClient();
-    const schema = (this.constructor as any)[SCHEMA];
-
-    await client.send(
-      new PutItemCommand({
-        TableName: schema.name,
-        Item: marshall(data, { removeUndefinedValues: true }),
-      })
-    );
-  }
-
-  private async deleteFromDynamoDB(id: any): Promise<void> {
-    const client = requireClient();
-    const schema = (this.constructor as any)[SCHEMA];
-
-    await client.send(
-      new DeleteItemCommand({
-        TableName: schema.name,
-        Key: marshall({ [schema.primary_key]: id }),
-      })
-    );
+    throw new Error("onlyTrashed() requiere un campo @SoftDelete configurado");
   }
 }
-
-// Exportar tipos para uso público
-export type { QueryOptions, IncludeRelationOptions, QueryOperator };

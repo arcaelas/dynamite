@@ -5,7 +5,7 @@
  * @fecha 2025-01-28
  */
 
-import { decorator, ensureSchema } from "../core/decorator";
+import { decorator, SCHEMA } from "../core/decorator";
 
 /**
  * @description Decorador para marcar propiedad como Partition Key
@@ -46,24 +46,16 @@ export const IndexSort = decorator((_schema, col) => {
  * }
  * ```
  */
-export function PrimaryKey(): PropertyDecorator {
-  return (target: object, prop: string | symbol): void => {
-    const table_class = target.constructor;
-    const column_name = String(prop);
-    const schema = ensureSchema(table_class);
+export const PrimaryKey = decorator((table_class, col) => {
+  const schema = (table_class as any)[SCHEMA];
 
-    // Crear columna si no existe
-    if (!schema.columns[column_name]) {
-      schema.columns[column_name] = { name: column_name, get: [], set: [], store: {} };
-    }
+  // Configurar como primary key
+  Object.assign(col.store, {
+    index: true,
+    primaryKey: true,
+    nullable: false
+  });
 
-    // Configurar como primary key
-    Object.assign(schema.columns[column_name].store, {
-      index: true,
-      primaryKey: true,
-      nullable: false
-    });
-
-    schema.primary_key = column_name;
-  };
-}
+  // Obtener nombre de columna desde col.name
+  schema.primary_key = col.name;
+});
