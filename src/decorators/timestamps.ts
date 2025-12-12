@@ -8,8 +8,8 @@
 import { decorator } from "../core/decorator";
 
 /**
- * @description Decorador que establece automáticamente la fecha/hora de creación.
- * El valor se genera solo si no existe uno previo.
+ * @description Decorador que establece automáticamente la fecha/hora de creación usando pipelines.
+ * El valor se genera en el getter si no existe, y se preserva en el setter.
  * @example
  * ```typescript
  * class User extends Table<User> {
@@ -19,13 +19,16 @@ import { decorator } from "../core/decorator";
  * ```
  */
 export const CreatedAt = decorator((_schema, col) => {
-  col.store.createdAt = true;
+  // Getter: asignar timestamp si no existe (solo primera vez)
   col.get.push((value: any) => value ?? new Date().toISOString());
+
+  // Setter: preservar valor si ya existe, ignorar intentos de cambio
+  col.set.push((current: any, next: any) => current ?? next ?? new Date().toISOString());
 });
 
 /**
- * @description Decorador que marca una propiedad para que se actualice automáticamente
- * con la fecha/hora actual cada vez que se guarde el modelo.
+ * @description Decorador que actualiza automáticamente la fecha/hora en cada asignación usando pipelines.
+ * El timestamp se actualiza cada vez que se escribe en la propiedad.
  * @example
  * ```typescript
  * class User extends Table<User> {
@@ -36,7 +39,11 @@ export const CreatedAt = decorator((_schema, col) => {
  * ```
  */
 export const UpdatedAt = decorator((_schema, col) => {
-  col.store.updatedAt = true;
+  // Getter: retornar valor actual o timestamp si no existe
+  col.get.push((value: any) => value ?? new Date().toISOString());
+
+  // Setter: siempre actualizar con nuevo timestamp (ignora el valor pasado)
+  col.set.push((_current: any, _next: any) => new Date().toISOString());
 });
 
 /**

@@ -7,7 +7,6 @@
 
 // Symbols para autocontención (exportados desde table.ts pero también aquí compatibilidad)
 export const SCHEMA = Symbol('dynamite:schema');
-export const VALUES = Symbol('dynamite:values');
 
 // Helper simple para snake_case plural
 function toSnakePlural(str: string): string {
@@ -39,8 +38,8 @@ export function decorator(
       const table_class = target.constructor;
       const column_name = String(propertyKey);
 
-      // Inicializar SCHEMA si no existe
-      if (!table_class[SCHEMA]) {
+      // Inicializar SCHEMA SI NO TIENE UNO PROPIO (no heredado)
+      if (!Object.prototype.hasOwnProperty.call(table_class, SCHEMA)) {
         table_class[SCHEMA] = {
           name: toSnakePlural(table_class.name),
           primary_key: 'id',
@@ -82,7 +81,8 @@ export function relationDecorator(
     const table_class = target.constructor;
     const column_name = String(propertyKey);
 
-    if (!table_class[SCHEMA]) {
+    // Inicializar SCHEMA SI NO TIENE UNO PROPIO (no heredado)
+    if (!Object.prototype.hasOwnProperty.call(table_class, SCHEMA)) {
       table_class[SCHEMA] = {
         name: toSnakePlural(table_class.name),
         primary_key: 'id',
@@ -113,36 +113,3 @@ export function relationDecorator(
   };
 }
 
-/**
- * @description Función helper para obtener metadatos del esquema
- * @param ctor Constructor de la clase
- * @returns SchemaEntry
- */
-export function getSchema(ctor: Function): any {
-  const schema = (ctor as any)[SCHEMA];
-  if (!schema) {
-    throw new Error(
-      `Schema not found for ${ctor.name}. Use decorators first.`
-    );
-  }
-  return schema;
-}
-
-/**
- * @description Función helper para verificar que existe esquema
- * @param ctor Constructor de la clase
- * @returns SchemaEntry
- */
-export function ensureSchema(ctor: Function): any {
-  if (!(ctor as any)[SCHEMA]) {
-    (ctor as any)[SCHEMA] = {
-      name: toSnakePlural(ctor.name),
-      primary_key: 'id',
-      columns: {}
-    };
-  }
-  return (ctor as any)[SCHEMA];
-}
-
-// Exportar symbols para compatibilidad
-export { toSnakePlural };

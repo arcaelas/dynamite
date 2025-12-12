@@ -10,34 +10,39 @@ export { Dynamite } from "./core/client";
 export { default as Table } from "./core/table";
 
 // Factory para crear decoradores personalizados
-export { decorator, relationDecorator, SCHEMA, VALUES } from "./core/decorator";
+export { decorator, relationDecorator, SCHEMA } from "./core/decorator";
 
 // Decoradores - Índices
 export { Index, IndexSort, PrimaryKey } from "./decorators/indexes";
 
 // Decoradores - Timestamps
-export { CreatedAt, DeleteAt, UpdatedAt } from "./decorators/timestamps";
+export { CreatedAt, UpdatedAt, DeleteAt } from "./decorators/timestamps";
 
 // Decoradores - Transformación
-export {
-  Default,
-  Mutate,
-  Name,
-  NotNull,
-  Serialize,
-  Validate,
-} from "./decorators/transforms";
+export { Default, Mutate, Validate, Serialize, NotNull, Name, Column } from "./decorators/transforms";
 
 // Decoradores - Relaciones
-export { BelongsTo, HasMany, HasOne } from "./decorators/relations";
+export { HasMany, BelongsTo, HasOne, ManyToMany } from "./decorators/relations";
 
-// Tipos simplificados (sin @types complejos)
+// Sistema de tipos simplificado
 export type {
-  IncludeRelationOptions,
+  // Brands
+  NonAttribute,
+  CreationOptional,
+
+  // Core
+  InferAttributes,
+  InferRelations,
+  WhereOptions,
   QueryOperator,
-  QueryOptions,
-} from "./core/table";
+
+  // Input
+  CreateInput,
+  UpdateInput,
+
+  // Auxiliares
+  PickRelations,
+} from "./@types/index";
 
 // Re-exportar TransactionContext para compatibilidad
-export * from "./@types/index";
 export { TransactionContext } from "./core/client";

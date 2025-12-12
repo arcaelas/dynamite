@@ -9,22 +9,20 @@
     "url": "https://github.com/arcaelas/dynamite/issues"
   },
   "dependencies": {
+    "@arcaelas/utils": "^2.0.8",
     "@aws-sdk/client-dynamodb": "3.329.0",
     "@aws-sdk/lib-dynamodb": "3.329.0",
     "pluralize": "^8.0.0",
     "uuid": "^11.1.0"
   },
   "devDependencies": {
-    "@types/jest": "^30.0.0",
+    "@eslint/js": "^9.39.1",
     "@types/node": "^24.0.6",
-    "jest": "^30.0.3",
-    "reflect-metadata": "^0.2.2",
-    "ts-jest": "^29.4.0",
-    "ts-node": "^10.9.2",
+    "globals": "^16.5.0",
     "tsc-alias": "^1.8.16",
-    "tsconfig-paths": "^4.2.0",
     "tsx": "^4.20.3",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.49.0"
   },
   "files": [
     "src/**/*.js",
@@ -48,44 +46,15 @@
     "deploy": "npm version patch && npm publish --access=public",
     "prepublishOnly": "yarn build",
     "postpublish": "find src -type f \\( -name '*.js' -o -name '*.d.ts' -o -name '*.map' \\) -delete",
+    "seed:generate": "tsx scripts/generate_seed.ts",
+    "seed:load": "tsx scripts/load_seed.ts",
+    "seed:full": "yarn seed:generate && yarn seed:load",
     "test": "yarn test:db:start && yarn test:run; yarn test:db:stop",
-    "test:run": "node --expose-gc ./node_modules/.bin/jest src/index.test.ts --runInBand --verbose",
-    "test:watch": "yarn test:db:start && node --expose-gc ./node_modules/.bin/jest src/index.test.ts --watch --runInBand",
+    "test:run": "NODE_OPTIONS='--expose-gc' tsx --tsconfig tsx.config.json src/index.test.ts",
+    "test:watch": "yarn test:db:start && NODE_OPTIONS='--expose-gc' tsx watch src/index.test.ts",
     "test:db:start": "docker run -d -p 8000:8000 --name dynamite-test-db amazon/dynamodb-local -jar DynamoDBLocal.jar -sharedDb || echo 'DynamoDB ya está corriendo'",
     "test:db:stop": "docker stop dynamite-test-db && docker rm dynamite-test-db || true",
     "test:db:clean": "docker stop dynamite-test-db && docker rm dynamite-test-db; docker run -d -p 8000:8000 --name dynamite-test-db amazon/dynamodb-local -jar DynamoDBLocal.jar -sharedDb"
   },
-  "version": "1.0.19",
-  "jest": {
-    "preset": "ts-jest",
-    "testEnvironment": "node",
-    "roots": [
-      "<rootDir>/src"
-    ],
-    "testMatch": [
-      "**/*.test.ts"
-    ],
-    "moduleNameMapper": {
-      "^~/(.*)$": "<rootDir>/src/$1",
-      "^@type/(.*)$": "<rootDir>/src/@types/$1"
-    },
-    "transform": {
-      "^.+\\.ts$": [
-        "ts-jest",
-        {
-          "tsconfig": {
-            "experimentalDecorators": true,
-            "emitDecoratorMetadata": true,
-            "esModuleInterop": true,
-            "target": "ES2022",
-            "module": "commonjs"
-          }
-        }
-      ]
-    },
-    "testTimeout": 60000,
-    "maxWorkers": 1,
-    "detectOpenHandles": false,
-    "forceExit": true
-  }
+  "version": "1.0.19"
 }
