@@ -169,9 +169,14 @@ Dynamite basiert auf drei Kernkonzepten:
 ## Nächste Schritte
 
 - **[Installationsanleitung](installation.md)** - Richten Sie Dynamite in Ihrem Projekt ein
-- **[Erste Schritte](guides/getting-started.md)** - Ihr erstes Dynamite-Modell
-- **[Kernkonzepte](guides/core-concepts.md)** - Die Grundlagen verstehen
-- **[API-Referenz](api/table.md)** - Vollständige API-Dokumentation
+- **[Erste Schritte](getting-started.md)** - Ihr erstes Dynamite-Modell
+- **[Kernkonzepte](references/core-concepts.md)** - Die Grundlagen verstehen
+- **[API-Referenz](references/table.md)** - Vollständige API-Dokumentation
+- **[Beispiele](examples/basic.md)** - Praktische Beispiele
+  - [Grundlegend](examples/basic.md) - CRUD-Operationen
+  - [Beziehungen](examples/relations.md) - HasMany, BelongsTo, ManyToMany
+  - [Fortgeschritten](examples/advanced.md) - Komplexe Abfragen und Muster
+- **[Changelog](changelog.md)** - Versionshistorie
 
 ## Community
 

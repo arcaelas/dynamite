@@ -5,17 +5,17 @@ Este ejemplo completo demuestra patrones de consulta avanzados, paginación, fil
 ## Tabla de Contenidos
 
 - [Operadores de Consulta](#operadores-de-consulta)
-- [Consultas de Comparación](#consultas-de-comparación)
+- [Consultas de Comparacion](#consultas-de-comparacion)
 - [Consultas de Array](#consultas-de-array)
 - [Consultas de String](#consultas-de-string)
-- [Paginación](#paginación)
-- [Ordenamiento y Clasificación](#ordenamiento-y-clasificación)
-- [Selección de Atributos](#selección-de-atributos)
+- [Paginacion](#paginacion)
+- [Ordenamiento y Clasificacion](#ordenamiento-y-clasificacion)
+- [Seleccion de Atributos](#seleccion-de-atributos)
 - [Filtrado Complejo](#filtrado-complejo)
 - [Ejemplo Completo Funcional](#ejemplo-completo-funcional)
 - [Salida Esperada](#salida-esperada)
-- [Optimización de Rendimiento](#optimización-de-rendimiento)
-- [Mejores Prácticas](#mejores-prácticas)
+- [Optimizacion de Rendimiento](#optimizacion-de-rendimiento)
+- [Mejores Practicas](#mejores-practicas)
 
 ## Operadores de Consulta
 
@@ -1060,7 +1060,7 @@ async function get_users_1() {
 ### Referencias de API
 
 - [API de Table](../references/table.md) - Documentación completa de la clase Table
-- [Operadores de Consulta](../references/core-concepts.md#query-operators) - Todos los operadores disponibles
+- [Operadores de Consulta](../references/core-concepts.es.md#operadores-de-consulta) - Todos los operadores disponibles
 - [Guía de Decoradores](../references/decorators.md) - Todos los decoradores disponibles
 
 ¡Feliz consulta con Dynamite!

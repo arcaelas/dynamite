@@ -14,6 +14,28 @@ und dieses Projekt hält sich an [Semantische Versionierung](https://semver.org/
 
 ---
 
+## [1.0.21] - 2025-12-13
+
+### Behoben
+- **mkdocs.yml**: Navigationsstruktur korrigiert, die auf nicht existierende Pfade verwies (`guides/`, `api/`)
+- **TOC-Anker**: 47 defekte Ankerlinks in ES/DE-Dokumentationsdateien behoben
+  - Akzente aus Ankern entfernt (`#introducción` → `#introduccion`)
+  - Dreifach-Strich-Anker korrigiert (`#primarykey---claves` → `#primarykey-claves`)
+- **docs/index.es.md, docs/index.de.md**: Startseiten-Links auf korrekte Pfade korrigiert
+- **docs/installation.*.md**: API-Referenzlinks korrigiert (`./api/table.md` → `./references/table.md`)
+- **docs/getting-started.*.md**: Core-Concepts- und Beispiel-Links korrigiert
+- **docs/references/client.*.md**: Decorators-Linkformat korrigiert (`./decorators/` → `./decorators.md`)
+- **docs/references/decorators.de.md**: TOC-Einträge für nicht existierende Abschnitte entfernt (Datei unvollständig)
+- **docs/examples/relations.*.md**: Decorator-Referenzlinks auf korrekte Anker korrigiert
+- **docs/examples/advanced.*.md**: Core-Concepts-Querverweislink korrigiert
+
+### Dokumentation
+- Alle MkDocs-Build-Warnungen behoben (von 47 auf 0 defekte Links)
+- Mehrsprachige Dokumentationskonsistenz verbessert (EN/ES/DE)
+- Deutsche Navigationsleiste auf 404-Seiten aufgrund falscher Linkpfade behoben
+
+---
+
 ## [1.0.20] - 2025-12-12
 
 ### Hinzugefügt
@@ -184,7 +206,8 @@ Dies ist eine stabile Version von @arcaelas/dynamite - ein modernes, Decorator-f
 
 ## Versionsverlauf-Zusammenfassung
 
-- **v1.0.20** (Aktuell) - Dokumentationsumstrukturierung, Codebasis-Optimierung, API.md-Erstellung
+- **v1.0.21** (Aktuell) - Dokumentationslink-Korrekturen, TOC-Anker-Korrekturen, mehrsprachige Konsistenz
+- **v1.0.20** - Dokumentationsumstrukturierung, Codebasis-Optimierung, API.md-Erstellung
 - **v1.0.17** - @Serialize, @DeleteAt, Dynamite.tx()-Transaktionen hinzugefügt
 - **v1.0.13** - Stabile Version mit vollständigem Funktionsumfang
 - **v1.0.0** - Erste öffentliche Veröffentlichung

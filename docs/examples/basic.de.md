@@ -6,14 +6,14 @@ Dieses Beispiel demonstriert eine einfache CRUD-Anwendung (Create, Read, Update,
 
 - [Modelldefinition](#modelldefinition)
 - [Einrichtung und Konfiguration](#einrichtung-und-konfiguration)
-- [Datensätze Erstellen](#datensätze-erstellen)
-- [Datensätze Lesen](#datensätze-lesen)
-- [Datensätze Aktualisieren](#datensätze-aktualisieren)
-- [Datensätze Löschen](#datensätze-löschen)
-- [Vollständiges Funktionierendes Beispiel](#vollständiges-funktionierendes-beispiel)
+- [Datensatze Erstellen](#datensatze-erstellen)
+- [Datensatze Lesen](#datensatze-lesen)
+- [Datensatze Aktualisieren](#datensatze-aktualisieren)
+- [Datensatze Loschen](#datensatze-loschen)
+- [Vollstandiges Funktionierendes Beispiel](#vollstandiges-funktionierendes-beispiel)
 - [Erwartete Ausgabe](#erwartete-ausgabe)
-- [Schlüsselkonzepte](#schlüsselkonzepte)
-- [Nächste Schritte](#nächste-schritte)
+- [Schlusselkonzepte](#schlusselkonzepte)
+- [Nachste Schritte](#nachste-schritte)
 
 ## Modelldefinition
 

@@ -14,6 +14,28 @@ y este proyecto adhiere a [Versionado Semántico](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.21] - 2025-12-13
+
+### Corregido
+- **mkdocs.yml**: Corregida la estructura de navegación que apuntaba a rutas inexistentes (`guides/`, `api/`)
+- **Anclas TOC**: Corregidos 47 enlaces de anclas rotos en archivos de documentación ES/DE
+  - Eliminados acentos de anclas (`#introducción` → `#introduccion`)
+  - Corregidos anclas con triple guión (`#primarykey---claves` → `#primarykey-claves`)
+- **docs/index.es.md, docs/index.de.md**: Corregidos enlaces de página de inicio a rutas correctas
+- **docs/installation.*.md**: Corregidos enlaces de referencia API (`./api/table.md` → `./references/table.md`)
+- **docs/getting-started.*.md**: Corregidos enlaces de core-concepts y ejemplos
+- **docs/references/client.*.md**: Corregido formato de enlace de decoradores (`./decorators/` → `./decorators.md`)
+- **docs/references/decorators.de.md**: Eliminadas entradas TOC para secciones inexistentes (archivo incompleto)
+- **docs/examples/relations.*.md**: Corregidos enlaces de referencia de decoradores a anclas correctas
+- **docs/examples/advanced.*.md**: Corregido enlace de referencia cruzada de core-concepts
+
+### Documentación
+- Resueltas todas las advertencias de compilación de MkDocs (de 47 a 0 enlaces rotos)
+- Mejorada la consistencia de documentación multilingüe (EN/ES/DE)
+- Corregida la barra de navegación alemana que aparecía en páginas 404 debido a rutas de enlaces incorrectas
+
+---
+
 ## [1.0.20] - 2025-12-12
 
 ### Agregado
@@ -184,7 +206,8 @@ Esta es una versión estable de @arcaelas/dynamite - un ORM moderno basado en de
 
 ## Resumen del Historial de Versiones
 
-- **v1.0.20** (Actual) - Reestructuración de documentación, optimización del código base, creación de API.md
+- **v1.0.21** (Actual) - Corrección de enlaces de documentación, anclas TOC, consistencia multilingüe
+- **v1.0.20** - Reestructuración de documentación, optimización del código base, creación de API.md
 - **v1.0.17** - Agregado @Serialize, @DeleteAt, transacciones Dynamite.tx()
 - **v1.0.13** - Versión estable con conjunto completo de características
 - **v1.0.0** - Versión pública inicial

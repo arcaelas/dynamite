@@ -5,11 +5,11 @@ Esta guía te ayuda a migrar a Dynamite desde otros ORMs o actualizar entre vers
 ## Tabla de Contenidos
 
 - [Migrar desde Otros ORMs](#migrar-desde-otros-orms)
-- [Guía de Actualización de Versión](#guía-de-actualización-de-versión)
-- [Migración de Esquema](#migración-de-esquema)
-- [Migración de Datos](#migración-de-datos)
+- [Guia de Actualizacion de Version](#guia-de-actualizacion-de-version)
+- [Migracion de Esquema](#migracion-de-esquema)
+- [Migracion de Datos](#migracion-de-datos)
 - [Pruebas de Migraciones](#pruebas-de-migraciones)
-- [Despliegue en Producción](#despliegue-en-producción)
+- [Despliegue en Produccion](#despliegue-en-produccion)
 
 ## Migrar desde Otros ORMs
 

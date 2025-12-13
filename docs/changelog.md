@@ -14,6 +14,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.21] - 2025-12-13
+
+### Fixed
+- **mkdocs.yml**: Corrected navigation structure pointing to non-existent paths (`guides/`, `api/`)
+- **TOC anchors**: Fixed 47 broken anchor links across ES/DE documentation files
+  - Removed accents from anchors (`#introducción` → `#introduccion`)
+  - Fixed triple-dash anchors (`#primarykey---claves` → `#primarykey-claves`)
+- **docs/index.es.md, docs/index.de.md**: Fixed homepage links to correct paths
+- **docs/installation.*.md**: Fixed API reference links (`./api/table.md` → `./references/table.md`)
+- **docs/getting-started.*.md**: Fixed core-concepts and examples links
+- **docs/references/client.*.md**: Fixed decorators link format (`./decorators/` → `./decorators.md`)
+- **docs/references/decorators.de.md**: Removed TOC entries for non-existent sections (file is incomplete)
+- **docs/examples/relations.*.md**: Fixed decorator reference links to correct anchors
+- **docs/examples/advanced.*.md**: Fixed core-concepts cross-reference link
+
+### Documentation
+- Resolved all MkDocs build warnings (from 47 to 0 broken links)
+- Improved multilingual documentation consistency (EN/ES/DE)
+- Fixed German navbar appearing on 404 pages due to incorrect link paths
+
+---
+
 ## [1.0.20] - 2025-12-12
 
 ### Added
@@ -184,7 +206,8 @@ This is a stable release of @arcaelas/dynamite - a modern, decorator-first ORM f
 
 ## Version History Summary
 
-- **v1.0.20** (Current) - Documentation restructure, codebase optimization, API.md creation
+- **v1.0.21** (Current) - Documentation link fixes, TOC anchor corrections, multilingual consistency
+- **v1.0.20** - Documentation restructure, codebase optimization, API.md creation
 - **v1.0.17** - Added @Serialize, @DeleteAt, Dynamite.tx() transactions
 - **v1.0.13** - Stable release with full feature set
 - **v1.0.0** - Initial public release

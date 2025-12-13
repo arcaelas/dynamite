@@ -5,8 +5,8 @@ Dieser Leitfaden erklärt die grundlegenden Konzepte von Dynamite ORM und wie si
 ## Inhaltsverzeichnis
 
 1. [Table-Klasse](#table-klasse)
-2. [Decorators-Übersicht](#decorators-übersicht)
-3. [Primärschlüssel](#primärschlüssel)
+2. [Decorators-Ubersicht](#decorators-ubersicht)
+3. [Primarschlussel](#primarschlussel)
 4. [Indizes](#indizes)
 5. [Query Builder](#query-builder)
 6. [Query-Operatoren](#query-operatoren)
