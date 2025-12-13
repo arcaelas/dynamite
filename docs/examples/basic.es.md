@@ -4,16 +4,16 @@ Este ejemplo demuestra una aplicación CRUD (Crear, Leer, Actualizar, Eliminar) 
 
 ## Tabla de Contenidos
 
-- [Definición del Modelo](#definición-del-modelo)
-- [Configuración e Inicialización](#configuración-e-inicialización)
-- [Creación de Registros](#creación-de-registros)
+- [Definicion del Modelo](#definicion-del-modelo)
+- [Configuracion e Inicializacion](#configuracion-e-inicializacion)
+- [Creacion de Registros](#creacion-de-registros)
 - [Lectura de Registros](#lectura-de-registros)
-- [Actualización de Registros](#actualización-de-registros)
-- [Eliminación de Registros](#eliminación-de-registros)
+- [Actualizacion de Registros](#actualizacion-de-registros)
+- [Eliminacion de Registros](#eliminacion-de-registros)
 - [Ejemplo Completo Funcional](#ejemplo-completo-funcional)
 - [Salida Esperada](#salida-esperada)
 - [Conceptos Clave](#conceptos-clave)
-- [Próximos Pasos](#próximos-pasos)
+- [Proximos Pasos](#proximos-pasos)
 
 ## Definición del Modelo
 

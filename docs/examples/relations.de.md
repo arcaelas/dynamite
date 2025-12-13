@@ -9,7 +9,7 @@ Dieses umfassende Beispiel demonstriert, wie Sie Beziehungen in Dynamite ORM def
 - [Viele-zu-Eins (BelongsTo)](#viele-zu-eins-belongsto)
 - [Verschachtelte Beziehungen](#verschachtelte-beziehungen)
 - [Gefilterte Beziehungen](#gefilterte-beziehungen)
-- [Vollständiges E-Commerce-Beispiel](#vollständiges-e-commerce-beispiel)
+- [Vollstandiges E-Commerce-Beispiel](#vollstandiges-e-commerce-beispiel)
 - [Erwartete Ausgabe](#erwartete-ausgabe)
 - [Erweiterte Muster](#erweiterte-muster)
 - [Best Practices](#best-practices)

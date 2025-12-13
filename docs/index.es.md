@@ -169,9 +169,14 @@ Dynamite está construido sobre tres conceptos fundamentales:
 ## Próximos Pasos
 
 - **[Guía de Instalación](installation.md)** - Configura Dynamite en tu proyecto
-- **[Comenzando](guides/getting-started.md)** - Tu primer modelo Dynamite
-- **[Conceptos Básicos](guides/core-concepts.md)** - Entendiendo los fundamentos
-- **[Referencia API](api/table.md)** - Documentación completa de la API
+- **[Comenzando](getting-started.md)** - Tu primer modelo Dynamite
+- **[Conceptos Básicos](references/core-concepts.md)** - Entendiendo los fundamentos
+- **[Referencia API](references/table.md)** - Documentación completa de la API
+- **[Ejemplos](examples/basic.md)** - Ejemplos prácticos
+  - [Básico](examples/basic.md) - Operaciones CRUD
+  - [Relaciones](examples/relations.md) - HasMany, BelongsTo, ManyToMany
+  - [Avanzado](examples/advanced.md) - Consultas complejas y patrones
+- **[Changelog](changelog.md)** - Historial de versiones
 
 ## Comunidad
 

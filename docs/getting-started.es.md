@@ -613,7 +613,7 @@ Ahora que comprendes los conceptos básicos, explora estos temas avanzados:
 
 ### Conceptos Básicos
 Aprende sobre los conceptos fundamentales y la arquitectura:
-- [Conceptos Básicos](./core-concepts.es.md) - Inmersión profunda en decoradores, modelos y relaciones
+- [Conceptos Básicos](./references/core-concepts.es.md) - Inmersión profunda en decoradores, modelos y relaciones
 
 ### Características Avanzadas
 - **Relaciones** - Define relaciones uno a muchos y muchos a uno
@@ -632,7 +632,7 @@ Aprende sobre los conceptos fundamentales y la arquitectura:
 
 ### Recursos Adicionales
 - [Referencia de API](references/table.md) - Documentación completa de la API
-- [Ejemplos](../../examples/) - Más ejemplos de código
+- [Ejemplos](./examples/basic.md) - Más ejemplos de código
 - [GitHub Issues](https://github.com/arcaelas/dynamite/issues) - Problemas comunes y soluciones
 
 ## Referencia Rápida

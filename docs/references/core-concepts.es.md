@@ -5,9 +5,9 @@ Esta guía explica los conceptos fundamentales del ORM Dynamite y cómo trabajan
 ## Tabla de Contenidos
 
 1. [Clase Table](#clase-table)
-2. [Descripción General de Decoradores](#descripción-general-de-decoradores)
+2. [Descripcion General de Decoradores](#descripcion-general-de-decoradores)
 3. [Claves Primarias](#claves-primarias)
-4. [Índices](#índices)
+4. [Indices](#indices)
 5. [Constructor de Consultas](#constructor-de-consultas)
 6. [Operadores de Consulta](#operadores-de-consulta)
 7. [Sistema de Tipos](#sistema-de-tipos)
