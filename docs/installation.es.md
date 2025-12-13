@@ -9,12 +9,12 @@ Esta guía cubre todo lo que necesitas para instalar, configurar y verificar @ar
 ## Tabla de Contenidos
 
 - [Requisitos Previos](#requisitos-previos)
-- [Instalación](#instalación)
-- [Configuración de AWS](#configuración-de-aws)
-- [Configuración Básica](#configuración-básica)
-- [Verificación](#verificación)
-- [Solución de Problemas](#solución-de-problemas)
-- [Próximos Pasos](#próximos-pasos)
+- [Instalacion](#instalacion)
+- [Configuracion de AWS](#configuracion-de-aws)
+- [Configuracion Basica](#configuracion-basica)
+- [Verificacion](#verificacion)
+- [Solucion de Problemas](#solucion-de-problemas)
+- [Proximos Pasos](#proximos-pasos)
 
 ---
 
@@ -921,7 +921,7 @@ npm install @arcaelas/dynamite @aws-sdk/client-dynamodb @aws-sdk/lib-dynamodb
 
 ### Recursos Adicionales
 
-- [Referencia de API](./api/table.md)
+- [Referencia de API](./references/table.md)
 - [Mejores Prácticas de DynamoDB](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/best-practices.html)
 - [Documentación AWS SDK v3](https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/)
 - [Repositorio GitHub](https://github.com/arcaelas/dynamite)
@@ -937,7 +937,7 @@ npm install @arcaelas/dynamite @aws-sdk/client-dynamodb @aws-sdk/lib-dynamodb
 **¿Necesitas Ayuda?**
 
 Si encuentras algún problema no cubierto en esta guía, por favor:
-1. Revisa la sección de [Solución de Problemas](#solución-de-problemas) arriba
+1. Revisa la seccion de [Solucion de Problemas](#solucion-de-problemas) arriba
 2. Abre un issue en [GitHub](https://github.com/arcaelas/dynamite/issues)
 
 ---

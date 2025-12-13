@@ -4,7 +4,7 @@ Este ejemplo completo demuestra cómo definir y usar relaciones en Dynamite ORM.
 
 ## Tabla de Contenidos
 
-- [Conceptos Básicos de Relaciones](#conceptos-básicos-de-relaciones)
+- [Conceptos Basicos de Relaciones](#conceptos-basicos-de-relaciones)
 - [Uno-a-Muchos (HasMany)](#uno-a-muchos-hasmany)
 - [Muchos-a-Uno (BelongsTo)](#muchos-a-uno-belongsto)
 - [Relaciones Anidadas](#relaciones-anidadas)
@@ -12,7 +12,7 @@ Este ejemplo completo demuestra cómo definir y usar relaciones en Dynamite ORM.
 - [Ejemplo Completo de E-Commerce](#ejemplo-completo-de-e-commerce)
 - [Salida Esperada](#salida-esperada)
 - [Patrones Avanzados](#patrones-avanzados)
-- [Mejores Prácticas](#mejores-prácticas)
+- [Mejores Practicas](#mejores-practicas)
 
 ## Conceptos Básicos de Relaciones
 
@@ -1059,8 +1059,8 @@ for (const post of posts) {
 
 ### Referencias de API
 
-- [Decorador HasMany](../references/decorators.md#hasmany) - Documentación completa de HasMany
-- [Decorador BelongsTo](../references/decorators.md#belongsto) - Documentación completa de BelongsTo
+- [Decorador HasMany](../references/decorators.md#hasmany-relaciones-uno-a-muchos) - Documentación completa de HasMany
+- [Decorador BelongsTo](../references/decorators.md#belongsto-relaciones-muchos-a-uno) - Documentación completa de BelongsTo
 - [Consultas Avanzadas](./advanced.es.md) - Consultas complejas con relaciones
 
 ¡Feliz codificación con relaciones de Dynamite!

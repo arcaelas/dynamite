@@ -4,19 +4,15 @@ Dieser Leitfaden bietet umfassende Dokumentation zu allen in Dynamite ORM verfü
 
 ## Inhaltsverzeichnis
 
-1. [Einführung in Decorators](#einführung-in-decorators)
-2. [@PrimaryKey - Primärschlüssel](#primarykey---primärschlüssel)
-3. [@Index - GSI-Konfiguration](#index---gsi-konfiguration)
-4. [@IndexSort - LSI-Konfiguration](#indexsort---lsi-konfiguration)
-5. [@Default - Standardwerte](#default---standardwerte)
-6. [@Validate - Validierungsfunktionen](#validate---validierungsfunktionen)
-7. [@Mutate - Datentransformation](#mutate---datentransformation)
-8. [@NotNull - Erforderliche Felder](#notnull---erforderliche-felder)
-9. [@CreatedAt - Erstellungs-Zeitstempel](#createdat---erstellungs-zeitstempel)
-10. [@UpdatedAt - Aktualisierungs-Zeitstempel](#updatedat---aktualisierungs-zeitstempel)
-11. [@Name - Benutzerdefinierte Namen](#name---benutzerdefinierte-namen)
-12. [@HasMany - Eins-zu-Viele-Beziehungen](#hasmany---eins-zu-viele-beziehungen)
-13. [@BelongsTo - Viele-zu-Eins-Beziehungen](#belongsto---viele-zu-eins-beziehungen)
+1. [Einfuhrung in Decorators](#einfuhrung-in-decorators)
+2. [@PrimaryKey - Primarschlussel](#primarykey-primarschlussel)
+3. [@Default - Standardwerte](#default-standardwerte)
+4. [@Validate - Validierungsfunktionen](#validate-validierungsfunktionen)
+5. [@Mutate - Datentransformation](#mutate-datentransformation)
+6. [@NotNull - Erforderliche Felder](#notnull-erforderliche-felder)
+7. [@CreatedAt - Erstellungs-Zeitstempel](#createdat-erstellungs-zeitstempel)
+8. [@UpdatedAt - Aktualisierungs-Zeitstempel](#updatedat-aktualisierungs-zeitstempel)
+9. [Best Practices](#best-practices)
 
 ---
 

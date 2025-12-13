@@ -1052,6 +1052,6 @@ export async function teardown_test_database(client: Dynamite) {
 ## Siehe auch
 
 - [Table API-Referenz](./table.md) - Vollständige Table-Klassendokumentation
-- [Decorator-Referenz](./decorators/) - Alle verfügbaren Decorators
+- [Decorator-Referenz](./decorators.md) - Alle verfügbaren Decorators
 - [AWS SDK DynamoDB-Client](https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/clients/client-dynamodb/) - Zugrundeliegende AWS SDK-Dokumentation
 - [DynamoDB Local](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html) - Lokale Entwicklungseinrichtung

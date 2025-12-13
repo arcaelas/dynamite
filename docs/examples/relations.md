@@ -1059,8 +1059,8 @@ for (const post of posts) {
 
 ### API References
 
-- [HasMany Decorator](../references/decorators.md#hasmany) - Complete HasMany documentation
-- [BelongsTo Decorator](../references/decorators.md#belongsto) - Complete BelongsTo documentation
+- [HasMany Decorator](../references/decorators.md#hasmany-relaciones-uno-a-muchos) - Complete HasMany documentation
+- [BelongsTo Decorator](../references/decorators.md#belongsto-relaciones-muchos-a-uno) - Complete BelongsTo documentation
 - [Advanced Queries](./advanced.md) - Complex queries with relationships
 
 ### Additional Topics

@@ -507,7 +507,7 @@ Jetzt, da Sie die Grundlagen verstehen, erkunden Sie diese erweiterten Themen:
 
 ### Kernkonzepte
 Lernen Sie die grundlegenden Konzepte und Architektur kennen:
-- [Kernkonzepte](./core-concepts.de.md) - Tiefer Einblick in Decorators, Modelle und Beziehungen
+- [Kernkonzepte](./references/core-concepts.de.md) - Tiefer Einblick in Decorators, Modelle und Beziehungen
 
 ### Erweiterte Funktionen
 - **Beziehungen** - Definieren Sie Eins-zu-Viele- und Viele-zu-Eins-Beziehungen
@@ -526,7 +526,7 @@ Lernen Sie die grundlegenden Konzepte und Architektur kennen:
 
 ### Zusätzliche Ressourcen
 - [API-Referenz](references/table.md) - Vollständige API-Dokumentation
-- [Beispiele](../../examples/) - Weitere Codebeispiele
+- [Beispiele](./examples/basic.md) - Weitere Codebeispiele
 - [GitHub Issues](https://github.com/arcaelas/dynamite/issues) - Häufige Probleme und Lösungen
 
 ## Schnellreferenz

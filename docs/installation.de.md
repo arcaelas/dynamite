@@ -12,9 +12,9 @@ Diese Anleitung deckt alles ab, was Sie benötigen, um @arcaelas/dynamite in Ihr
 - [Installation](#installation)
 - [AWS-Konfiguration](#aws-konfiguration)
 - [Basiskonfiguration](#basiskonfiguration)
-- [Überprüfung](#überprüfung)
+- [Uberprufung](#uberprufung)
 - [Fehlerbehebung](#fehlerbehebung)
-- [Nächste Schritte](#nächste-schritte)
+- [Nachste Schritte](#nachste-schritte)
 
 ---
 
@@ -921,7 +921,7 @@ npm install @arcaelas/dynamite @aws-sdk/client-dynamodb @aws-sdk/lib-dynamodb
 
 ### Zusätzliche Ressourcen
 
-- [API-Referenz](./api/table.md)
+- [API-Referenz](./references/table.md)
 - [DynamoDB Best Practices](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/best-practices.html)
 - [AWS SDK v3-Dokumentation](https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/)
 - [GitHub-Repository](https://github.com/arcaelas/dynamite)

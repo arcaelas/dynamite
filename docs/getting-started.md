@@ -613,7 +613,7 @@ Now that you understand the basics, explore these advanced topics:
 
 ### Core Concepts
 Learn about the fundamental concepts and architecture:
-- [Core Concepts](./core-concepts.md) - Deep dive into decorators, models, and relationships
+- [Core Concepts](./references/core-concepts.md) - Deep dive into decorators, models, and relationships
 
 ### Advanced Features
 - **Relationships** - Define one-to-many and many-to-one relationships
@@ -632,7 +632,7 @@ Learn about the fundamental concepts and architecture:
 
 ### Additional Resources
 - [API Reference](references/table.md) - Complete API documentation
-- [Examples](../../examples/) - More code examples
+- [Examples](./examples/basic.md) - More code examples
 - [GitHub Issues](https://github.com/arcaelas/dynamite/issues) - Common issues and solutions
 
 ## Quick Reference

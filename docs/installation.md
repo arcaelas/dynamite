@@ -921,7 +921,7 @@ npm install @arcaelas/dynamite @aws-sdk/client-dynamodb @aws-sdk/lib-dynamodb
 
 ### Additional Resources
 
-- [API Reference](./api/table.md)
+- [API Reference](./references/table.md)
 - [DynamoDB Best Practices](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/best-practices.html)
 - [AWS SDK v3 Documentation](https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/)
 - [GitHub Repository](https://github.com/arcaelas/dynamite)

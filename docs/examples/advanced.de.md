@@ -12,7 +12,7 @@ Dieses umfassende Beispiel demonstriert fortgeschrittene Abfragemuster, Paginier
 - [Sortierung und Reihenfolge](#sortierung-und-reihenfolge)
 - [Attributauswahl](#attributauswahl)
 - [Komplexe Filterung](#komplexe-filterung)
-- [Vollständiges Funktionierendes Beispiel](#vollständiges-funktionierendes-beispiel)
+- [Vollstandiges Funktionierendes Beispiel](#vollstandiges-funktionierendes-beispiel)
 - [Erwartete Ausgabe](#erwartete-ausgabe)
 - [Leistungsoptimierung](#leistungsoptimierung)
 - [Best Practices](#best-practices)
@@ -866,7 +866,7 @@ async function get_users_1() {
 ### API-Referenzen
 
 - [Table API](../references/table.md) - Vollständige Table-Klassendokumentation
-- [Abfrageoperatoren](../references/core-concepts.md#query-operators) - Alle verfügbaren Operatoren
+- [Abfrageoperatoren](../references/core-concepts.de.md#query-operatoren) - Alle verfügbaren Operatoren
 - [Decorator-Leitfaden](../references/decorators.md) - Alle verfügbaren Decorators
 
 Viel Erfolg beim Abfragen mit Dynamite!
