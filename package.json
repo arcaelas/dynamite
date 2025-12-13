@@ -56,5 +56,5 @@
     "test:db:stop": "docker stop dynamite-test-db && docker rm dynamite-test-db || true",
     "test:db:clean": "docker stop dynamite-test-db && docker rm dynamite-test-db; docker run -d -p 8000:8000 --name dynamite-test-db amazon/dynamodb-local -jar DynamoDBLocal.jar -sharedDb"
   },
-  "version": "1.0.22"
+  "version": "1.0.23"
 }
