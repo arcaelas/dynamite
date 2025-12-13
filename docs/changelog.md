@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.21] - 2025-12-13
+## [1.0.23] - 2025-12-13
 
 ### Fixed
 - **mkdocs.yml**: Corrected navigation structure pointing to non-existent paths (`guides/`, `api/`)
@@ -206,7 +206,7 @@ This is a stable release of @arcaelas/dynamite - a modern, decorator-first ORM f
 
 ## Version History Summary
 
-- **v1.0.21** (Current) - Documentation link fixes, TOC anchor corrections, multilingual consistency
+- **v1.0.23** (Current) - Documentation link fixes, TOC anchor corrections, multilingual consistency
 - **v1.0.20** - Documentation restructure, codebase optimization, API.md creation
 - **v1.0.17** - Added @Serialize, @DeleteAt, Dynamite.tx() transactions
 - **v1.0.13** - Stable release with full feature set
