@@ -6,8 +6,7 @@
     "moduleResolution": "node",
     "baseUrl": "./",
     "paths": {
-      "~/*": ["src/*"],
-      "@type/*": ["src/@types/*"]
+      "~/*": ["src/*"]
     },
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,

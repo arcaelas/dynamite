@@ -45,16 +45,7 @@
     "docs": "mkdocs gh-deploy --force",
     "deploy": "npm version patch && npm publish --access=public",
     "prepublishOnly": "yarn build",
-    "postpublish": "find src -type f \\( -name '*.js' -o -name '*.d.ts' -o -name '*.map' \\) -delete",
-    "seed:generate": "tsx scripts/generate_seed.ts",
-    "seed:load": "tsx scripts/load_seed.ts",
-    "seed:full": "yarn seed:generate && yarn seed:load",
-    "test": "yarn test:db:start && yarn test:run; yarn test:db:stop",
-    "test:run": "NODE_OPTIONS='--expose-gc' tsx --tsconfig tsx.config.json src/index.test.ts",
-    "test:watch": "yarn test:db:start && NODE_OPTIONS='--expose-gc' tsx watch src/index.test.ts",
-    "test:db:start": "docker run -d -p 8000:8000 --name dynamite-test-db amazon/dynamodb-local -jar DynamoDBLocal.jar -sharedDb || echo 'DynamoDB ya está corriendo'",
-    "test:db:stop": "docker stop dynamite-test-db && docker rm dynamite-test-db || true",
-    "test:db:clean": "docker stop dynamite-test-db && docker rm dynamite-test-db; docker run -d -p 8000:8000 --name dynamite-test-db amazon/dynamodb-local -jar DynamoDBLocal.jar -sharedDb"
+    "postpublish": "find src -type f \\( -name '*.js' -o -name '*.d.ts' -o -name '*.map' \\) -delete"
   },
   "version": "1.0.24"
 }
