@@ -14,7 +14,7 @@ und dieses Projekt hält sich an [Semantische Versionierung](https://semver.org/
 
 ---
 
-## [1.0.21] - 2025-12-13
+## [1.0.23] - 2025-12-13
 
 ### Behoben
 - **mkdocs.yml**: Navigationsstruktur korrigiert, die auf nicht existierende Pfade verwies (`guides/`, `api/`)
@@ -206,7 +206,7 @@ Dies ist eine stabile Version von @arcaelas/dynamite - ein modernes, Decorator-f
 
 ## Versionsverlauf-Zusammenfassung
 
-- **v1.0.21** (Aktuell) - Dokumentationslink-Korrekturen, TOC-Anker-Korrekturen, mehrsprachige Konsistenz
+- **v1.0.23** (Aktuell) - Dokumentationslink-Korrekturen, TOC-Anker-Korrekturen, mehrsprachige Konsistenz
 - **v1.0.20** - Dokumentationsumstrukturierung, Codebasis-Optimierung, API.md-Erstellung
 - **v1.0.17** - @Serialize, @DeleteAt, Dynamite.tx()-Transaktionen hinzugefügt
 - **v1.0.13** - Stabile Version mit vollständigem Funktionsumfang

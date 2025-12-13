@@ -14,7 +14,7 @@ y este proyecto adhiere a [Versionado Semántico](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.21] - 2025-12-13
+## [1.0.23] - 2025-12-13
 
 ### Corregido
 - **mkdocs.yml**: Corregida la estructura de navegación que apuntaba a rutas inexistentes (`guides/`, `api/`)
@@ -206,7 +206,7 @@ Esta es una versión estable de @arcaelas/dynamite - un ORM moderno basado en de
 
 ## Resumen del Historial de Versiones
 
-- **v1.0.21** (Actual) - Corrección de enlaces de documentación, anclas TOC, consistencia multilingüe
+- **v1.0.23** (Actual) - Corrección de enlaces de documentación, anclas TOC, consistencia multilingüe
 - **v1.0.20** - Reestructuración de documentación, optimización del código base, creación de API.md
 - **v1.0.17** - Agregado @Serialize, @DeleteAt, transacciones Dynamite.tx()
 - **v1.0.13** - Versión estable con conjunto completo de características
