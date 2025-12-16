@@ -35,8 +35,10 @@ export class Dynamite {
    * @param config Dynamite client configuration
    */
   constructor(config: DynamiteConfig) {
-    const { tables, ...clientConfig } = config;
-    this.client = new DynamoDBClient(clientConfig);
+    const { tables, ...options } = config;
+    this.client = new DynamoDBClient({
+      ...options,
+    });
     this.tables = tables;
   }
 
@@ -65,7 +67,10 @@ export class Dynamite {
    * Auto-crear pivot tables para relaciones ManyToMany
    */
   private async createPivotTables(): Promise<void> {
-    const pivot_tables = new Map<string, { foreignKey: string, relatedKey: string }>();
+    const pivot_tables = new Map<
+      string,
+      { foreignKey: string; relatedKey: string }
+    >();
 
     // Recolectar nombres de pivot tables con metadata
     for (const table_class of this.tables) {
@@ -79,7 +84,7 @@ export class Dynamite {
         if (relation?.type === "ManyToMany" && relation.pivotTable) {
           pivot_tables.set(relation.pivotTable, {
             foreignKey: relation.foreignKey || "source_id",
-            relatedKey: relation.relatedKey || "target_id"
+            relatedKey: relation.relatedKey || "target_id",
           });
         }
       }
@@ -164,7 +169,9 @@ export class Dynamite {
    * Create table with automatic GSI detection and creation
    * @param ctor Table class constructor
    */
-  private async createTableWithGSI(ctor: new (...args: any[]) => any): Promise<void> {
+  private async createTableWithGSI(
+    ctor: new (...args: any[]) => any
+  ): Promise<void> {
     const meta: any = (ctor as any)[SCHEMA];
     if (!meta)
       throw new Error(`Class ${ctor.name} not registered. Use decorators.`);
