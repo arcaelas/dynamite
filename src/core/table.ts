@@ -1019,10 +1019,10 @@ export default class Table<T = any> {
       });
     }
 
-    // 3. Aplicar paginación DESPUÉS de ordenar (soporta skip como alias de offset)
-    const targetSkip = queryOptions.skip ?? queryOptions.offset ?? 0;
-    const targetLimit = queryOptions.limit ?? allItems.length;
-    allItems = allItems.slice(targetSkip, targetSkip + targetLimit);
+    // 3. Aplicar paginación DESPUÉS de ordenar (skip es alias de offset)
+    const offset = queryOptions.skip ?? queryOptions.offset ?? 0;
+    const limit = queryOptions.limit ?? allItems.length;
+    allItems = allItems.slice(offset, offset + limit);
 
     const instances = allItems.map((item) => {
       // Mapear nombres de DB → propiedades TS
