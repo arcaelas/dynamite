@@ -18,6 +18,7 @@ interface IncludeOptions {
   attributes?: string[];
   limit?: number;
   offset?: number;
+  skip?: number;
   order?: 'asc' | 'desc';
   include?: Record<string, IncludeOptions | boolean>;
 }
@@ -60,8 +61,9 @@ const batchLoadHasMany = async (
 
   // Aplicar limit por grupo
   if (options.limit) {
+    const offset = options.skip ?? options.offset ?? 0;
     for (const [key, groupItems] of grouped) {
-      grouped.set(key, groupItems.slice(options.offset ?? 0, (options.offset ?? 0) + options.limit));
+      grouped.set(key, groupItems.slice(offset, offset + options.limit));
     }
   }
 
@@ -170,8 +172,9 @@ const batchLoadManyToMany = async (
 
   // [7] Apply limit per group
   if (options.limit) {
+    const offset = options.skip ?? options.offset ?? 0;
     for (const [key, items_arr] of grouped) {
-      grouped.set(key, items_arr.slice(options.offset ?? 0, (options.offset ?? 0) + options.limit));
+      grouped.set(key, items_arr.slice(offset, offset + options.limit));
     }
   }
 
