@@ -1,95 +1,27 @@
-# Bienvenido a Arcaelas Dynamite
+# @arcaelas/dynamite
 
-ORM moderno basado en decoradores para AWS DynamoDB con soporte TypeScript.
+![Banner](assets/cover.png)
 
-## ¿Qué es Dynamite?
+> **ORM moderno con decoradores para AWS DynamoDB**
+> Decoradores TypeScript | Relaciones tipadas | Sincronización automática | Mínimo boilerplate
 
-Arcaelas Dynamite es una potente librería de Mapeo Objeto-Relacional (ORM) basada en decoradores para AWS DynamoDB. Proporciona una API limpia e intuitiva que aprovecha los decoradores de TypeScript para definir tus modelos de datos con seguridad de tipos y mínimo código repetitivo.
+---
 
-## Características Principales
+## Características
 
-### Diseño Basado en Decoradores
-Define tus modelos usando decoradores familiares de TypeScript:
+- **Diseño con decoradores** - Define modelos con decoradores TypeScript
+- **Relaciones tipadas** - HasMany, BelongsTo, ManyToMany con tipado completo
+- **Sincronización automática** - Tablas e índices creados automáticamente
+- **Validación y transformación** - Decoradores integrados para procesar datos
+- **Soft deletes** - Decorador @DeleteAt para registros recuperables
+- **Transacciones** - Soporte completo de transacciones con rollback
 
-```typescript
-import { Table, PrimaryKey, CreatedAt, UpdatedAt } from '@arcaelas/dynamite';
-
-class User extends Table {
-  @PrimaryKey()
-  id: string;
-
-  @Default(() => 'active')
-  status: string;
-
-  @CreatedAt()
-  created_at: Date;
-
-  @UpdatedAt()
-  updated_at: Date;
-}
-```
-
-### Relaciones con Seguridad de Tipos
-Soporte integrado para relaciones uno-a-muchos y muchos-a-uno:
-
-```typescript
-import { HasMany, BelongsTo } from '@arcaelas/dynamite';
-
-class User extends Table {
-  @HasMany(() => Post, 'user_id')
-  posts: HasMany<Post>;
-}
-
-class Post extends Table {
-  @BelongsTo(() => User, 'user_id')
-  user: BelongsTo<User>;
-}
-```
-
-### API de Consultas Simple
-Métodos async directos con soporte completo de TypeScript:
-
-```typescript
-// Igualdad simple
-const active_users = await User.where('status', 'active');
-
-// Con operador
-const recent = await User.where('created_at', '>', '2024-01-01');
-
-// Múltiples filtros con opciones
-const users = await User.where(
-  { status: 'active' },
-  { include: { posts: true }, limit: 10 }
-);
-```
-
-### Validación y Transformación
-Decoradores integrados para validación y mutación de datos:
-
-```typescript
-class User extends Table {
-  @Validate(value => value.length >= 8, 'La contraseña debe tener al menos 8 caracteres')
-  password: string;
-
-  @Mutate(value => value.toLowerCase().trim())
-  email: string;
-}
-```
+---
 
 ## Inicio Rápido
 
-### Instalación
-
-```bash
-npm install @arcaelas/dynamite
-# o
-yarn add @arcaelas/dynamite
-```
-
-### Uso Básico
-
 ```typescript
-import { Dynamite, Table, PrimaryKey, Default } from '@arcaelas/dynamite';
+import { Dynamite, Table, PrimaryKey, Default, CreatedAt } from '@arcaelas/dynamite';
 
 // Define tu modelo
 class User extends Table<User> {
@@ -99,9 +31,12 @@ class User extends Table<User> {
 
   declare name: string;
   declare email: string;
+
+  @CreatedAt()
+  declare created_at: Date;
 }
 
-// Configurar y conectar
+// Configura y conecta
 const dynamite = new Dynamite({
   region: 'us-east-1',
   tables: [User]
@@ -109,81 +44,109 @@ const dynamite = new Dynamite({
 dynamite.connect();
 await dynamite.sync();
 
-// Crear un nuevo usuario
+// Crear
 const user = await User.create({
-  name: 'Juan Pérez',
-  email: 'juan@ejemplo.com'
+  name: 'John Doe',
+  email: 'john@example.com'
 });
 
-// Consultar usuarios
-const users = await User.where('name', 'Juan Pérez');
+// Consultar
+const users = await User.where('name', 'John Doe');
 
 // Actualizar
-user.email = 'nuevoemail@ejemplo.com';
+user.email = 'newemail@example.com';
 await user.save();
 
 // Eliminar
 await user.destroy();
 ```
 
-## Resumen de Arquitectura
+---
 
-Dynamite está construido sobre tres conceptos fundamentales:
+## Decoradores
 
-1. **Table** - Clase base para todos los modelos con operaciones CRUD
-2. **Decorators** - Definen esquema, validación y comportamiento
-3. **Relationships** - Conectan modelos con asociaciones seguras de tipos
-
-```
-┌─────────────────────────────────────────┐
-│             Tus Modelos                  │
-│  ┌─────────────────────────────────┐   │
-│  │  User extends Table              │   │
-│  │  - @PrimaryKey() id              │   │
-│  │  - @HasMany() posts              │   │
-│  └─────────────────────────────────┘   │
-└──────────────┬──────────────────────────┘
-               │
-┌──────────────▼──────────────────────────┐
-│          Dynamite ORM                    │
-│  - Constructor de Consultas              │
-│  - Resolutor de Relaciones               │
-│  - Procesamiento de Decoradores          │
-└──────────────┬──────────────────────────┘
-               │
-┌──────────────▼──────────────────────────┐
-│         AWS SDK v3                       │
-│  - DynamoDBClient                        │
-│  - DynamoDB Document Client              │
-└──────────────────────────────────────────┘
-```
-
-## ¿Por Qué Dynamite?
-
-- **Seguridad de Tipos** - Soporte completo de TypeScript con tipos avanzados
-- **Experiencia del Desarrollador** - API limpia e intuitiva con mínimo código repetitivo
-- **Moderno** - Construido sobre AWS SDK v3 con soporte ESM
-- **Flexible** - Soporta consultas complejas, relaciones y lógica personalizada
-- **Ligero** - Dependencias mínimas, enfocado en DynamoDB
-
-## Próximos Pasos
-
-- **[Guía de Instalación](installation.md)** - Configura Dynamite en tu proyecto
-- **[Comenzando](getting-started.md)** - Tu primer modelo Dynamite
-- **[Conceptos Básicos](references/core-concepts.md)** - Entendiendo los fundamentos
-- **[Referencia API](references/table.md)** - Documentación completa de la API
-- **[Ejemplos](examples/basic.md)** - Ejemplos prácticos
-  - [Básico](examples/basic.md) - Operaciones CRUD
-  - [Relaciones](examples/relations.md) - HasMany, BelongsTo, ManyToMany
-  - [Avanzado](examples/advanced.md) - Consultas complejas y patrones
-- **[Changelog](changelog.md)** - Historial de versiones
-
-## Comunidad
-
-- **GitHub**: [github.com/arcaelas/dynamite](https://github.com/arcaelas/dynamite)
-- **Issues**: [Reportar bugs o solicitar características](https://github.com/arcaelas/dynamite/issues)
-- **NPM**: [@arcaelas/dynamite](https://www.npmjs.com/package/@arcaelas/dynamite)
+| Decorador | Descripción |
+|-----------|-------------|
+| `@PrimaryKey()` | Clave de partición |
+| `@Index()` | Índice Secundario Global |
+| `@Default(value)` | Valor por defecto (estático o función) |
+| `@Validate(fn)` | Validación al asignar |
+| `@Mutate(fn)` | Transformación al asignar |
+| `@CreatedAt()` | Auto-asignar al crear |
+| `@UpdatedAt()` | Auto-asignar al actualizar |
+| `@DeleteAt()` | Timestamp de soft delete |
+| `@HasMany()` | Relación uno a muchos |
+| `@BelongsTo()` | Relación muchos a uno |
+| `@ManyToMany()` | Muchos a muchos con tabla pivote |
 
 ---
 
-**¿Listo para comenzar?** [Instala Dynamite](installation.md) y crea tu primer modelo en minutos.
+## Relaciones
+
+```typescript
+class User extends Table<User> {
+  @PrimaryKey()
+  declare id: string;
+
+  @HasMany(() => Post, 'user_id')
+  declare posts: HasMany<Post>;
+}
+
+class Post extends Table<Post> {
+  @PrimaryKey()
+  declare id: string;
+
+  declare user_id: string;
+
+  @BelongsTo(() => User, 'user_id')
+  declare user: BelongsTo<User>;
+}
+
+// Cargar con relaciones
+const user = await User.first({ id: '123' }, { include: { posts: true } });
+console.log(user.posts); // Post[]
+```
+
+---
+
+## Siguientes Pasos
+
+<div class="grid cards" markdown>
+
+-   :material-download:{ .lg .middle } **Instalación**
+
+    ---
+
+    Configura Dynamite en tu proyecto
+
+    [:octicons-arrow-right-24: Instalar](installation.md)
+
+-   :material-rocket-launch:{ .lg .middle } **Primeros Pasos**
+
+    ---
+
+    Crea tu primer modelo paso a paso
+
+    [:octicons-arrow-right-24: Comenzar](getting-started.md)
+
+-   :material-api:{ .lg .middle } **Referencia API**
+
+    ---
+
+    Documentación completa de todas las clases
+
+    [:octicons-arrow-right-24: Referencia](references/table.md)
+
+-   :material-code-tags:{ .lg .middle } **Ejemplos**
+
+    ---
+
+    Ejemplos prácticos listos para usar
+
+    [:octicons-arrow-right-24: Ejemplos](examples/basic.md)
+
+</div>
+
+---
+
+**Desarrollado por [Arcaelas Insiders](https://github.com/arcaelas)**

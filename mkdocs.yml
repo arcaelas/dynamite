@@ -1,4 +1,4 @@
-site_name: Arcaelas Dynamite
+site_name: Arcaelas Insiders | Dynamite
 site_description: Modern decorator-first ORM for DynamoDB with TypeScript support
 site_author: Arcaelas Insiders
 site_url: https://arcaelas.github.io/dynamite/
@@ -11,9 +11,9 @@ copyright: Copyright &copy; 2025 Arcaelas Insiders
 
 theme:
   name: material
+  custom_dir: overrides
   language: en
   palette:
-    # Light mode
     - media: "(prefers-color-scheme: light)"
       scheme: default
       primary: indigo
@@ -21,7 +21,6 @@ theme:
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
-    # Dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
       primary: indigo
@@ -40,7 +39,6 @@ theme:
     view: material/eye
 
   features:
-    # Navigation
     - navigation.tracking
     - navigation.tabs
     - navigation.tabs.sticky
@@ -48,21 +46,14 @@ theme:
     - navigation.expand
     - navigation.indexes
     - navigation.top
-
-    # Search
     - search.suggest
     - search.highlight
     - search.share
-
-    # Content
     - content.code.copy
     - content.code.annotate
     - content.tabs.link
     - content.tooltips
-
-    # Table of contents
     - toc.follow
-    - toc.integrate
 
 nav:
   - Home:
@@ -85,7 +76,6 @@ nav:
     - Advanced Queries: examples/advanced.md
 
 markdown_extensions:
-  # Python Markdown
   - abbr
   - admonition
   - attr_list
@@ -96,8 +86,6 @@ markdown_extensions:
   - toc:
       permalink: true
       toc_depth: 3
-
-  # Python Markdown Extensions
   - pymdownx.arithmatex:
       generic: true
   - pymdownx.betterem:
@@ -144,7 +132,6 @@ plugins:
           default: true
           name: English
           build: true
-          site_name: "Arcaelas Dynamite"
         - locale: es
           name: Español
           build: true
@@ -152,15 +139,15 @@ plugins:
             Home: Inicio
             Welcome: Bienvenida
             Installation: Instalación
-            Getting Started: Comenzando
-            Changelog: Registro de Cambios
+            Getting Started: Primeros Pasos
+            Changelog: Historial
             References: Referencias
-            Core Concepts: Conceptos Básicos
+            Core Concepts: Conceptos
             Decorators: Decoradores
             Table: Tabla
             Client: Cliente
             Types: Tipos
-            Migration Guide: Guía de Migración
+            Migration Guide: Migración
             Examples: Ejemplos
             Basic Model: Modelo Básico
             Relationships: Relaciones
@@ -169,20 +156,20 @@ plugins:
           name: Deutsch
           build: true
           nav_translations:
-            Home: Startseite
+            Home: Start
             Welcome: Willkommen
             Installation: Installation
             Getting Started: Erste Schritte
-            Changelog: Änderungsprotokoll
+            Changelog: Änderungen
             References: Referenzen
-            Core Concepts: Kernkonzepte
+            Core Concepts: Konzepte
             Decorators: Dekoratoren
             Table: Tabelle
             Client: Client
             Types: Typen
-            Migration Guide: Migrationsanleitung
+            Migration Guide: Migration
             Examples: Beispiele
-            Basic Model: Grundlegendes Modell
+            Basic Model: Basismodell
             Relationships: Beziehungen
             Advanced Queries: Erweiterte Abfragen
   - minify:
@@ -193,44 +180,9 @@ plugins:
         remove_comments: true
 
 extra:
-  alternate:
-    - name: English
-      link: /dynamite/
-      lang: en
-    - name: Español
-      link: /dynamite/es/
-      lang: es
-    - name: Deutsch
-      link: /dynamite/de/
-      lang: de
-
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/arcaelas/dynamite
     - icon: fontawesome/brands/npm
       link: https://www.npmjs.com/package/@arcaelas/dynamite
-
-  version:
-    provider: mike
-
-  analytics:
-    feedback:
-      title: Was this page helpful?
-      ratings:
-        - icon: material/emoticon-happy-outline
-          name: Very helpful
-          data: 1
-          note: >-
-            Thanks for your feedback!
-        - icon: material/emoticon-sad-outline
-          name: Could be better
-          data: 0
-          note: >-
-            Thanks for your feedback. Help us improve this page by
-            <a href="https://github.com/arcaelas/dynamite/issues/new" target="_blank" rel="noopener">opening an issue</a>.
-
-extra_css:
-  - stylesheets/extra.css
-
-extra_javascript:
-  - javascripts/extra.js
+  generator: false
