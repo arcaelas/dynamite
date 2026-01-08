@@ -74,9 +74,9 @@ npm install @arcaelas/dynamite
 
 | Decorator | Description |
 |-----------|-------------|
-| `@PrimaryKey()` | Primary key (partition key) |
-| `@Index()` | Partition key for GSI |
-| `@IndexSort()` | Sort key |
+| `@PrimaryKey()` | Primary key (partition key) - sets `schema.primary_key` |
+| `@Index()` | Partition key marker (use `@PrimaryKey` for main key) |
+| `@IndexSort()` | Sort key (range key) |
 
 ### Data Decorators
 
@@ -102,10 +102,10 @@ npm install @arcaelas/dynamite
 
 | Decorator | Description |
 |-----------|-------------|
-| `@HasMany(() => Model, "foreign_key")` | One-to-many |
-| `@HasOne(() => Model, "foreign_key")` | One-to-one |
-| `@BelongsTo(() => Model, "local_key")` | Many-to-one |
-| `@ManyToMany(() => Model, config)` | Many-to-many with pivot table |
+| `@HasMany(() => Model, foreignKey, localKey?)` | One-to-many (localKey defaults to 'id') |
+| `@HasOne(() => Model, foreignKey, localKey?)` | One-to-one (localKey defaults to 'id') |
+| `@BelongsTo(() => Model, localKey, foreignKey?)` | Many-to-one (foreignKey defaults to 'id') |
+| `@ManyToMany(() => Model, pivot, fk, rk, lk?, rpk?)` | Many-to-many with pivot table |
 
 ---
 
@@ -154,7 +154,7 @@ class User extends Table<User> {
   declare full_name: NonAttribute<string>;
 
   // Relations - loaded via include
-  @HasMany(() => Order, "user_id")
+  @HasMany(() => Order, "user_id", "id")
   declare orders: NonAttribute<Order[]>;
 }
 ```
@@ -223,17 +223,16 @@ class User extends Table<User> {
   @PrimaryKey()
   declare id: string;
 
-  @HasMany(() => Order, "user_id")
+  // HasMany(model, foreignKey, localKey = 'id')
+  @HasMany(() => Order, "user_id", "id")
   declare orders: NonAttribute<Order[]>;
 
-  @HasOne(() => Profile, "user_id")
+  // HasOne(model, foreignKey, localKey = 'id')
+  @HasOne(() => Profile, "user_id", "id")
   declare profile: NonAttribute<Profile | null>;
 
-  @ManyToMany(() => Role, {
-    pivotTable: "user_roles",
-    foreignKey: "user_id",
-    relatedKey: "role_id"
-  })
+  // ManyToMany(model, pivotTable, foreignKey, relatedKey, localKey = 'id', relatedPK = 'id')
+  @ManyToMany(() => Role, "user_roles", "user_id", "role_id", "id", "id")
   declare roles: NonAttribute<Role[]>;
 }
 
@@ -243,7 +242,8 @@ class Order extends Table<Order> {
 
   declare user_id: string;
 
-  @BelongsTo(() => User, "user_id")
+  // BelongsTo(model, localKey, foreignKey = 'id')
+  @BelongsTo(() => User, "user_id", "id")
   declare user: NonAttribute<User | null>;
 }
 ```
@@ -253,9 +253,9 @@ class Order extends Table<Order> {
 ```typescript
 const users = await User.where({}, {
   include: {
-    orders: { where: { status: "completed" } },
-    profile: {},
-    roles: {}
+    orders: { where: { status: "completed" }, limit: 5 },
+    profile: true,  // or { attributes: ["bio", "avatar"] }
+    roles: true
   }
 });
 ```
