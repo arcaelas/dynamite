@@ -35,8 +35,8 @@ const dynamite = new Dynamite({
     secretAccessKey: "test"
   }
 });
-dynamite.connect();
-await dynamite.sync();
+await dynamite.connect();
+
 
 // For AWS production
 const dynamite = new Dynamite({
@@ -47,8 +47,8 @@ const dynamite = new Dynamite({
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
   }
 });
-dynamite.connect();
-await dynamite.sync();
+await dynamite.connect();
+
 ```
 
 ## Step 1: Your First Model
@@ -266,8 +266,11 @@ if (user) {
 ### Using static `delete()` method
 
 ```typescript
-// Delete by ID
-await User.delete("user-123");
+// Delete by filters
+await User.delete({ id: "user-123" });
+
+// Delete multiple by condition
+await User.delete({ active: false });
 ```
 
 ### Batch delete
@@ -402,8 +405,8 @@ const dynamite = new Dynamite({
     secretAccessKey: "test"
   }
 });
-dynamite.connect();
-await dynamite.sync();
+await dynamite.connect();
+
 
 // Main application
 async function main() {

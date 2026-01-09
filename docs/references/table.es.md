@@ -82,7 +82,7 @@ await user.save();
 
 ## Métodos de Instancia
 
-### `save(): Promise<this>`
+### `save(): Promise<boolean>`
 
 Guarda o actualiza el registro actual en la base de datos.
 
@@ -92,7 +92,7 @@ Guarda o actualiza el registro actual en la base de datos.
 - Actualiza automáticamente el campo `updatedAt` si está definido
 - Establece `createdAt` solo en registros nuevos
 
-**Retorna:** La instancia actual actualizada
+**Retorna:** `true` si la operación fue exitosa
 
 **Ejemplo:**
 
@@ -111,14 +111,14 @@ await user.save(); // Solo updatedAt se actualiza
 
 ---
 
-### `update(patch: Partial<InferAttributes<T>>): Promise<this>`
+### `update(patch: Partial<InferAttributes<T>>): Promise<boolean>`
 
 Actualiza parcialmente el registro con los campos proporcionados.
 
 **Parámetros:**
 - `patch` - Objeto con los campos a actualizar
 
-**Retorna:** La instancia actual actualizada
+**Retorna:** `true` si la operación fue exitosa
 
 **Ejemplo:**
 
@@ -359,9 +359,7 @@ Busca registros usando un operador específico.
 | `">"` | Mayor que | `where("balance", ">", 1000)` |
 | `">="` | Mayor o igual que | `where("rating", ">=", 4)` |
 | `"in"` | Incluido en array | `where("status", "in", ["active", "pending"])` |
-| `"not-in"` | No incluido en array | `where("role", "not-in", ["banned"])` |
 | `"contains"` | Contiene substring | `where("name", "contains", "John")` |
-| `"begins-with"` | Comienza con | `where("email", "begins-with", "admin@")` |
 
 **Ejemplos:**
 
@@ -375,11 +373,9 @@ const notBanned = await User.where("status", "!=", "banned");
 
 // Operadores de array
 const staff = await User.where("role", "in", ["admin", "employee"]);
-const customers = await User.where("role", "not-in", ["admin", "employee"]);
 
 // Operadores de texto
 const johns = await User.where("name", "contains", "John");
-const admins = await User.where("email", "begins-with", "admin@");
 ```
 
 ---
@@ -656,13 +652,13 @@ const activeJohns = johns.filter(u => u.active === true);
 @Name("users")
 class User extends Table<User> {
   @HasMany(() => Order, "user_id")
-  declare orders: HasMany<Order>;
+  declare orders: NonAttribute<Order[]>;
 }
 
 @Name("orders")
 class Order extends Table<Order> {
   @BelongsTo(() => User, "user_id")
-  declare user: BelongsTo<User>;
+  declare user: NonAttribute<User | null>;
 }
 
 // Obtener usuario con sus órdenes
@@ -842,16 +838,16 @@ import { HasMany, BelongsTo } from '@arcaelas/dynamite';
 @Name("users")
 class User extends Table<User> {
   @HasMany(() => Order, "user_id")
-  declare orders: HasMany<Order>; // Array de Order
+  declare orders: NonAttribute<Order[]>; // Array de Order
 
   @HasMany(() => Review, "user_id")
-  declare reviews: HasMany<Review>;
+  declare reviews: NonAttribute<Review[]>;
 }
 
 @Name("orders")
 class Order extends Table<Order> {
   @BelongsTo(() => User, "user_id")
-  declare user: BelongsTo<User>; // User o null
+  declare user: NonAttribute<User | null>; // User o null
 }
 ```
 

@@ -81,8 +81,8 @@ const dynamite = new Dynamite({
     secretAccessKey: "test"
   }
 });
-dynamite.connect();
-await dynamite.sync();
+await dynamite.connect();
+
 
 // For AWS production
 const dynamite = new Dynamite({
@@ -93,8 +93,8 @@ const dynamite = new Dynamite({
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
   }
 });
-dynamite.connect();
-await dynamite.sync();
+await dynamite.connect();
+
 ```
 
 **Configuration Options:**
@@ -481,8 +481,8 @@ const dynamite = new Dynamite({
     secretAccessKey: "test"
   }
 });
-dynamite.connect();
-await dynamite.sync();
+await dynamite.connect();
+
 
 // Main application
 async function main() {

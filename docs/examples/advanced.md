@@ -21,18 +21,16 @@ This comprehensive example demonstrates advanced query patterns, pagination, fil
 
 Dynamite supports a rich set of query operators for flexible data filtering:
 
-| Operator | Description | Example |
-|----------|-------------|---------|
-| `=` | Equal to (default) | `where("age", 25)` |
-| `!=` | Not equal to | `where("status", "!=", "deleted")` |
-| `<` | Less than | `where("age", "<", 18)` |
-| `<=` | Less than or equal | `where("age", "<=", 65)` |
-| `>` | Greater than | `where("score", ">", 100)` |
-| `>=` | Greater than or equal | `where("age", ">=", 18)` |
-| `in` | In array | `where("role", "in", ["admin", "user"])` |
-| `not-in` | Not in array | `where("status", "not-in", ["banned"])` |
-| `contains` | String contains | `where("email", "contains", "gmail")` |
-| `begins-with` | String starts with | `where("name", "begins-with", "John")` |
+| Operator | Alias | Description | Example |
+|----------|-------|-------------|---------|
+| `=` | `$eq` | Equal to (default) | `where("age", 25)` |
+| `!=` | `$ne`, `<>` | Not equal to | `where("status", "!=", "deleted")` |
+| `<` | `$lt` | Less than | `where("age", "<", 18)` |
+| `<=` | `$lte` | Less than or equal | `where("age", "<=", 65)` |
+| `>` | `$gt` | Greater than | `where("score", ">", 100)` |
+| `>=` | `$gte` | Greater than or equal | `where("age", ">=", 18)` |
+| `in` | `$in` | In array | `where("role", "in", ["admin", "user"])` |
+| `include` | `contains`, `$include`, `$contains` | String contains | `where("email", "contains", "gmail")` |
 
 ## Comparison Queries
 
@@ -162,26 +160,6 @@ const specific_users = await User.where(
 const users = await User.where("id", ["user-1", "user-2", "user-3"]);
 ```
 
-### Not In Operator
-
-```typescript
-// Exclude banned and deleted users
-const active_users = await User.where(
-  "status",
-  "not-in",
-  ["banned", "deleted", "suspended"]
-);
-
-console.log(`Active users: ${active_users.length}`);
-
-// Exclude test users
-const real_users = await User.where(
-  "email",
-  "not-in",
-  ["test@example.com", "demo@example.com"]
-);
-```
-
 ## String Queries
 
 Perform pattern matching on string fields:
@@ -198,20 +176,6 @@ const johns = await User.where("name", "contains", "john");
 
 // Find users with specific domain
 const company_users = await User.where("email", "contains", "@company.com");
-```
-
-### Begins With Operator
-
-```typescript
-// Find users with name starting with "J"
-const j_users = await User.where("name", "begins-with", "J");
-console.log(`Names starting with J: ${j_users.length}`);
-
-// Find users with specific prefix
-const admin_users = await User.where("username", "begins-with", "admin_");
-
-// Find orders with specific ID prefix
-const orders_2024 = await Order.where("id", "begins-with", "2024-");
 ```
 
 ### Case-Insensitive Search
@@ -643,8 +607,8 @@ const dynamite = new Dynamite({
 // Main application
 async function main() {
   // Connect and sync tables
-  dynamite.connect();
-  await dynamite.sync();
+  await dynamite.connect();
+  
   console.log("=== Advanced Queries Example ===\n");
 
   // 1. Create sample users
@@ -690,10 +654,7 @@ async function main() {
   console.log(`Privileged users: ${privileged.length}`);
 
   const gmail_users = await User.where("email", "contains", "gmail");
-  console.log(`Gmail users: ${gmail_users.length}`);
-
-  const j_names = await User.where("name", "begins-with", "J");
-  console.log(`Names starting with J: ${j_names.length}\n`);
+  console.log(`Gmail users: ${gmail_users.length}\n`);
 
   // 5. Pagination
   console.log("5. Pagination...");
@@ -832,7 +793,6 @@ Young adults (age < 30): 4
 4. Array queries...
 Privileged users: 5
 Gmail users: 5
-Names starting with J: 2
 
 5. Pagination...
 Page 1: 3 users
@@ -1060,7 +1020,7 @@ async function get_users_1() {
 ### API References
 
 - [Table API](../references/table.md) - Complete Table class documentation
-- [Query Operators](../references/core-concepts.md#query-operators) - All available operators
+- [Types Reference](../references/types.md) - Query operators and types
 - [Decorators Guide](../references/decorators.md) - All available decorators
 
 ### Advanced Topics

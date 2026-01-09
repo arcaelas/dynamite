@@ -81,8 +81,8 @@ const dynamite = new Dynamite({
     secretAccessKey: "test"
   }
 });
-dynamite.connect();
-await dynamite.sync();
+await dynamite.connect();
+
 
 // Für AWS-Produktion
 const dynamite = new Dynamite({
@@ -93,8 +93,8 @@ const dynamite = new Dynamite({
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
   }
 });
-dynamite.connect();
-await dynamite.sync();
+await dynamite.connect();
+
 ```
 
 **Konfigurationsoptionen:**
@@ -440,8 +440,8 @@ const dynamite = new Dynamite({
 // Hauptanwendung
 async function main() {
   // Verbindung herstellen und Tabellen synchronisieren
-  dynamite.connect();
-  await dynamite.sync();
+  await dynamite.connect();
+  
   console.log("=== User Management System ===\n");
 
   // 1. CREATE - Neue Benutzer hinzufügen

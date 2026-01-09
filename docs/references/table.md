@@ -9,7 +9,7 @@ The `Table` class is the base class for all models in Dynamite ORM. It provides 
 - Complete CRUD operations
 - Flexible query system with multiple operators
 - Support for HasMany, BelongsTo, HasOne, and ManyToMany relationships
-- Automatic timestamp management (createdAt/updatedAt)
+- Automatic timestamp management (created_at/updated_at)
 - Built-in validations and mutations
 - Pagination and sorting
 - Specific attribute selection
@@ -82,7 +82,7 @@ await user.save();
 
 ## Instance Methods
 
-### `save(): Promise<this>`
+### `save(): Promise<boolean>`
 
 Saves or updates the current record in the database.
 
@@ -92,7 +92,7 @@ Saves or updates the current record in the database.
 - Automatically updates the `updated_at` field if defined
 - Sets `created_at` only on new records
 
-**Returns:** The current updated instance
+**Returns:** `true` if the operation succeeded
 
 **Example:**
 
@@ -111,14 +111,14 @@ await user.save(); // Only updated_at is updated
 
 ---
 
-### `update(patch: Partial<InferAttributes<T>>): Promise<this>`
+### `update(patch: Partial<InferAttributes<T>>): Promise<boolean>`
 
 Partially updates the record with the provided fields.
 
 **Parameters:**
 - `patch` - Object with the fields to update
 
-**Returns:** The current updated instance
+**Returns:** `true` if the operation succeeded
 
 **Example:**
 
@@ -244,12 +244,13 @@ console.log(json);
 
 ## Static Methods
 
-### `create<M>(data: InferAttributes<M>): Promise<M>`
+### `create<M>(data: InferAttributes<M>, tx?: TransactionContext): Promise<M>`
 
 Creates and persists a new record in the database.
 
 **Parameters:**
 - `data` - Object with the attributes for the new record
+- `tx` - (Optional) Transaction context for atomic operations
 
 **Characteristics:**
 - Creates a new instance
@@ -275,13 +276,14 @@ console.log(user.created_at); // "2025-01-15T10:30:00.000Z"
 
 ---
 
-### `update<M>(updates, filters): Promise<number>`
+### `update<M>(updates, filters, tx?: TransactionContext): Promise<number>`
 
 Updates multiple records matching the filters.
 
 **Parameters:**
 - `updates` - Object with fields to update
 - `filters` - Object with selection criteria
+- `tx` - (Optional) Transaction context for atomic operations
 
 **Returns:** Number of updated records
 
@@ -298,12 +300,13 @@ console.log(`${count} users suspended`);
 
 ---
 
-### `delete<M>(filters): Promise<number>`
+### `delete<M>(filters, tx?: TransactionContext): Promise<number>`
 
 Deletes records matching the filters.
 
 **Parameters:**
 - `filters` - Object with selection criteria
+- `tx` - (Optional) Transaction context for atomic operations
 
 **Returns:** Number of deleted records
 
@@ -340,17 +343,18 @@ Searches records using a specific operator.
 
 **Supported Operators:**
 
-| Operator | Description | Example |
-|----------|-------------|---------|
-| `"="` | Equal to | `where("age", "=", 25)` |
-| `"!="` | Not equal to | `where("status", "!=", "banned")` |
-| `"<"` | Less than | `where("age", "<", 30)` |
-| `"<="` | Less than or equal | `where("price", "<=", 100)` |
-| `">"` | Greater than | `where("balance", ">", 1000)` |
-| `">="` | Greater than or equal | `where("rating", ">=", 4)` |
-| `"in"` | Included in array | `where("status", "in", ["active", "pending"])` |
-| `"contains"` | Contains substring | `where("name", "contains", "John")` |
-| `"begins-with"` | Begins with | `where("email", "begins-with", "admin@")` |
+| Operator | Alias | Description | Example |
+|----------|-------|-------------|---------|
+| `"="` | `"$eq"` | Equal to | `where("age", "=", 25)` |
+| `"!="` | `"$ne"`, `"<>"` | Not equal to | `where("status", "!=", "banned")` |
+| `"<"` | `"$lt"` | Less than | `where("age", "<", 30)` |
+| `"<="` | `"$lte"` | Less than or equal | `where("price", "<=", 100)` |
+| `">"` | `"$gt"` | Greater than | `where("balance", ">", 1000)` |
+| `">="` | `"$gte"` | Greater than or equal | `where("rating", ">=", 4)` |
+| `"in"` | `"$in"` | Included in array | `where("status", "in", ["active", "pending"])` |
+| `"include"` | `"contains"`, `"$include"`, `"$contains"` | Contains substring | `where("name", "contains", "John")` |
+| `"attribute_exists"` | `"$exists"`, `"attribute-exists"` | Attribute exists | `where("email", "$exists", true)` |
+| `"attribute_not_exists"` | `"$notExists"`, `"attribute-not-exists"` | Attribute not exists | `where("deleted_at", "$notExists", true)` |
 
 **Examples:**
 
@@ -390,13 +394,14 @@ Searches records with advanced options for pagination, sorting, attribute select
 **Available Options:**
 
 ```typescript
-interface QueryOptions<T> {
+interface WhereOptions<T> {
   order?: "ASC" | "DESC";        // Sorting
-  skip?: number;                  // Number of records to skip (offset)
+  skip?: number;                  // Number of records to skip
+  offset?: number;                // Alias for skip
   limit?: number;                 // Maximum number of records to return
   attributes?: string[];          // Specific fields to select
   include?: {                     // Relationships to include
-    [relation: string]: IncludeRelationOptions | true;
+    [relation: string]: WhereOptions<any> | true;
   };
 }
 ```

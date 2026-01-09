@@ -30,9 +30,7 @@ Dynamite soporta un rico conjunto de operadores de consulta para filtrado de dat
 | `>` | Mayor que | `where("score", ">", 100)` |
 | `>=` | Mayor o igual que | `where("age", ">=", 18)` |
 | `in` | En array | `where("role", "in", ["admin", "user"])` |
-| `not-in` | No en array | `where("status", "not-in", ["banned"])` |
 | `contains` | String contiene | `where("email", "contains", "gmail")` |
-| `begins-with` | String comienza con | `where("name", "begins-with", "John")` |
 
 ## Consultas de Comparación
 
@@ -198,20 +196,6 @@ const johns = await User.where("name", "contains", "john");
 
 // Encontrar usuarios con dominio específico
 const company_users = await User.where("email", "contains", "@company.com");
-```
-
-### Operador Begins With
-
-```typescript
-// Encontrar usuarios con nombre que comienza con "J"
-const j_users = await User.where("name", "begins-with", "J");
-console.log(`Names starting with J: ${j_users.length}`);
-
-// Encontrar usuarios con prefijo específico
-const admin_users = await User.where("username", "begins-with", "admin_");
-
-// Encontrar órdenes con prefijo de ID específico
-const orders_2024 = await Order.where("id", "begins-with", "2024-");
 ```
 
 ### Búsqueda Sin Distinción de Mayúsculas
@@ -643,8 +627,8 @@ const dynamite = new Dynamite({
 // Aplicación principal
 async function main() {
   // Conectar y sincronizar tablas
-  dynamite.connect();
-  await dynamite.sync();
+  await dynamite.connect();
+  
   console.log("=== Advanced Queries Example ===\n");
 
   // 1. Crear usuarios de muestra
@@ -690,10 +674,7 @@ async function main() {
   console.log(`Privileged users: ${privileged.length}`);
 
   const gmail_users = await User.where("email", "contains", "gmail");
-  console.log(`Gmail users: ${gmail_users.length}`);
-
-  const j_names = await User.where("name", "begins-with", "J");
-  console.log(`Names starting with J: ${j_names.length}\n`);
+  console.log(`Gmail users: ${gmail_users.length}\n`);
 
   // 5. Paginación
   console.log("5. Pagination...");

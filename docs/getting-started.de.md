@@ -35,8 +35,8 @@ const dynamite = new Dynamite({
     secretAccessKey: "test"
   }
 });
-dynamite.connect();
-await dynamite.sync();
+await dynamite.connect();
+
 
 // Für AWS-Produktion
 const dynamite = new Dynamite({
@@ -47,8 +47,8 @@ const dynamite = new Dynamite({
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
   }
 });
-dynamite.connect();
-await dynamite.sync();
+await dynamite.connect();
+
 ```
 
 ## Schritt 1: Ihr erstes Modell
@@ -267,7 +267,7 @@ if (user) {
 
 ```typescript
 // Nach ID löschen
-await User.delete("user-123");
+await User.delete({ id: "user-123" });
 ```
 
 ### Batch-Löschung
@@ -402,8 +402,8 @@ const dynamite = new Dynamite({
     secretAccessKey: "test"
   }
 });
-dynamite.connect();
-await dynamite.sync();
+await dynamite.connect();
+
 
 // Hauptanwendung
 async function main() {

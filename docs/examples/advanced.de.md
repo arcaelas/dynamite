@@ -30,9 +30,7 @@ Dynamite unterstützt einen umfangreichen Satz von Abfrageoperatoren für flexib
 | `>` | Größer als | `where("score", ">", 100)` |
 | `>=` | Größer oder gleich | `where("age", ">=", 18)` |
 | `in` | In Array | `where("role", "in", ["admin", "user"])` |
-| `not-in` | Nicht in Array | `where("status", "not-in", ["banned"])` |
 | `contains` | String enthält | `where("email", "contains", "gmail")` |
-| `begins-with` | String beginnt mit | `where("name", "begins-with", "John")` |
 
 ## Vergleichsabfragen
 
@@ -198,20 +196,6 @@ const johns = await User.where("name", "contains", "john");
 
 // Benutzer mit bestimmter Domain finden
 const company_users = await User.where("email", "contains", "@company.com");
-```
-
-### Begins-With-Operator
-
-```typescript
-// Benutzer mit Namen beginnend mit "J" finden
-const j_users = await User.where("name", "begins-with", "J");
-console.log(`Names starting with J: ${j_users.length}`);
-
-// Benutzer mit bestimmtem Präfix finden
-const admin_users = await User.where("username", "begins-with", "admin_");
-
-// Bestellungen mit bestimmtem ID-Präfix finden
-const orders_2024 = await Order.where("id", "begins-with", "2024-");
 ```
 
 ### Groß-/Kleinschreibung Unabhängige Suche
@@ -601,8 +585,8 @@ const dynamite = new Dynamite({
 // Hauptanwendung
 async function main() {
   // Verbindung herstellen und Tabellen synchronisieren
-  dynamite.connect();
-  await dynamite.sync();
+  await dynamite.connect();
+  
   console.log("=== Advanced Queries Example ===\n");
 
   // Beispielbenutzer erstellen

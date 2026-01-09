@@ -29,7 +29,7 @@ import { HasMany, BelongsTo, NonAttribute } from "@arcaelas/dynamite";
 // Parent model (User has many Orders)
 class User extends Table<User> {
   @HasMany(() => Order, "user_id")
-  declare orders: NonAttribute<HasMany<Order>>;
+  declare orders: NonAttribute<Order[]>;
 }
 
 // Child model (Order belongs to User)
@@ -37,7 +37,7 @@ class Order extends Table<Order> {
   declare user_id: string; // Foreign key
 
   @BelongsTo(() => User, "user_id")
-  declare user: NonAttribute<BelongsTo<User>>;
+  declare user: NonAttribute<User | null>;
 }
 ```
 
@@ -74,7 +74,7 @@ class User extends Table<User> {
 
   // One-to-many: User has many Posts
   @HasMany(() => Post, "user_id")
-  declare posts: NonAttribute<HasMany<Post>>;
+  declare posts: NonAttribute<Post[]>;
 }
 
 // Post model (child)
@@ -130,15 +130,15 @@ class User extends Table<User> {
 
   // User has many Posts
   @HasMany(() => Post, "user_id")
-  declare posts: NonAttribute<HasMany<Post>>;
+  declare posts: NonAttribute<Post[]>;
 
   // User has many Comments
   @HasMany(() => Comment, "user_id")
-  declare comments: NonAttribute<HasMany<Comment>>;
+  declare comments: NonAttribute<Comment[]>;
 
   // User has many Orders
   @HasMany(() => Order, "user_id")
-  declare orders: NonAttribute<HasMany<Order>>;
+  declare orders: NonAttribute<Order[]>;
 }
 
 // Load user with all relationships
@@ -175,7 +175,7 @@ class Post extends Table<Post> {
 
   // Many-to-one: Post belongs to User
   @BelongsTo(() => User, "user_id")
-  declare user: NonAttribute<BelongsTo<User>>;
+  declare user: NonAttribute<User | null>;
 }
 
 // User model (parent)
@@ -229,11 +229,11 @@ class Order extends Table<Order> {
 
   // Order belongs to User
   @BelongsTo(() => User, "user_id")
-  declare user: NonAttribute<BelongsTo<User>>;
+  declare user: NonAttribute<User | null>;
 
   // Order belongs to Product
   @BelongsTo(() => Product, "product_id")
-  declare product: NonAttribute<BelongsTo<Product>>;
+  declare product: NonAttribute<Product | null>;
 }
 
 // Load order with both relationships
@@ -264,7 +264,7 @@ class User extends Table<User> {
   declare name: string;
 
   @HasMany(() => Post, "user_id")
-  declare posts: NonAttribute<HasMany<Post>>;
+  declare posts: NonAttribute<Post[]>;
 }
 
 class Post extends Table<Post> {
@@ -274,10 +274,10 @@ class Post extends Table<Post> {
   declare title: string;
 
   @BelongsTo(() => User, "user_id")
-  declare user: NonAttribute<BelongsTo<User>>;
+  declare user: NonAttribute<User | null>;
 
   @HasMany(() => Comment, "post_id")
-  declare comments: NonAttribute<HasMany<Comment>>;
+  declare comments: NonAttribute<Comment[]>;
 }
 
 class Comment extends Table<Comment> {
@@ -319,10 +319,10 @@ class Order extends Table<Order> {
   declare user_id: string;
 
   @BelongsTo(() => User, "user_id")
-  declare user: NonAttribute<BelongsTo<User>>;
+  declare user: NonAttribute<User | null>;
 
   @HasMany(() => OrderItem, "order_id")
-  declare items: NonAttribute<HasMany<OrderItem>>;
+  declare items: NonAttribute<OrderItem[]>;
 }
 
 class OrderItem extends Table<OrderItem> {
@@ -333,7 +333,7 @@ class OrderItem extends Table<OrderItem> {
   declare quantity: number;
 
   @BelongsTo(() => Product, "product_id")
-  declare product: NonAttribute<BelongsTo<Product>>;
+  declare product: NonAttribute<Product | null>;
 }
 
 class Product extends Table<Product> {
@@ -479,10 +479,10 @@ class User extends Table<User> {
 
   // Relationships
   @HasMany(() => Order, "user_id")
-  declare orders: NonAttribute<HasMany<Order>>;
+  declare orders: NonAttribute<Order[]>;
 
   @HasMany(() => Review, "user_id")
-  declare reviews: NonAttribute<HasMany<Review>>;
+  declare reviews: NonAttribute<Review[]>;
 }
 
 // Product model
@@ -503,10 +503,10 @@ class Product extends Table<Product> {
 
   // Relationships
   @HasMany(() => OrderItem, "product_id")
-  declare order_items: NonAttribute<HasMany<OrderItem>>;
+  declare order_items: NonAttribute<OrderItem[]>;
 
   @HasMany(() => Review, "product_id")
-  declare reviews: NonAttribute<HasMany<Review>>;
+  declare reviews: NonAttribute<Review[]>;
 }
 
 // Order model
@@ -530,10 +530,10 @@ class Order extends Table<Order> {
 
   // Relationships
   @BelongsTo(() => User, "user_id")
-  declare user: NonAttribute<BelongsTo<User>>;
+  declare user: NonAttribute<User | null>;
 
   @HasMany(() => OrderItem, "order_id")
-  declare items: NonAttribute<HasMany<OrderItem>>;
+  declare items: NonAttribute<OrderItem[]>;
 }
 
 // OrderItem model
@@ -549,10 +549,10 @@ class OrderItem extends Table<OrderItem> {
 
   // Relationships
   @BelongsTo(() => Order, "order_id")
-  declare order: NonAttribute<BelongsTo<Order>>;
+  declare order: NonAttribute<Order | null>;
 
   @BelongsTo(() => Product, "product_id")
-  declare product: NonAttribute<BelongsTo<Product>>;
+  declare product: NonAttribute<Product | null>;
 }
 
 // Review model
@@ -571,10 +571,10 @@ class Review extends Table<Review> {
 
   // Relationships
   @BelongsTo(() => User, "user_id")
-  declare user: NonAttribute<BelongsTo<User>>;
+  declare user: NonAttribute<User | null>;
 
   @BelongsTo(() => Product, "product_id")
-  declare product: NonAttribute<BelongsTo<Product>>;
+  declare product: NonAttribute<Product | null>;
 }
 
 // Configure DynamoDB and register all tables
@@ -591,8 +591,8 @@ const dynamite = new Dynamite({
 // Main application
 async function main() {
   // Connect and sync tables
-  dynamite.connect();
-  await dynamite.sync();
+  await dynamite.connect();
+  
   console.log("=== E-Commerce Relationships Example ===\n");
 
   // 1. Create users
@@ -862,11 +862,11 @@ class Category extends Table<Category> {
 
   // Category has many child categories
   @HasMany(() => Category, "parent_id")
-  declare children: NonAttribute<HasMany<Category>>;
+  declare children: NonAttribute<Category[]>;
 
   // Category belongs to parent category
   @BelongsTo(() => Category, "parent_id")
-  declare parent: NonAttribute<BelongsTo<Category>>;
+  declare parent: NonAttribute<Category | null>;
 }
 
 // Load category tree
@@ -893,7 +893,7 @@ class Student extends Table<Student> {
   declare name: string;
 
   @HasMany(() => Enrollment, "student_id")
-  declare enrollments: NonAttribute<HasMany<Enrollment>>;
+  declare enrollments: NonAttribute<Enrollment[]>;
 }
 
 // Course model
@@ -903,7 +903,7 @@ class Course extends Table<Course> {
   declare name: string;
 
   @HasMany(() => Enrollment, "course_id")
-  declare enrollments: NonAttribute<HasMany<Enrollment>>;
+  declare enrollments: NonAttribute<Enrollment[]>;
 }
 
 // Junction table
@@ -916,10 +916,10 @@ class Enrollment extends Table<Enrollment> {
   declare grade: string;
 
   @BelongsTo(() => Student, "student_id")
-  declare student: NonAttribute<BelongsTo<Student>>;
+  declare student: NonAttribute<Student | null>;
 
   @BelongsTo(() => Course, "course_id")
-  declare course: NonAttribute<BelongsTo<Course>>;
+  declare course: NonAttribute<Course | null>;
 }
 
 // Load student with courses
@@ -972,7 +972,7 @@ class Comment extends Table<Comment> {
 ```typescript
 // Good - marked as NonAttribute
 @HasMany(() => Order, "user_id")
-declare orders: NonAttribute<HasMany<Order>>;
+declare orders: NonAttribute<Order[]>;
 
 // Bad - will try to save to database
 @HasMany(() => Order, "user_id")
@@ -987,13 +987,13 @@ class Order extends Table<Order> {
   declare user_id: string; // Foreign key field
 
   @BelongsTo(() => User, "user_id")
-  declare user: NonAttribute<BelongsTo<User>>;
+  declare user: NonAttribute<User | null>;
 }
 
 // Bad - missing foreign key field
 class Order extends Table<Order> {
   @BelongsTo(() => User, "user_id")
-  declare user: NonAttribute<BelongsTo<User>>;
+  declare user: NonAttribute<User | null>;
 }
 ```
 
@@ -1002,11 +1002,11 @@ class Order extends Table<Order> {
 ```typescript
 // Good - arrow function (avoids circular dependency)
 @HasMany(() => Order, "user_id")
-declare orders: NonAttribute<HasMany<Order>>;
+declare orders: NonAttribute<Order[]>;
 
 // Bad - direct reference (can cause circular dependency issues)
 @HasMany(Order, "user_id")
-declare orders: NonAttribute<HasMany<Order>>;
+declare orders: NonAttribute<Order[]>;
 ```
 
 ### 4. Filter Relationships for Performance

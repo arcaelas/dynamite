@@ -33,7 +33,7 @@ class User extends Table<User> {
   declare email: string;
 
   @CreatedAt()
-  declare created_at: Date;
+  declare created_at: string;
 }
 
 // Configure and connect
@@ -41,8 +41,7 @@ const dynamite = new Dynamite({
   region: 'us-east-1',
   tables: [User]
 });
-dynamite.connect();
-await dynamite.sync();
+await dynamite.connect();
 
 // Create
 const user = await User.create({
@@ -76,6 +75,7 @@ await user.destroy();
 | `@UpdatedAt()` | Auto-set on update |
 | `@DeleteAt()` | Soft delete timestamp |
 | `@HasMany()` | One-to-many relationship |
+| `@HasOne()` | One-to-one relationship |
 | `@BelongsTo()` | Many-to-one relationship |
 | `@ManyToMany()` | Many-to-many with pivot table |
 
@@ -89,7 +89,7 @@ class User extends Table<User> {
   declare id: string;
 
   @HasMany(() => Post, 'user_id')
-  declare posts: HasMany<Post>;
+  declare posts: NonAttribute<Post[]>;
 }
 
 class Post extends Table<Post> {
@@ -99,7 +99,7 @@ class Post extends Table<Post> {
   declare user_id: string;
 
   @BelongsTo(() => User, 'user_id')
-  declare user: BelongsTo<User>;
+  declare user: NonAttribute<User | null>;
 }
 
 // Load with relations

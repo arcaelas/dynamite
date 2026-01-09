@@ -99,7 +99,7 @@ Decorators are special functions that annotate class properties with metadata. D
 
 | Decorator | Purpose | Example |
 |-----------|---------|---------|
-| `@Default(value)` | Default value | `@Default(() => Date.now()) declare createdAt: number;` |
+| `@Default(value)` | Default value | `@Default(() => Date.now()) declare created_at: number;` |
 | `@Mutate(fn)` | Transform before save | `@Mutate(v => v.toLowerCase()) declare email: string;` |
 | `@Validate(fn)` | Validate before save | `@Validate(v => v.length > 0) declare name: string;` |
 | `@NotNull()` | Require non-null value | `@NotNull() declare email: string;` |
@@ -108,15 +108,17 @@ Decorators are special functions that annotate class properties with metadata. D
 
 | Decorator | Purpose | Example |
 |-----------|---------|---------|
-| `@CreatedAt()` | Auto-set on creation | `@CreatedAt() declare createdAt: string;` |
-| `@UpdatedAt()` | Auto-set on update | `@UpdatedAt() declare updatedAt: string;` |
+| `@CreatedAt()` | Auto-set on creation | `@CreatedAt() declare created_at: string;` |
+| `@UpdatedAt()` | Auto-set on update | `@UpdatedAt() declare updated_at: string;` |
 
 ### Relationship Decorators
 
 | Decorator | Purpose | Example |
 |-----------|---------|---------|
-| `@HasMany(Model, fk)` | One-to-many | `@HasMany(() => Order, "userId") declare orders: any;` |
-| `@BelongsTo(Model, lk)` | Many-to-one | `@BelongsTo(() => User, "userId") declare user: any;` |
+| `@HasMany(Model, fk)` | One-to-many | `@HasMany(() => Order, "user_id") declare orders: any;` |
+| `@HasOne(Model, fk)` | One-to-one | `@HasOne(() => Profile, "user_id") declare profile: any;` |
+| `@BelongsTo(Model, lk)` | Many-to-one | `@BelongsTo(() => User, "user_id") declare user: any;` |
+| `@ManyToMany(Model, pivot, fk, rk)` | Many-to-many | `@ManyToMany(() => Role, "users_roles", "user_id", "role_id") declare roles: any;` |
 
 ### Complete Example
 
@@ -158,10 +160,10 @@ class User extends Table<User> {
   declare active: CreationOptional<boolean>;
 
   @CreatedAt()
-  declare createdAt: CreationOptional<string>;
+  declare created_at: CreationOptional<string>;
 
   @UpdatedAt()
-  declare updatedAt: CreationOptional<string>;
+  declare updated_at: CreationOptional<string>;
 
   @HasMany(() => Order, "userId")
   declare orders: NonAttribute<Order[]>;
@@ -447,8 +449,6 @@ const adults = await User.where("age", ">=", 18);
 // IN - value in array
 const specificRoles = await User.where("role", "in", ["admin", "premium", "vip"]);
 
-// NOT IN - value not in array
-const regularUsers = await User.where("role", "not-in", ["admin", "moderator"]);
 ```
 
 ### String Operators
@@ -456,9 +456,6 @@ const regularUsers = await User.where("role", "not-in", ["admin", "moderator"]);
 ```typescript
 // CONTAINS - string contains substring
 const gmailUsers = await User.where("email", "contains", "gmail");
-
-// BEGINS WITH - string starts with prefix
-const johnUsers = await User.where("name", "begins-with", "John");
 ```
 
 ### Complete Examples
@@ -517,23 +514,23 @@ class User extends Table<User> {
 
   // Auto-set timestamps - always CreationOptional
   @CreatedAt()
-  declare createdAt: CreationOptional<string>;
+  declare created_at: CreationOptional<string>;
 
   @UpdatedAt()
-  declare updatedAt: CreationOptional<string>;
+  declare updated_at: CreationOptional<string>;
 }
 
 // TypeScript knows what's required
 const user = await User.create({
   name: "John",
   email: "john@test.com"
-  // id, role, createdAt, updatedAt are optional
+  // id, role, created_at, updated_at are optional
 });
 
 // But all fields exist after creation
-console.log(user.id);        // string (not undefined)
-console.log(user.role);      // "customer"
-console.log(user.createdAt); // "2023-12-01T10:30:00.000Z"
+console.log(user.id);         // string (not undefined)
+console.log(user.role);       // "customer"
+console.log(user.created_at); // "2023-12-01T10:30:00.000Z"
 ```
 
 ### NonAttribute
@@ -607,8 +604,9 @@ type UserAttrs = InferAttributes<User>;
 async function updateUser(
   id: string,
   updates: Partial<InferAttributes<User>>
-): Promise<User> {
-  return await User.update(updates, { id });
+): Promise<User | undefined> {
+  await User.update(updates, { id });
+  return User.first({ id });
 }
 ```
 
@@ -689,10 +687,10 @@ class User extends Table<User> {
 
   // Auto-set timestamps (CreationOptional)
   @CreatedAt()
-  declare createdAt: CreationOptional<string>;
+  declare created_at: CreationOptional<string>;
 
   @UpdatedAt()
-  declare updatedAt: CreationOptional<string>;
+  declare updated_at: CreationOptional<string>;
 
   // Computed (NonAttribute)
   declare fullName: NonAttribute<string>;
@@ -718,8 +716,8 @@ type Creation = {
   email: string;        // Required
   id?: string;          // Optional (CreationOptional)
   role?: string;        // Optional (CreationOptional)
-  createdAt?: string;   // Optional (CreationOptional)
-  updatedAt?: string;   // Optional (CreationOptional)
+  created_at?: string;  // Optional (CreationOptional)
+  updated_at?: string;  // Optional (CreationOptional)
   // fullName not included (NonAttribute)
   // orders not included (NonAttribute)
 };
@@ -730,8 +728,8 @@ type Instance = {
   lastName: string;
   email: string;
   role: string;         // Required after creation
-  createdAt: string;    // Required after creation
-  updatedAt: string;    // Required after creation
+  created_at: string;   // Required after creation
+  updated_at: string;   // Required after creation
   fullName: string;     // Available but not stored
   orders: Order[];      // Available when included
 };
@@ -801,8 +799,8 @@ Understanding how data flows through Dynamite helps you use it effectively. Here
    │   email passes isEmail() check ✓                       │
    │   ↓                                                    │
    │ Apply @CreatedAt / @UpdatedAt                          │
-   │   createdAt = "2023-12-01T10:30:00.000Z"               │
-   │   updatedAt = "2023-12-01T10:30:00.000Z"               │
+   │   created_at = "2023-12-01T10:30:00.000Z"              │
+   │   updated_at = "2023-12-01T10:30:00.000Z"              │
    └────────────────────────────────────────────────────────┘
                             ↓
 5. SERIALIZATION
@@ -813,8 +811,8 @@ Understanding how data flows through Dynamite helps you use it effectively. Here
    │   {                                                    │
    │     id: "550e8400-...",                                │
    │     email: "john@example.com",                         │
-   │     createdAt: "2023-12-01T10:30:00.000Z",             │
-   │     updatedAt: "2023-12-01T10:30:00.000Z"              │
+   │     created_at: "2023-12-01T10:30:00.000Z",            │
+   │     updated_at: "2023-12-01T10:30:00.000Z"             │
    │   }                                                    │
    └────────────────────────────────────────────────────────┘
                             ↓
@@ -826,8 +824,8 @@ Understanding how data flows through Dynamite helps you use it effectively. Here
    │   {                                                    │
    │     id: { S: "550e8400-..." },                         │
    │     email: { S: "john@example.com" },                  │
-   │     createdAt: { S: "2023-12-01T10:30:00.000Z" },      │
-   │     updatedAt: { S: "2023-12-01T10:30:00.000Z" }       │
+   │     created_at: { S: "2023-12-01T10:30:00.000Z" },     │
+   │     updated_at: { S: "2023-12-01T10:30:00.000Z" }      │
    │   }                                                    │
    └────────────────────────────────────────────────────────┘
 
@@ -900,7 +898,7 @@ This guide covered the core concepts of Dynamite:
 - **Primary Keys**: Partition and sort keys using @PrimaryKey and @IndexSort
 - **Indexes**: GSI and LSI for efficient querying
 - **Query Builder**: Fluent interface with where(), first(), last()
-- **Query Operators**: =, !=, <, >, <=, >=, in, not-in, contains, begins-with
+- **Query Operators**: =, !=, <, >, <=, >=, in, contains
 - **Type System**: CreationOptional, NonAttribute, InferAttributes for type safety
 - **Data Flow**: How data moves through decorators to the database
 

@@ -375,8 +375,6 @@ const adults = await User.where("age", ">=", 18);
 // IN - valor en array
 const specificRoles = await User.where("role", "in", ["admin", "premium", "vip"]);
 
-// NOT IN - valor no en array
-const regularUsers = await User.where("role", "not-in", ["admin", "moderator"]);
 ```
 
 ### Operadores de String
@@ -384,9 +382,6 @@ const regularUsers = await User.where("role", "not-in", ["admin", "moderator"]);
 ```typescript
 // CONTAINS - string contiene substring
 const gmailUsers = await User.where("email", "contains", "gmail");
-
-// BEGINS WITH - string comienza con prefijo
-const johnUsers = await User.where("name", "begins-with", "John");
 ```
 
 ---

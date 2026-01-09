@@ -29,7 +29,7 @@ import { HasMany, BelongsTo, NonAttribute } from "@arcaelas/dynamite";
 // Elternmodell (User hat viele Orders)
 class User extends Table<User> {
   @HasMany(() => Order, "user_id")
-  declare orders: NonAttribute<HasMany<Order>>;
+  declare orders: NonAttribute<Order[]>;
 }
 
 // Kindmodell (Order gehört zu User)
@@ -37,7 +37,7 @@ class Order extends Table<Order> {
   declare user_id: string; // Fremdschlüssel
 
   @BelongsTo(() => User, "user_id")
-  declare user: NonAttribute<BelongsTo<User>>;
+  declare user: NonAttribute<User | null>;
 }
 ```
 
@@ -74,7 +74,7 @@ class User extends Table<User> {
 
   // Eins-zu-Viele: User hat viele Posts
   @HasMany(() => Post, "user_id")
-  declare posts: NonAttribute<HasMany<Post>>;
+  declare posts: NonAttribute<Post[]>;
 }
 
 // Post-Modell (Kind)
@@ -130,15 +130,15 @@ class User extends Table<User> {
 
   // User hat viele Posts
   @HasMany(() => Post, "user_id")
-  declare posts: NonAttribute<HasMany<Post>>;
+  declare posts: NonAttribute<Post[]>;
 
   // User hat viele Comments
   @HasMany(() => Comment, "user_id")
-  declare comments: NonAttribute<HasMany<Comment>>;
+  declare comments: NonAttribute<Comment[]>;
 
   // User hat viele Orders
   @HasMany(() => Order, "user_id")
-  declare orders: NonAttribute<HasMany<Order>>;
+  declare orders: NonAttribute<Order[]>;
 }
 
 // Benutzer mit allen Beziehungen laden
@@ -175,7 +175,7 @@ class Post extends Table<Post> {
 
   // Viele-zu-Eins: Post gehört zu User
   @BelongsTo(() => User, "user_id")
-  declare user: NonAttribute<BelongsTo<User>>;
+  declare user: NonAttribute<User | null>;
 }
 
 // User-Modell (Eltern)
@@ -227,7 +227,7 @@ class User extends Table<User> {
   declare name: string;
 
   @HasMany(() => Post, "user_id")
-  declare posts: NonAttribute<HasMany<Post>>;
+  declare posts: NonAttribute<Post[]>;
 }
 
 class Post extends Table<Post> {
@@ -237,10 +237,10 @@ class Post extends Table<Post> {
   declare title: string;
 
   @BelongsTo(() => User, "user_id")
-  declare user: NonAttribute<BelongsTo<User>>;
+  declare user: NonAttribute<User | null>;
 
   @HasMany(() => Comment, "post_id")
-  declare comments: NonAttribute<HasMany<Comment>>;
+  declare comments: NonAttribute<Comment[]>;
 }
 
 class Comment extends Table<Comment> {
@@ -356,7 +356,7 @@ class User extends Table<User> {
 
   // Beziehungen
   @HasMany(() => Order, "user_id")
-  declare orders: NonAttribute<HasMany<Order>>;
+  declare orders: NonAttribute<Order[]>;
 }
 
 // Product-Modell
@@ -373,7 +373,7 @@ class Product extends Table<Product> {
 
   // Beziehungen
   @HasMany(() => OrderItem, "product_id")
-  declare order_items: NonAttribute<HasMany<OrderItem>>;
+  declare order_items: NonAttribute<OrderItem[]>;
 }
 
 // Order-Modell
@@ -390,10 +390,10 @@ class Order extends Table<Order> {
 
   // Beziehungen
   @BelongsTo(() => User, "user_id")
-  declare user: NonAttribute<BelongsTo<User>>;
+  declare user: NonAttribute<User | null>;
 
   @HasMany(() => OrderItem, "order_id")
-  declare items: NonAttribute<HasMany<OrderItem>>;
+  declare items: NonAttribute<OrderItem[]>;
 }
 
 // OrderItem-Modell
@@ -409,10 +409,10 @@ class OrderItem extends Table<OrderItem> {
 
   // Beziehungen
   @BelongsTo(() => Order, "order_id")
-  declare order: NonAttribute<BelongsTo<Order>>;
+  declare order: NonAttribute<Order | null>;
 
   @BelongsTo(() => Product, "product_id")
-  declare product: NonAttribute<BelongsTo<Product>>;
+  declare product: NonAttribute<Product | null>;
 }
 
 // DynamoDB konfigurieren und alle Tabellen registrieren
@@ -429,8 +429,8 @@ const dynamite = new Dynamite({
 // Hauptanwendung
 async function main() {
   // Verbindung herstellen und Tabellen synchronisieren
-  dynamite.connect();
-  await dynamite.sync();
+  await dynamite.connect();
+  
   console.log("=== E-Commerce Relationships Example ===\n");
 
   // Benutzer erstellen
@@ -514,11 +514,11 @@ class Category extends Table<Category> {
 
   // Category hat viele Kindkategorien
   @HasMany(() => Category, "parent_id")
-  declare children: NonAttribute<HasMany<Category>>;
+  declare children: NonAttribute<Category[]>;
 
   // Category gehört zu Elternkategorie
   @BelongsTo(() => Category, "parent_id")
-  declare parent: NonAttribute<BelongsTo<Category>>;
+  declare parent: NonAttribute<Category | null>;
 }
 ```
 
@@ -534,7 +534,7 @@ class Student extends Table<Student> {
   declare name: string;
 
   @HasMany(() => Enrollment, "student_id")
-  declare enrollments: NonAttribute<HasMany<Enrollment>>;
+  declare enrollments: NonAttribute<Enrollment[]>;
 }
 
 // Course-Modell
@@ -544,7 +544,7 @@ class Course extends Table<Course> {
   declare name: string;
 
   @HasMany(() => Enrollment, "course_id")
-  declare enrollments: NonAttribute<HasMany<Enrollment>>;
+  declare enrollments: NonAttribute<Enrollment[]>;
 }
 
 // Verbindungstabelle
@@ -557,10 +557,10 @@ class Enrollment extends Table<Enrollment> {
   declare grade: string;
 
   @BelongsTo(() => Student, "student_id")
-  declare student: NonAttribute<BelongsTo<Student>>;
+  declare student: NonAttribute<Student | null>;
 
   @BelongsTo(() => Course, "course_id")
-  declare course: NonAttribute<BelongsTo<Course>>;
+  declare course: NonAttribute<Course | null>;
 }
 ```
 
@@ -571,7 +571,7 @@ class Enrollment extends Table<Enrollment> {
 ```typescript
 // Gut - als NonAttribute markiert
 @HasMany(() => Order, "user_id")
-declare orders: NonAttribute<HasMany<Order>>;
+declare orders: NonAttribute<Order[]>;
 
 // Schlecht - wird versuchen, in Datenbank zu speichern
 @HasMany(() => Order, "user_id")
@@ -586,7 +586,7 @@ class Order extends Table<Order> {
   declare user_id: string; // Fremdschlüsselfeld
 
   @BelongsTo(() => User, "user_id")
-  declare user: NonAttribute<BelongsTo<User>>;
+  declare user: NonAttribute<User | null>;
 }
 ```
 
@@ -595,7 +595,7 @@ class Order extends Table<Order> {
 ```typescript
 // Gut - Pfeilfunktion (vermeidet Zirkelbezug)
 @HasMany(() => Order, "user_id")
-declare orders: NonAttribute<HasMany<Order>>;
+declare orders: NonAttribute<Order[]>;
 ```
 
 ### 4. Beziehungen für Performance Filtern
