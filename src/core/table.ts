@@ -40,7 +40,7 @@ interface Schema {
       store: {
         [K: string]: any;
         relation: {
-          type: "HasMany" | "HasOne" | "BelognsTo" | "ManyToMany";
+          type: "HasMany" | "HasOne" | "BelongsTo" | "ManyToMany";
           local: string;
           foreign: string;
           pivot?: string;

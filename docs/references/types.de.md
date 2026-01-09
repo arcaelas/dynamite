@@ -1,6 +1,6 @@
-# API-Referenz: Typen
+# Typen API-Referenz
 
-Diese Anleitung dokumentiert alle TypeScript-Typen, die von Dynamite ORM exportiert werden und die Erstellung von Modellen mit vollständiger Type-Safety ermöglichen.
+Diese Anleitung dokumentiert alle TypeScript-Typen, die von Dynamite ORM exportiert werden.
 
 ## Inhaltsverzeichnis
 
@@ -9,21 +9,14 @@ Diese Anleitung dokumentiert alle TypeScript-Typen, die von Dynamite ORM exporti
   - [NonAttribute\<T\>](#nonattributet)
 - [Inferenz-Typen](#inferenz-typen)
   - [InferAttributes\<T\>](#inferattributest)
-  - [FilterableAttributes\<T\>](#filterableattributest)
-- [Beziehungstypen](#beziehungstypen)
-  - [HasMany\<T\>](#hasmanyt)
-  - [BelongsTo\<T\>](#belongstot)
+  - [InferRelations\<T\>](#inferrelationst)
+  - [PickRelations\<T\>](#pickrelationst)
+- [Eingabe-Typen](#eingabe-typen)
+  - [CreateInput\<T\>](#createinputt)
+  - [UpdateInput\<T\>](#updateinputt)
 - [Abfrage-Typen](#abfrage-typen)
   - [QueryOperator](#queryoperator)
-  - [QueryOptions\<T\>](#queryoptionst)
-  - [QueryFilters\<T\>](#queryfilterst)
   - [WhereOptions\<T\>](#whereoptionst)
-  - [IncludeRelationOptions](#includerelationoptions)
-- [Metadaten-Typen](#metadaten-typen)
-  - [Column](#column)
-  - [RelationMetadata](#relationmetadata)
-  - [ValidatorEntry](#validatorentry)
-  - [SerializeConfig](#serializeconfig)
 
 ---
 
@@ -39,8 +32,8 @@ declare field_name: CreationOptional<Type>;
 ```
 
 **Merkmale:**
-- Feld ist optional beim Aufruf von `Model.create()`
-- Feld ist in der Instanz nach dem Speichern vorhanden
+- Das Feld ist optional beim Aufruf von `Model.create()`
+- Das Feld ist in der Instanz nach dem Speichern vorhanden
 - Ideal für automatisch generierte IDs, Zeitstempel und Standardwerte
 
 **Beispiele:**
@@ -49,62 +42,43 @@ declare field_name: CreationOptional<Type>;
 import { Table, PrimaryKey, Default, CreatedAt, UpdatedAt, CreationOptional } from '@arcaelas/dynamite';
 
 class User extends Table<User> {
-  // Automatisch generierte ID - IMMER CreationOptional verwenden
+  // Automatisch generierter Primärschlüssel
   @PrimaryKey()
+  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
-  // Erforderliches Feld während der Erstellung
-  @NotNull()
+  // Pflichtfeld (ohne CreationOptional)
   declare email: string;
 
-  // Feld mit Standardwert - CreationOptional verwenden
-  @Default(() => 'customer')
+  // Feld mit Standardwert
+  @Default(() => "customer")
   declare role: CreationOptional<string>;
 
-  // Boolean mit Standardwert - CreationOptional verwenden
-  @Default(() => true)
-  declare active: CreationOptional<boolean>;
-
-  // Numerisch mit Standardwert - CreationOptional verwenden
-  @Default(() => 0)
-  declare balance: CreationOptional<number>;
-
-  // Automatisch generierte Zeitstempel - IMMER CreationOptional verwenden
+  // Automatisch gesetzte Zeitstempel
   @CreatedAt()
-  declare createdAt: CreationOptional<string>;
+  declare created_at: CreationOptional<string>;
 
   @UpdatedAt()
-  declare updatedAt: CreationOptional<string>;
+  declare updated_at: CreationOptional<string>;
 }
 
-// Während der Erstellung: nur erforderliche Felder
+// Nur email ist während der Erstellung erforderlich
 const user = await User.create({
-  email: 'user@test.com'
-  // id, role, active, balance, createdAt, updatedAt sind optional
+  email: "john@example.com"
+  // id, role, created_at, updated_at sind optional
 });
 
-// Nach dem Speichern: alle Felder sind vorhanden
-console.log(user.id);        // string (automatisch generiert)
-console.log(user.role);      // 'customer' (Standardwert)
-console.log(user.active);    // true (Standardwert)
-console.log(user.balance);   // 0 (Standardwert)
-console.log(user.createdAt); // string (automatisch generierter Zeitstempel)
-console.log(user.updatedAt); // string (automatisch generierter Zeitstempel)
+// Nach der Erstellung sind alle Felder vorhanden
+console.log(user.id);         // "550e8400-e29b-..."
+console.log(user.role);       // "customer"
+console.log(user.created_at); // "2025-01-15T10:30:00.000Z"
 ```
-
-**Verwendungsregel:**
-
-Verwenden Sie `CreationOptional<T>` für:
-1. Felder mit Decorator `@PrimaryKey()` (automatisch generierte IDs)
-2. Felder mit Decorator `@Default()` (Standardwerte)
-3. Felder mit Decorator `@CreatedAt()` oder `@UpdatedAt()` (Zeitstempel)
-4. Alle automatisch vom System berechneten Felder
 
 ---
 
 ### NonAttribute\<T\>
 
-Markiert ein Feld als nicht persistent in der Datenbank. Verwenden Sie dies für berechnete Eigenschaften, Getter, Methoden oder temporäre Daten.
+Markiert ein Feld, das NICHT in der Datenbank gespeichert wird. Verwenden Sie dies für berechnete Eigenschaften, Beziehungen und virtuelle Getter.
 
 **Syntax:**
 ```typescript
@@ -112,119 +86,38 @@ declare field_name: NonAttribute<Type>;
 ```
 
 **Merkmale:**
-- Feld wird NICHT in DynamoDB gespeichert
-- Feld wird NICHT in Abfragen einbezogen
-- Ideal für berechnete Eigenschaften, Getter und Instanzmethoden
-- Wird automatisch von `InferAttributes<T>` ausgeschlossen
+- Das Feld wird von Datenbankoperationen ausgeschlossen
+- Ideal für Beziehungen und berechnete Werte
+- Erscheint nicht in `toJSON()`, es sei denn, es wird explizit hinzugefügt
 
 **Beispiele:**
 
 ```typescript
-import { Table, PrimaryKey, NotNull, NonAttribute } from '@arcaelas/dynamite';
+import { Table, HasMany, BelongsTo, NonAttribute } from '@arcaelas/dynamite';
 
 class User extends Table<User> {
   @PrimaryKey()
   declare id: string;
 
-  @NotNull()
-  declare first_name: string;
+  declare name: string;
 
-  @NotNull()
-  declare last_name: string;
+  // Beziehung - nicht in der Datenbank gespeichert
+  @HasMany(() => Order, "user_id")
+  declare orders: NonAttribute<Order[]>;
 
-  @NotNull()
-  declare birth_date: string;
-
-  // Berechnete Eigenschaft - wird NICHT persistiert
-  declare full_name: NonAttribute<string>;
-
-  // Berechnete Eigenschaft - wird NICHT persistiert
-  declare age: NonAttribute<number>;
-
-  // Instanzmethode - wird NICHT persistiert
-  declare get_display_name: NonAttribute<() => string>;
-
-  constructor(data: any) {
-    super(data);
-
-    // Berechnete Eigenschaften berechnen
-    this.full_name = `${this.first_name} ${this.last_name}`;
-
-    const birth = new Date(this.birth_date);
-    const today = new Date();
-    this.age = today.getFullYear() - birth.getFullYear();
-
-    // Instanzmethode definieren
-    this.get_display_name = () => {
-      return `${this.full_name} (${this.age} Jahre)`;
-    };
-  }
+  // Berechnete Eigenschaft
+  declare display_name: NonAttribute<string>;
 }
 
-const user = await User.create({
-  id: 'user-1',
-  first_name: 'Juan',
-  last_name: 'Pérez',
-  birth_date: '1990-05-15'
-});
-
-// Berechnete Eigenschaften verfügbar
-console.log(user.full_name);           // 'Juan Pérez'
-console.log(user.age);                 // 34
-console.log(user.get_display_name());  // 'Juan Pérez (34 Jahre)'
-
-// Aber sie werden NICHT in der Datenbank gespeichert
-// Nur persistiert werden: id, first_name, last_name, birth_date
-```
-
-**Anwendungsfälle:**
-
-```typescript
-class Product extends Table<Product> {
+class Order extends Table<Order> {
   @PrimaryKey()
   declare id: string;
 
-  @NotNull()
-  declare name: string;
+  declare user_id: string;
 
-  @NotNull()
-  declare price: number;
-
-  @Default(() => 0)
-  declare discount: CreationOptional<number>;
-
-  // Berechneter Endpreis - NonAttribute
-  declare final_price: NonAttribute<number>;
-
-  // Indikator ob im Angebot - NonAttribute
-  declare is_on_sale: NonAttribute<boolean>;
-
-  // Methode zum Anwenden von Rabatten - NonAttribute
-  declare apply_discount: NonAttribute<(additional: number) => number>;
-
-  constructor(data: any) {
-    super(data);
-
-    this.final_price = this.price * (1 - (this.discount ?? 0) / 100);
-    this.is_on_sale = (this.discount ?? 0) > 0;
-
-    this.apply_discount = (additional: number) => {
-      const total_discount = (this.discount ?? 0) + additional;
-      return this.price * (1 - total_discount / 100);
-    };
-  }
+  @BelongsTo(() => User, "user_id")
+  declare user: NonAttribute<User | null>;
 }
-
-const product = await Product.create({
-  id: 'prod-1',
-  name: 'Laptop',
-  price: 1000,
-  discount: 10
-});
-
-console.log(product.final_price);        // 900 (berechnet)
-console.log(product.is_on_sale);         // true (berechnet)
-console.log(product.apply_discount(5));  // 850 (Methode)
 ```
 
 ---
@@ -233,469 +126,144 @@ console.log(product.apply_discount(5));  // 850 (Methode)
 
 ### InferAttributes\<T\>
 
-Leitet automatisch die persistenten Attribute eines Modells ab und schließt Beziehungen, Methoden und `NonAttribute`-Felder aus.
+Extrahiert nur die Datenbankattribute aus einem Modell, ohne Methoden, Beziehungen und Nicht-Attribut-Felder.
 
-**Syntax:**
+**Verwendung:**
 ```typescript
-type ModelAttributes = InferAttributes<ModelClass>;
+import type { InferAttributes } from '@arcaelas/dynamite';
+
+type UserAttributes = InferAttributes<User>;
+// Ergebnis:
+// {
+//   id?: string;            // CreationOptional wird optional
+//   email: string;          // Erforderlich
+//   name: string;           // Erforderlich
+//   role?: string;          // CreationOptional wird optional
+//   created_at?: string;    // CreationOptional wird optional
+//   updated_at?: string;    // CreationOptional wird optional
+// }
 ```
 
-**Merkmale:**
-- Schließt automatisch Beziehungen aus (`HasMany`, `BelongsTo`)
-- Schließt automatisch `NonAttribute`-Felder aus
-- Schließt automatisch Methoden aus
-- Enthält nur Felder, die in DynamoDB persistiert werden
-- Wird intern von `where()`, `create()`, `update()` verwendet
+**Anwendungsfälle:**
+- Type-sichere Funktionsparameter
+- DTO (Data Transfer Object) Definitionen
+- API-Antwort-Typen
 
-**Beispiele:**
+**Beispiel:**
 
 ```typescript
-import { Table, PrimaryKey, NotNull, HasMany, BelongsTo, NonAttribute, InferAttributes } from '@arcaelas/dynamite';
+import type { InferAttributes } from '@arcaelas/dynamite';
+
+// Funktion mit type-sicherer Eingabe
+async function updateUser(
+  id: string,
+  data: Partial<InferAttributes<User>>
+): Promise<boolean> {
+  const user = await User.first({ id });
+  if (user) {
+    return user.update(data);
+  }
+  return false;
+}
+
+// Verwendung
+await updateUser("user-123", { name: "Neuer Name", role: "admin" });
+```
+
+---
+
+### InferRelations\<T\>
+
+Extrahiert nur die Beziehungsfelder aus einem Modell (mit `NonAttribute` markierte Felder).
+
+**Verwendung:**
+```typescript
+import type { InferRelations } from '@arcaelas/dynamite';
+
+type UserRelations = InferRelations<User>;
+// Ergebnis:
+// {
+//   orders: Order[];        // HasMany wird zu Array
+//   profile: Profile;       // HasOne wird zu Einzelwert
+// }
+```
+
+**Beispiel:**
+
+```typescript
+import type { InferRelations } from '@arcaelas/dynamite';
 
 class User extends Table<User> {
   @PrimaryKey()
   declare id: string;
 
-  @NotNull()
-  declare email: string;
+  @HasMany(() => Post, "user_id")
+  declare posts: NonAttribute<Post[]>;
 
-  @NotNull()
-  declare name: string;
-
-  @Default(() => 'customer')
-  declare role: CreationOptional<string>;
-
-  // Beziehung - ist KEIN persistentes Attribut
-  @HasMany(() => Order, 'user_id')
-  declare orders: any;
-
-  // Berechnetes Feld - ist KEIN persistentes Attribut
-  declare display_name: NonAttribute<string>;
+  @HasOne(() => Profile, "user_id")
+  declare profile: NonAttribute<Profile | null>;
 }
 
-// InferAttributes schließt 'orders' und 'display_name' aus
-type UserAttributes = InferAttributes<User>;
-// Entspricht:
-// {
-//   id: string;
-//   email: string;
-//   name: string;
-//   role: string | undefined;
-// }
-
-// Verwendung in Abfragen
-const users = await User.where({
-  role: 'customer',
-  // orders: {} // ❌ Fehler: 'orders' ist kein filterbares Attribut
-  // display_name: 'X' // ❌ Fehler: 'display_name' ist kein filterbares Attribut
-});
-
-// Verwendung in Updates
-await User.update(
-  {
-    name: 'Neuer Name',
-    // orders: [] // ❌ Fehler: Beziehung kann nicht aktualisiert werden
-    // display_name: 'X' // ❌ Fehler: NonAttribute kann nicht aktualisiert werden
-  },
-  { id: 'user-1' }
-);
-```
-
-**Interne Verwendung:**
-
-```typescript
-// Dynamite verwendet InferAttributes intern
-class Table<T> {
-  // Konstruktor akzeptiert nur persistente Attribute
-  constructor(data: InferAttributes<T>) { }
-
-  // where() akzeptiert nur persistente Attribute als Filter
-  static async where<M extends Table>(
-    this: { new (data: InferAttributes<M>): M },
-    filters: Partial<InferAttributes<M>>
-  ): Promise<M[]> { }
-
-  // update() erlaubt nur die Aktualisierung persistenter Attribute
-  static async update<M extends Table>(
-    this: { new (data: InferAttributes<M>): M },
-    updates: Partial<InferAttributes<M>>,
-    filters: Partial<InferAttributes<M>>
-  ): Promise<number> { }
-}
+// InferRelations<User> = { posts: Post[], profile: Profile | null }
 ```
 
 ---
 
-### FilterableAttributes\<T\>
+### PickRelations\<T\>
 
-Alias von `InferAttributes<T>`, der Attribute darstellt, die in Abfragefiltern verwendet werden können.
+Extrahiert nur Beziehungsfelder. Wird intern für Validierung verwendet.
 
-**Syntax:**
+**Verwendung:**
 ```typescript
-type Filterable = FilterableAttributes<ModelClass>;
+import type { PickRelations } from '@arcaelas/dynamite';
+
+type UserRelations = PickRelations<User>;
+// { posts: Post[], profile: Profile | null }
 ```
 
-**Merkmale:**
-- Ist äquivalent zu `InferAttributes<T>`
-- Wird in `WhereOptions<T>` zur Validierung von Filtern verwendet
-- Semantischer bei Verwendung im Kontext von Abfragen
+---
 
-**Beispiele:**
+## Eingabe-Typen
 
+### CreateInput\<T\>
+
+Typ für `Model.create()` Eingabe. Alias von `InferAttributes<T>`.
+
+**Verwendung:**
 ```typescript
-import { Table, PrimaryKey, NotNull, FilterableAttributes } from '@arcaelas/dynamite';
+import type { CreateInput } from '@arcaelas/dynamite';
 
-class Product extends Table<Product> {
-  @PrimaryKey()
-  declare id: string;
+type UserCreateData = CreateInput<User>;
+// { email: string; name: string; id?: string; role?: string; ... }
 
-  @NotNull()
-  declare name: string;
-
-  @NotNull()
-  declare price: number;
-
-  @Default(() => 0)
-  declare stock: CreationOptional<number>;
-
-  @HasMany(() => Review, 'product_id')
-  declare reviews: any;
-}
-
-// FilterableAttributes enthält nur persistente Felder
-type ProductFilters = FilterableAttributes<Product>;
-// Entspricht:
-// {
-//   id: string;
-//   name: string;
-//   price: number;
-//   stock: number | undefined;
-// }
-
-// Verwendung in Abfragen mit Type-Safety
-const filters: Partial<ProductFilters> = {
-  price: 100,
-  stock: 50,
-  // reviews: [] // ❌ Fehler: 'reviews' ist nicht filterbar
+const data: CreateInput<User> = {
+  email: "john@example.com",
+  name: "John"
+  // id, role, Zeitstempel sind optional
 };
 
-const products = await Product.where(filters);
+await User.create(data);
 ```
 
 ---
 
-## Beziehungstypen
+### UpdateInput\<T\>
 
-### HasMany\<T\>
+Typ für `instance.update()` Eingabe. Alle Felder sind optional.
 
-Repräsentiert eine Eins-zu-Viele-Beziehung, bei der das aktuelle Modell mehrere Instanzen des verknüpften Modells hat.
-
-**Syntax:**
+**Verwendung:**
 ```typescript
-@HasMany(() => RelatedModel, 'foreign_key')
-declare relation_name: any;
-```
+import type { UpdateInput } from '@arcaelas/dynamite';
 
-**Merkmale:**
-- Gibt Array von Instanzen des verknüpften Modells zurück
-- Wird über die Option `include` in Abfragen geladen
-- Unterstützt Filter, Limits und Sortierung in der Beziehung
-- Implementiert automatisches Lazy Loading
+type UserUpdateData = UpdateInput<User>;
+// { email?: string; name?: string; role?: string; ... }
 
-**Grundlegende Beispiele:**
+const data: UpdateInput<User> = {
+  name: "Neuer Name"
+  // Alle Felder sind optional
+};
 
-```typescript
-import { Table, PrimaryKey, NotNull, HasMany } from '@arcaelas/dynamite';
-
-class User extends Table<User> {
-  @PrimaryKey()
-  declare id: string;
-
-  @NotNull()
-  declare name: string;
-
-  // Ein Benutzer hat viele Bestellungen
-  @HasMany(() => Order, 'user_id')
-  declare orders: any;
-
-  // Ein Benutzer hat viele Bewertungen
-  @HasMany(() => Review, 'user_id')
-  declare reviews: any;
-}
-
-class Order extends Table<Order> {
-  @PrimaryKey()
-  declare id: string;
-
-  @NotNull()
-  declare user_id: string;
-
-  @NotNull()
-  declare total: number;
-
-  // Eine Bestellung hat viele Artikel
-  @HasMany(() => OrderItem, 'order_id')
-  declare items: any;
-}
-
-class OrderItem extends Table<OrderItem> {
-  @PrimaryKey()
-  declare id: string;
-
-  @NotNull()
-  declare order_id: string;
-
-  @NotNull()
-  declare product_id: string;
-
-  @NotNull()
-  declare quantity: number;
-}
-
-class Review extends Table<Review> {
-  @PrimaryKey()
-  declare id: string;
-
-  @NotNull()
-  declare user_id: string;
-
-  @NotNull()
-  declare product_id: string;
-
-  @NotNull()
-  declare rating: number;
-}
-```
-
-**Verwendungsbeispiele:**
-
-```typescript
-// 1. Einfaches Include
-const users = await User.where({}, {
-  include: {
-    orders: {}
-  }
-});
-
-users.forEach(user => {
-  console.log(user.name);
-  console.log(user.orders); // Array von Order[]
-});
-
-// 2. Include mit Filtern
-const users_with_pending = await User.where({}, {
-  include: {
-    orders: {
-      where: { status: 'pending' },
-      limit: 10,
-      order: 'DESC'
-    }
-  }
-});
-
-// 3. Include mit mehreren Beziehungen
-const users_full = await User.where({ id: 'user-1' }, {
-  include: {
-    orders: {
-      include: {
-        items: {} // Verschachtelte Beziehung
-      }
-    },
-    reviews: {
-      where: { rating: 5 }
-    }
-  }
-});
-
-console.log(users_full[0].orders);        // Order[]
-console.log(users_full[0].orders[0].items); // OrderItem[]
-console.log(users_full[0].reviews);       // Review[]
-
-// 4. Include mit selektiven Attributen
-const users_minimal = await User.where({}, {
-  attributes: ['id', 'name'],
-  include: {
-    orders: {
-      attributes: ['id', 'total', 'status']
-    }
-  }
-});
-```
-
-**HasMany-Beziehungsoptionen:**
-
-```typescript
-interface IncludeOptions {
-  where?: Record<string, any>;    // Filter für die Beziehung
-  attributes?: string[];          // Auszuwählende Felder
-  limit?: number;                 // Limit der Ergebnisse
-  skip?: number;                  // Offset für Paginierung
-  order?: 'ASC' | 'DESC';         // Sortierung
-  include?: Record<string, any>;  // Verschachtelte Beziehungen
-}
-```
-
----
-
-### BelongsTo\<T\>
-
-Repräsentiert eine Viele-zu-Eins-Beziehung, bei der das aktuelle Modell zu einer Instanz des verknüpften Modells gehört.
-
-**Syntax:**
-```typescript
-@BelongsTo(() => RelatedModel, 'local_key')
-declare relation_name: any;
-```
-
-**Merkmale:**
-- Gibt eine Instanz des verknüpften Modells oder `null` zurück
-- Wird über die Option `include` in Abfragen geladen
-- Verwendet den lokalen Schlüssel (Foreign Key), um den verknüpften Datensatz zu finden
-- Unterstützt verschachtelte Beziehungen
-
-**Grundlegende Beispiele:**
-
-```typescript
-import { Table, PrimaryKey, NotNull, BelongsTo } from '@arcaelas/dynamite';
-
-class Order extends Table<Order> {
-  @PrimaryKey()
-  declare id: string;
-
-  @NotNull()
-  declare user_id: string;
-
-  @NotNull()
-  declare total: number;
-
-  // Eine Bestellung gehört zu einem Benutzer
-  @BelongsTo(() => User, 'user_id')
-  declare user: any;
-}
-
-class Product extends Table<Product> {
-  @PrimaryKey()
-  declare id: string;
-
-  @NotNull()
-  declare category_id: string;
-
-  @NotNull()
-  declare name: string;
-
-  // Ein Produkt gehört zu einer Kategorie
-  @BelongsTo(() => Category, 'category_id')
-  declare category: any;
-}
-
-class OrderItem extends Table<OrderItem> {
-  @PrimaryKey()
-  declare id: string;
-
-  @NotNull()
-  declare order_id: string;
-
-  @NotNull()
-  declare product_id: string;
-
-  // Ein Artikel gehört zu einer Bestellung
-  @BelongsTo(() => Order, 'order_id')
-  declare order: any;
-
-  // Ein Artikel gehört zu einem Produkt
-  @BelongsTo(() => Product, 'product_id')
-  declare product: any;
-}
-
-class Category extends Table<Category> {
-  @PrimaryKey()
-  declare id: string;
-
-  @NotNull()
-  declare name: string;
-}
-```
-
-**Verwendungsbeispiele:**
-
-```typescript
-// 1. Einfaches Include
-const orders = await Order.where({}, {
-  include: {
-    user: {}
-  }
-});
-
-orders.forEach(order => {
-  console.log(order.total);
-  console.log(order.user.name); // User | null
-});
-
-// 2. Include mit verschachtelten Beziehungen
-const products = await Product.where({}, {
-  include: {
-    category: {}
-  }
-});
-
-products.forEach(product => {
-  console.log(product.name);
-  if (product.category) {
-    console.log(product.category.name);
-  }
-});
-
-// 3. Include mit mehreren BelongsTo
-const items = await OrderItem.where({}, {
-  include: {
-    order: {
-      include: {
-        user: {} // Verschachtelte Beziehung
-      }
-    },
-    product: {
-      include: {
-        category: {} // Verschachtelte Beziehung
-      }
-    }
-  }
-});
-
-items.forEach(item => {
-  console.log(item.order.user.name);      // Benutzer der Bestellung
-  console.log(item.product.category.name); // Kategorie des Produkts
-});
-
-// 4. Include mit Filtern in übergeordneter Beziehung
-const recent_orders = await Order.where(
-  { status: 'delivered' },
-  {
-    include: {
-      user: {
-        where: { active: true }
-      }
-    }
-  }
-);
-```
-
-**Umgang mit Nullwerten:**
-
-```typescript
-const products = await Product.where({}, {
-  include: {
-    category: {}
-  }
-});
-
-products.forEach(product => {
-  // BelongsTo kann null zurückgeben, wenn die Beziehung nicht existiert
-  if (product.category) {
-    console.log(product.category.name);
-  } else {
-    console.log('Produkt ohne Kategorie');
-  }
-});
+await user.update(data);
 ```
 
 ---
@@ -704,405 +272,80 @@ products.forEach(product => {
 
 ### QueryOperator
 
-Verfügbare Operatoren für Filter in where-Abfragen.
+Union-Typ aller unterstützten Abfrageoperatoren.
 
-**Syntax:**
+**Definition:**
 ```typescript
 type QueryOperator =
-  | '='           // Gleich
-  | '!='          // Ungleich
-  | '<'           // Kleiner als
-  | '<='          // Kleiner oder gleich
-  | '>'           // Größer als
-  | '>='          // Größer oder gleich
-  | 'in'          // In Array
-  | 'not-in'      // Nicht in Array
-  | 'contains'    // Enthält (Strings)
-  | 'begins-with' // Beginnt mit (Strings)
+  | "="      // Gleich
+  | "$eq"   // Gleich (Alias)
+  | "<>"    // Ungleich
+  | "!="    // Ungleich (Alias)
+  | "$ne"   // Ungleich (Alias)
+  | "<"     // Kleiner als
+  | "$lt"   // Kleiner als (Alias)
+  | "<="    // Kleiner oder gleich
+  | "$lte"  // Kleiner oder gleich (Alias)
+  | ">"     // Größer als
+  | "$gt"   // Größer als (Alias)
+  | ">="    // Größer oder gleich
+  | "$gte"  // Größer oder gleich (Alias)
+  | "in"    // In Array
+  | "$in"   // In Array (Alias)
+  | "include"  // Enthält
+  | "$include" // Enthält (Alias)
 ```
 
-**Beispiele:**
+**Verwendung:**
 
 ```typescript
-import { Table, PrimaryKey, NotNull } from '@arcaelas/dynamite';
+// Gleichheit
+await User.where("role", "=", "admin");
+await User.where("role", "$eq", "admin");
 
-class User extends Table<User> {
-  @PrimaryKey()
-  declare id: string;
+// Vergleich
+await User.where("age", ">=", 18);
+await User.where("age", "$gte", 18);
+await User.where("balance", "<", 100);
+await User.where("balance", "$lt", 100);
 
-  @NotNull()
-  declare name: string;
+// Ungleich
+await User.where("status", "!=", "banned");
+await User.where("status", "<>", "banned");
+await User.where("status", "$ne", "banned");
 
-  @NotNull()
-  declare email: string;
+// Array-Zugehörigkeit
+await User.where("status", "in", ["active", "pending"]);
+await User.where("status", "$in", ["active", "pending"]);
 
-  @NotNull()
-  declare age: number;
-
-  @NotNull()
-  declare role: string;
-
-  @Default(() => true)
-  declare active: CreationOptional<boolean>;
-}
-
-// Operator '=' (implizit)
-const admins = await User.where('role', 'admin');
-const admins2 = await User.where('role', '=', 'admin');
-
-// Operator '!='
-const non_admins = await User.where('role', '!=', 'admin');
-
-// Numerische Operatoren
-const adults = await User.where('age', '>=', 18);
-const young = await User.where('age', '<', 30);
-const specific_age = await User.where('age', '>', 25);
-const age_limit = await User.where('age', '<=', 65);
-
-// Operator 'in'
-const staff = await User.where('role', 'in', ['admin', 'employee']);
-const staff2 = await User.where('role', ['admin', 'employee']); // Abkürzung
-
-// Operator 'not-in'
-const customers = await User.where('role', 'not-in', ['admin', 'employee']);
-
-// Operator 'contains' (Strings)
-const gmail_users = await User.where('email', 'contains', '@gmail.com');
-const name_with_a = await User.where('name', 'contains', 'a');
-
-// Operator 'begins-with' (Strings)
-const admins_by_email = await User.where('email', 'begins-with', 'admin@');
-const a_names = await User.where('name', 'begins-with', 'A');
+// Enthält
+await User.where("email", "include", "@gmail.com");
+await User.where("email", "$include", "@gmail.com");
 ```
-
-**Kombination von Operatoren:**
-
-```typescript
-// Mehrere Bedingungen mit Objekt
-const active_admins = await User.where({
-  role: 'admin',
-  active: true
-});
-
-// Operatoren in Kette
-const young_admins = await User.where('age', '<', 30);
-const active_young_admins = young_admins.filter(u => u.active);
-
-// Operatoren mit Optionen
-const paginated = await User.where(
-  'age',
-  '>=',
-  18,
-  {
-    limit: 10,
-    skip: 20,
-    order: 'DESC'
-  }
-);
-```
-
----
-
-### QueryOptions\<T\>
-
-Query-Optionen für `where()`, `first()`, `last()`, etc. Dieser Typ definiert Paginierung, Sortierung, Attributauswahl und Includes.
-
-**Syntax:**
-```typescript
-interface QueryOptions<T> {
-  order?: "ASC" | "DESC";
-  skip?: number;
-  limit?: number;
-  attributes?: (keyof InferAttributes<T>)[];
-  include?: Record<string, IncludeRelationOptions | true>;
-}
-```
-
-**Eigenschaften:**
-
-| Eigenschaft | Typ | Beschreibung |
-|-------------|-----|--------------|
-| `order` | `'ASC' \| 'DESC'` | Sortierung nach Sort Key |
-| `skip` | `number` | Offset für Paginierung |
-| `limit` | `number` | Limit der Ergebnisse |
-| `attributes` | `(keyof InferAttributes<T>)[]` | Auszuwählende Felder |
-| `include` | `Record<string, IncludeRelationOptions \| true>` | Einzuschließende Beziehungen |
-
-**Beispiele:**
-
-```typescript
-import { Table, PrimaryKey, HasMany, QueryOptions } from '@arcaelas/dynamite';
-
-class User extends Table<User> {
-  @PrimaryKey()
-  declare id: string;
-  declare name: string;
-  declare email: string;
-
-  @HasMany(() => Order, 'user_id')
-  declare orders: any;
-}
-
-// Grundlegende Verwendung mit Paginierung
-const options: QueryOptions<User> = {
-  limit: 10,
-  skip: 20,
-  order: 'DESC'
-};
-const users = await User.where({ role: 'customer' }, options);
-
-// Mit Attributauswahl
-const options2: QueryOptions<User> = {
-  attributes: ['id', 'name', 'email'],
-  limit: 50
-};
-const minimal_users = await User.where({}, options2);
-
-// Mit Includes
-const options3: QueryOptions<User> = {
-  include: {
-    orders: {
-      where: { status: 'pending' },
-      limit: 5,
-      order: 'DESC'
-    }
-  }
-};
-const users_with_orders = await User.where({}, options3);
-```
-
----
-
-### QueryFilters\<T\>
-
-Alias von `QueryOptions<T>` ohne das `where`-Feld. Nützlich wenn Filter als erstes Argument übergeben werden.
-
-**Syntax:**
-```typescript
-type QueryFilters<T> = Omit<WhereOptions<T>, 'where'>;
-```
-
-**Merkmale:**
-- Ist `WhereOptions<T>` ohne die `where`-Eigenschaft
-- Verwendet wenn Filter separat als erstes Argument übergeben werden
-- Semantischer in Helper-Funktionen
-
-**Beispiele:**
-
-```typescript
-import { Table, PrimaryKey, HasMany, QueryFilters } from '@arcaelas/dynamite';
-
-class User extends Table<User> {
-  @PrimaryKey()
-  declare id: string;
-  declare name: string;
-
-  @HasMany(() => Order, 'user_id')
-  declare orders: any;
-}
-
-// Filter getrennt von Optionen
-const filters = { role: 'admin' };
-
-const options: QueryFilters<User> = {
-  limit: 10,
-  skip: 0,
-  order: 'DESC',
-  attributes: ['id', 'name'],
-  include: {
-    orders: {}
-  }
-};
-
-const users = await User.where(filters, options);
-
-// Nützlich in generischen Helper-Funktionen
-async function find_paginated<T extends Table<T>>(
-  Model: { where: Function },
-  filters: Record<string, any>,
-  page: number,
-  page_size: number
-): Promise<T[]> {
-  const options: QueryFilters<T> = {
-    limit: page_size,
-    skip: page * page_size,
-    order: 'ASC'
-  };
-
-  return Model.where(filters, options);
-}
-```
-
-> **Hinweis:** `WhereOptionsWithoutWhere<T>` ist ein deprecated Alias von `QueryFilters<T>`. Verwende `QueryFilters<T>` in neuem Code.
 
 ---
 
 ### WhereOptions\<T\>
 
-Vollständige Optionen für where-Abfragen, einschließlich Filter, Paginierung, Sortierung und Includes.
+Optionen zur Konfiguration des Abfrageverhaltens.
 
-**Syntax:**
+**Definition:**
 ```typescript
 interface WhereOptions<T> {
-  where?: Partial<FilterableAttributes<T>>;
-  skip?: number;
-  limit?: number;
-  order?: 'ASC' | 'DESC';
-  attributes?: (keyof FilterableAttributes<T>)[];
-  include?: {
-    [K in keyof T]?: T[K] extends HasMany<any> | BelongsTo<any>
-      ? IncludeOptions | {}
-      : never;
+  where?: {
+    [K in keyof InferAttributes<T>]?:
+      | InferAttributes<T>[K]
+      | { [op in QueryOperator]?: InferAttributes<T>[K] };
   };
-}
-```
-
-**Eigenschaften:**
-
-| Eigenschaft | Typ | Beschreibung |
-|-------------|-----|--------------|
-| `where` | `Partial<FilterableAttributes<T>>` | Filter für die Abfrage |
-| `skip` | `number` | Offset für Paginierung |
-| `limit` | `number` | Limit der Ergebnisse |
-| `order` | `'ASC' \| 'DESC'` | Sortierung nach Primärschlüssel |
-| `attributes` | `(keyof FilterableAttributes<T>)[]` | Auszuwählende Felder |
-| `include` | `object` | Einzuschließende Beziehungen |
-
-**Beispiele:**
-
-```typescript
-import { Table, PrimaryKey, NotNull, HasMany, WhereOptions } from '@arcaelas/dynamite';
-
-class User extends Table<User> {
-  @PrimaryKey()
-  declare id: string;
-
-  @NotNull()
-  declare name: string;
-
-  @NotNull()
-  declare email: string;
-
-  @NotNull()
-  declare age: number;
-
-  @Default(() => 'customer')
-  declare role: CreationOptional<string>;
-
-  @HasMany(() => Order, 'user_id')
-  declare orders: any;
-}
-
-class Order extends Table<Order> {
-  @PrimaryKey()
-  declare id: string;
-
-  @NotNull()
-  declare user_id: string;
-
-  @NotNull()
-  declare total: number;
-}
-
-// Beispiel 1: Nur Filter
-const options1: WhereOptions<User> = {
-  where: {
-    role: 'admin',
-    age: 30
-  }
-};
-const admins = await User.where({}, options1);
-
-// Beispiel 2: Mit Paginierung
-const options2: WhereOptions<User> = {
-  where: {
-    role: 'customer'
-  },
-  limit: 10,
-  skip: 20,
-  order: 'DESC'
-};
-const customers = await User.where({}, options2);
-
-// Beispiel 3: Mit Attributauswahl
-const options3: WhereOptions<User> = {
-  where: {
-    age: 25
-  },
-  attributes: ['id', 'name', 'email']
-};
-const users = await User.where({}, options3);
-
-// Beispiel 4: Mit Includes
-const options4: WhereOptions<User> = {
-  where: {
-    role: 'customer'
-  },
-  include: {
-    orders: {
-      where: { total: 100 },
-      limit: 5,
-      order: 'DESC'
-    }
-  }
-};
-const customers_with_orders = await User.where({}, options4);
-
-// Beispiel 5: Vollständig
-const options5: WhereOptions<User> = {
-  where: {
-    role: 'customer',
-    age: 30
-  },
-  attributes: ['id', 'name', 'email'],
-  limit: 20,
-  skip: 0,
-  order: 'ASC',
-  include: {
-    orders: {
-      attributes: ['id', 'total'],
-      where: { total: 500 },
-      limit: 10
-    }
-  }
-};
-const filtered = await User.where({}, options5);
-```
-
-**Verwendung mit Operatoren:**
-
-```typescript
-// where() akzeptiert Operatoren und Optionen
-const users = await User.where(
-  'age',
-  '>=',
-  18,
-  {
-    limit: 10,
-    order: 'DESC',
-    attributes: ['id', 'name'],
-    include: {
-      orders: {}
-    }
-  } as WhereOptions<User>
-);
-```
-
----
-
-### IncludeRelationOptions
-
-Optionen für eingeschlossene Beziehungen in Abfragen.
-
-**Syntax:**
-```typescript
-interface IncludeRelationOptions {
-  where?: Record<string, any>;
-  attributes?: string[];
-  limit?: number;
-  skip?: number;
   order?: "ASC" | "DESC";
-  include?: Record<string, IncludeRelationOptions | true>;
+  skip?: number;              // Alias von offset
+  offset?: number;            // Anzahl zu überspringender Datensätze
+  limit?: number;             // Maximale Anzahl zurückzugebender Datensätze
+  attributes?: (keyof InferAttributes<T>)[];  // Auszuwählende Felder
+  include?: {                 // Einzubeziehende Beziehungen
+    [relation: string]: boolean | WhereOptions<any>;
+  };
+  _includeTrashed?: boolean;  // Soft-gelöschte Datensätze einbeziehen
 }
 ```
 
@@ -1110,271 +353,92 @@ interface IncludeRelationOptions {
 
 | Eigenschaft | Typ | Beschreibung |
 |-------------|-----|--------------|
-| `where` | `Record<string, any>` | Filter für die Beziehung |
-| `attributes` | `string[]` | Auszuwählende Felder der Beziehung |
-| `limit` | `number` | Limit der Beziehungsergebnisse |
-| `skip` | `number` | Offset für Beziehungspaginierung |
-| `order` | `'ASC' \| 'DESC'` | Sortierung der Beziehung |
-| `include` | `Record<string, IncludeRelationOptions \| true>` | Verschachtelte Includes |
+| `where` | `object` | Filterbedingungen mit Operator-Unterstützung |
+| `order` | `"ASC" \| "DESC"` | Sortierreihenfolge |
+| `skip` | `number` | Anzahl zu überspringender Datensätze (Alias: offset) |
+| `offset` | `number` | Anzahl zu überspringender Datensätze |
+| `limit` | `number` | Maximale Anzahl zurückzugebender Datensätze |
+| `attributes` | `string[]` | Spezifisch auszuwählende Felder |
+| `include` | `object` | Einzubeziehende Beziehungen |
+| `_includeTrashed` | `boolean` | Soft-gelöschte Datensätze einbeziehen |
 
----
-
-## Metadaten-Typen
-
-Die folgenden Typen werden für Introspektion und Erstellung benutzerdefinierter Decorators verwendet.
-
-### Column
-
-Konfigurationsmetadaten einer Spalte/Eigenschaft des Modells.
-
-**Syntax:**
-```typescript
-interface Column {
-  name: string;
-  nullable?: boolean;
-  default?: () => any;
-  index?: boolean;
-  indexSort?: boolean;
-  primaryKey?: boolean;
-  createdAt?: boolean;
-  updatedAt?: boolean;
-  softDelete?: boolean;
-  lazy_validators: Array<(value: any) => true | string>;
-  serialize?: SerializeConfig;
-  set: (fn: (current: any, next: any) => any) => void;
-  get: (fn: (current: any) => any) => void;
-}
-```
-
-**Verwendung:**
-Dieser Typ wird hauptsächlich zum Erstellen benutzerdefinierter Decorators mit der `decorator()`-Factory verwendet.
+**Beispiel:**
 
 ```typescript
-import { decorator, Column } from '@arcaelas/dynamite';
-
-// Benutzerdefinierten Decorator erstellen
-const Encrypted = decorator<[key: string]>((col: Column, [key]) => {
-  col.set((_, value) => encrypt(value, key));
-  col.get((current) => decrypt(current, key));
-});
-```
-
----
-
-### RelationMetadata
-
-Konfigurationsmetadaten einer Beziehung zwischen Modellen.
-
-**Syntax:**
-```typescript
-interface RelationMetadata {
-  type: "hasMany" | "belongsTo";
-  targetModel: () => any;
-  foreignKey: string;
-  localKey: string;
-}
-```
-
----
-
-### ValidatorEntry
-
-Validator-Eintrag für Lazy-Validierung (ausgeführt bei `save()`).
-
-**Syntax:**
-```typescript
-type ValidatorEntry = (value: any) => true | string;
-```
-
----
-
-### SerializeConfig
-
-Bidirektionale Serialisierungskonfiguration.
-
-**Syntax:**
-```typescript
-interface SerializeConfig {
-  fromDB?: (value: any) => any;
-  toDB?: (value: any) => any;
-}
-```
-
----
-
-## Häufige Muster
-
-### Vollständiges Modell mit allen Typen
-
-```typescript
-import {
-  Table,
-  PrimaryKey,
-  NotNull,
-  Default,
-  CreatedAt,
-  UpdatedAt,
-  HasMany,
-  BelongsTo,
-  CreationOptional,
-  NonAttribute,
-  InferAttributes,
-  FilterableAttributes
-} from '@arcaelas/dynamite';
-
-class User extends Table<User> {
-  // Automatisch generierte ID - CreationOptional
-  @PrimaryKey()
-  declare id: CreationOptional<string>;
-
-  // Erforderliche Felder - keine Markierung
-  @NotNull()
-  declare email: string;
-
-  @NotNull()
-  declare name: string;
-
-  // Felder mit Standardwerten - CreationOptional
-  @Default(() => 'customer')
-  declare role: CreationOptional<string>;
-
-  @Default(() => true)
-  declare active: CreationOptional<boolean>;
-
-  @Default(() => 0)
-  declare balance: CreationOptional<number>;
-
-  // Automatisch generierte Zeitstempel - CreationOptional
-  @CreatedAt()
-  declare createdAt: CreationOptional<string>;
-
-  @UpdatedAt()
-  declare updatedAt: CreationOptional<string>;
-
-  // Berechnete Eigenschaften - NonAttribute
-  declare full_name: NonAttribute<string>;
-  declare display_role: NonAttribute<string>;
-
-  // Beziehungen - keine spezielle Markierung erforderlich
-  @HasMany(() => Order, 'user_id')
-  declare orders: any;
-
-  @HasMany(() => Review, 'user_id')
-  declare reviews: any;
-
-  constructor(data: InferAttributes<User>) {
-    super(data);
-
-    this.full_name = `${this.name} <${this.email}>`;
-    this.display_role = this.role === 'admin' ? 'Administrator' : 'Kunde';
-  }
-}
-
-// Während der Erstellung: nur erforderliche Felder
-const user = await User.create({
-  email: 'user@test.com',
-  name: 'Juan Pérez'
-});
-
-// Nach dem Speichern: alle Felder vorhanden
-console.log(user.id);          // string (automatisch generiert)
-console.log(user.role);        // 'customer' (Standard)
-console.log(user.active);      // true (Standard)
-console.log(user.balance);     // 0 (Standard)
-console.log(user.createdAt);   // string (Zeitstempel)
-console.log(user.full_name);   // 'Juan Pérez <user@test.com>' (berechnet)
-console.log(user.display_role); // 'Kunde' (berechnet)
-```
-
-### Erweiterte Abfrage mit allen Typen
-
-```typescript
-import { WhereOptions, QueryOperator } from '@arcaelas/dynamite';
-
-// Generische Hilfsfunktion mit Type-Safety
-async function find_advanced<T extends Table>(
-  Model: { new (data: InferAttributes<T>): T },
-  field: keyof FilterableAttributes<T>,
-  operator: QueryOperator,
-  value: any,
-  options?: QueryFilters<T>
-): Promise<T[]> {
-  return Model.where(field as string, operator, value, options);
-}
-
-// Verwendung mit vollständiger Inferenz
-const admins = await find_advanced(
-  User,
-  'role',
-  '=',
-  'admin',
-  {
-    limit: 10,
-    attributes: ['id', 'name', 'email'],
-    include: {
-      orders: {
-        where: { status: 'delivered' },
-        limit: 5
+const users = await User.where({ active: true }, {
+  order: "DESC",
+  skip: 20,
+  limit: 10,
+  attributes: ["id", "name", "email"],
+  include: {
+    orders: {
+      where: { status: "completed" },
+      limit: 5,
+      order: "DESC",
+      include: {
+        items: {
+          include: {
+            product: true
+          }
+        }
       }
     }
   }
-);
+});
 ```
-
----
-
-## Zusammenfassung
-
-| Typ | Zweck | Wann verwenden |
-|-----|-------|----------------|
-| `CreationOptional<T>` | Optionale Felder bei Erstellung | Automatisch generierte IDs, Standardwerte, Zeitstempel |
-| `NonAttribute<T>` | Nicht persistente Felder | Berechnete Eigenschaften, Getter, Methoden |
-| `InferAttributes<T>` | Persistente Attribute | Type-Safety in Abfragen und Updates |
-| `FilterableAttributes<T>` | Filterbare Attribute | Type-Safety in where-Klauseln |
-| `HasMany<T>` | Eins-zu-Viele-Beziehung | Wenn ein Modell mehrere verknüpfte Instanzen hat |
-| `BelongsTo<T>` | Viele-zu-Eins-Beziehung | Wenn ein Modell zu einem anderen gehört |
-| `QueryOperator` | Abfrageoperatoren | Erweiterte Filter in where |
-| `QueryOptions<T>` | Query-Optionen | Paginierung, Sortierung, Includes |
-| `QueryFilters<T>` | Optionen ohne Filter | Abfragen, bei denen Filter separat übergeben werden |
-| `WhereOptions<T>` | Vollständige Optionen | Abfragen mit Filtern, Paginierung und Includes |
-| `IncludeRelationOptions` | Include-Optionen | Verschachtelte Beziehungen konfigurieren |
-| `Column` | Spaltenmetadaten | Benutzerdefinierte Decorators erstellen |
-| `RelationMetadata` | Beziehungsmetadaten | Introspektion von Beziehungen |
-| `ValidatorEntry` | Validatorfunktion | Benutzerdefinierte Validierungen |
-| `SerializeConfig` | Serialisierungskonfiguration | Bidirektionale Transformationen |
 
 ---
 
 ## Best Practices
 
-1. **Immer `CreationOptional<T>` verwenden für**:
-   - Felder mit `@PrimaryKey()` (automatisch generiert)
-   - Felder mit `@Default()` (Standardwerte)
-   - Felder mit `@CreatedAt()` oder `@UpdatedAt()` (Zeitstempel)
+### 1. Immer CreationOptional für Felder mit Standardwerten verwenden
 
-2. **Immer `NonAttribute<T>` verwenden für**:
-   - Im Konstruktor berechnete Eigenschaften
-   - Getter, die von anderen Feldern abgeleitet werden
-   - Instanzmethoden
+```typescript
+// Richtig
+@Default(() => "active")
+declare status: CreationOptional<string>;
 
-3. **Beziehungen**:
-   - `@HasMany` für Arrays von verknüpften Modellen verwenden
-   - `@BelongsTo` für einzelne Referenzen auf verknüpfte Modelle verwenden
-   - Keine zusätzlichen Typmarkierungen auf Beziehungen anwenden
+// Falsch - TypeScript erfordert status in create()
+@Default(() => "active")
+declare status: string;
+```
 
-4. **Type-Safety**:
-   - `InferAttributes<T>` in generischen Funktionen verwenden
-   - `FilterableAttributes<T>` zur Validierung von Filtern verwenden
-   - `WhereOptions<T>` für vollständige Abfrageoptionen verwenden
+### 2. Beziehungen immer in NonAttribute einschließen
 
-5. **Performance**:
-   - Nur notwendige Beziehungen mit `include` einschließen
-   - `attributes` verwenden, um nur erforderliche Felder auszuwählen
-   - `limit` und `skip` für Paginierung anwenden
+```typescript
+// Richtig
+@HasMany(() => Post, "user_id")
+declare posts: NonAttribute<Post[]>;
 
----
+// Falsch - posts würde als Datenbankspalte behandelt
+@HasMany(() => Post, "user_id")
+declare posts: Post[];
+```
 
-Für weitere Informationen siehe:
-- [Installationsanleitung](../installation.md)
-- [Decorator-Referenz](./decorators.md)
-- [Table-Referenz](./table.md)
+### 3. InferAttributes für type-sichere Funktionen verwenden
+
+```typescript
+// Richtig - type-sicherer Parameter
+function processUser(data: InferAttributes<User>) { ... }
+
+// Falsch - keine Typsicherheit
+function processUser(data: any) { ... }
+```
+
+### 4. Foreign Keys explizit definieren
+
+```typescript
+// Richtig - Foreign Key ist deklariert
+class Post extends Table<Post> {
+  declare user_id: string; // FK-Feld
+
+  @BelongsTo(() => User, "user_id")
+  declare author: NonAttribute<User | null>;
+}
+
+// Falsch - Foreign Key nicht deklariert
+class Post extends Table<Post> {
+  @BelongsTo(() => User, "user_id")
+  declare author: NonAttribute<User | null>;
+}
+```

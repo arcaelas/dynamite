@@ -1,93 +1,97 @@
-# Guía Completa de Decoradores en Dynamite
+# Complete Guide to Decorators in Dynamite
 
-Esta guía proporciona documentación exhaustiva sobre todos los decoradores disponibles en Dynamite ORM, incluyendo ejemplos prácticos, patrones comunes y mejores prácticas.
+This guide provides comprehensive documentation for all decorators available in Dynamite ORM, including practical examples, common patterns, and best practices.
 
-## Tabla de Contenidos
+## Table of Contents
 
-1. [Introduccion a los Decoradores](#introduccion-a-los-decoradores)
-2. [@PrimaryKey - Claves Primarias](#primarykey-claves-primarias)
-3. [@Index - Configuracion de GSI](#index-configuracion-de-gsi)
-4. [@IndexSort - Configuracion de LSI](#indexsort-configuracion-de-lsi)
-5. [@Default - Valores por Defecto](#default-valores-por-defecto)
-6. [@Validate - Funciones de Validacion](#validate-funciones-de-validacion)
-7. [@Mutate - Transformacion de Datos](#mutate-transformacion-de-datos)
-8. [@Serialize - Transformacion Bidireccional](#serialize-transformacion-bidireccional)
-9. [@NotNull - Campos Requeridos](#notnull-campos-requeridos)
-10. [@CreatedAt - Timestamp de Creacion](#createdat-timestamp-de-creacion)
-11. [@UpdatedAt - Timestamp de Actualizacion](#updatedat-timestamp-de-actualizacion)
+1. [Introduction to Decorators](#introduction-to-decorators)
+2. [@PrimaryKey - Primary Keys](#primarykey-primary-keys)
+3. [@Index - GSI Configuration](#index-gsi-configuration)
+4. [@IndexSort - LSI Configuration](#indexsort-lsi-configuration)
+5. [@Default - Default Values](#default-default-values)
+6. [@Validate - Validation Functions](#validate-validation-functions)
+7. [@Mutate - Data Transformation](#mutate-data-transformation)
+8. [@Serialize - Bidirectional Transformation](#serialize-bidirectional-transformation)
+9. [@NotNull - Required Fields](#notnull-required-fields)
+10. [@CreatedAt - Creation Timestamp](#createdat-creation-timestamp)
+11. [@UpdatedAt - Update Timestamp](#updatedat-update-timestamp)
 12. [@DeleteAt - Soft Delete](#deleteat-soft-delete)
-13. [@Name - Nombres Personalizados](#name-nombres-personalizados)
-14. [@HasMany - Relaciones Uno a Muchos](#hasmany-relaciones-uno-a-muchos)
-15. [@BelongsTo - Relaciones Muchos a Uno](#belongsto-relaciones-muchos-a-uno)
-16. [Combinando Multiples Decoradores](#combinando-multiples-decoradores)
-17. [Patrones de Decoradores Personalizados](#patrones-de-decoradores-personalizados)
-18. [Mejores Practicas](#mejores-practicas)
+13. [@Name - Custom Names](#name-custom-names)
+14. [@HasMany - One to Many Relationships](#hasmany-one-to-many-relationships)
+15. [@HasOne - One to One Relationships](#hasone-one-to-one-relationships)
+16. [@BelongsTo - Many to One Relationships](#belongsto-many-to-one-relationships)
+17. [@ManyToMany - Many to Many Relationships](#manytomany-many-to-many-relationships)
+18. [Combining Multiple Decorators](#combining-multiple-decorators)
+19. [Custom Decorator Patterns](#custom-decorator-patterns)
+20. [Best Practices](#best-practices)
 
 ---
 
-## Introducción a los Decoradores
+## Introduction to Decorators
 
-Los decoradores en Dynamite son funciones especiales que añaden metadatos y comportamiento a las clases y propiedades. Permiten definir esquemas de base de datos de manera declarativa y type-safe.
+Decorators in Dynamite are special functions that add metadata and behavior to classes and properties. They allow you to define database schemas in a declarative and type-safe manner.
 
-### Conceptos Básicos
+### Basic Concepts
 
 ```typescript
 import { Table, PrimaryKey, Default, CreationOptional } from "@arcaelas/dynamite";
 
 class User extends Table<User> {
-  // Decorador de clave primaria
+  // Primary key decorator
   @PrimaryKey()
   @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
-  // Campo simple sin decoradores
+  // Simple field without decorators
   declare name: string;
 
-  // Campo con valor por defecto
+  // Field with default value
   @Default(() => "customer")
   declare role: CreationOptional<string>;
 }
 ```
 
-### Tipos de Decoradores
+### Types of Decorators
 
-**Decoradores de Clave:**
-- `@PrimaryKey()` - Define la clave primaria
-- `@Index()` - Define partition key (GSI)
-- `@IndexSort()` - Define sort key (LSI)
+**Key Decorators:**
+- `@PrimaryKey()` - Defines the primary key
+- `@Index()` - Defines partition key (GSI)
+- `@IndexSort()` - Defines sort key (LSI)
 
-**Decoradores de Datos:**
-- `@Default()` - Establece valores por defecto
-- `@Mutate()` - Transforma valores antes de guardar
-- `@Serialize()` - Transforma valores bidireccionalmente (DB ↔ App)
-- `@Validate()` - Valida valores antes de guardar
-- `@NotNull()` - Marca campos como requeridos
+**Data Decorators:**
+- `@Default()` - Sets default values
+- `@Mutate()` - Transforms values before saving
+- `@Serialize()` - Transforms values bidirectionally (DB <-> App)
+- `@Validate()` - Validates values before saving
+- `@NotNull()` - Marks fields as required
 
-**Decoradores de Timestamp:**
-- `@CreatedAt()` - Auto-timestamp en creación
-- `@UpdatedAt()` - Auto-timestamp en actualización
-- `@DeleteAt()` - Soft delete con timestamp
+**Timestamp Decorators:**
+- `@CreatedAt()` - Auto-timestamp on creation
+- `@UpdatedAt()` - Auto-timestamp on update
+- `@DeleteAt()` - Soft delete with timestamp
 
-**Decoradores de Relaciones:**
-- `@HasMany()` - Relación uno a muchos
-- `@BelongsTo()` - Relación muchos a uno
+**Relationship Decorators:**
+- `@HasMany()` - One to many relationship
+- `@HasOne()` - One to one relationship
+- `@BelongsTo()` - Many to one relationship
+- `@ManyToMany()` - Many to many relationship
 
-**Decoradores de Configuración:**
-- `@Name()` - Nombres personalizados para tablas/columnas
+**Configuration Decorators:**
+- `@Name()` - Custom names for tables/columns
 
 ---
 
-## @PrimaryKey - Claves Primarias
+## @PrimaryKey - Primary Keys
 
-El decorador `@PrimaryKey` define la clave primaria de la tabla. Internamente aplica `@Index` y `@IndexSort` automáticamente.
+The `@PrimaryKey` decorator defines the table's primary key. It internally applies `@Index` and `@IndexSort` automatically.
 
-### Sintaxis
+### Syntax
 
 ```typescript
-@PrimaryKey(name?: string): PropertyDecorator
+@PrimaryKey(): PropertyDecorator
 ```
 
-### Clave Primaria Simple
+### Simple Primary Key
 
 ```typescript
 import { Table, PrimaryKey, CreationOptional, Default } from "@arcaelas/dynamite";
@@ -101,17 +105,17 @@ class User extends Table<User> {
   declare email: string;
 }
 
-// Uso
+// Usage
 const user = await User.create({
   name: "John Doe",
   email: "john@example.com"
-  // id es opcional (CreationOptional) y se genera automáticamente
+  // id is optional (CreationOptional) and auto-generated
 });
 
 console.log(user.id); // "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 ```
 
-### Clave Primaria con Valor Estático
+### Primary Key with Static Value
 
 ```typescript
 class Product extends Table<Product> {
@@ -122,7 +126,7 @@ class Product extends Table<Product> {
   declare price: number;
 }
 
-// Uso
+// Usage
 const product = await Product.create({
   sku: "PROD-001",
   name: "Widget",
@@ -130,9 +134,9 @@ const product = await Product.create({
 });
 ```
 
-### Clave Primaria Compuesta (Partition + Sort)
+### Composite Primary Key (Partition + Sort)
 
-Aunque `@PrimaryKey` aplica ambos decoradores, puedes definir claves compuestas manualmente:
+Although `@PrimaryKey` applies both decorators, you can define composite keys manually:
 
 ```typescript
 class Order extends Table<Order> {
@@ -146,7 +150,7 @@ class Order extends Table<Order> {
   declare status: string;
 }
 
-// Uso
+// Usage
 const order = await Order.create({
   user_id: "user-123",
   order_date: new Date().toISOString(),
@@ -154,43 +158,43 @@ const order = await Order.create({
   status: "pending"
 });
 
-// Consultas por partition key
+// Queries by partition key
 const user_orders = await Order.where({ user_id: "user-123" });
 
-// Consultas con sort key
+// Queries with sort key
 const recent_orders = await Order.where({ user_id: "user-123" }, {
   order: "DESC",
   limit: 10
 });
 ```
 
-### Características Importantes
+### Important Characteristics
 
 ```typescript
 class Account extends Table<Account> {
   @PrimaryKey()
   declare account_id: string;
-  // Automáticamente:
-  // - Marcado como @Index (partition key)
-  // - Marcado como @IndexSort (sort key)
-  // - nullable = false (no puede ser nulo)
-  // - primaryKey = true en metadatos
+  // Automatically:
+  // - Marked as @Index (partition key)
+  // - Marked as @IndexSort (sort key)
+  // - nullable = false (cannot be null)
+  // - primaryKey = true in metadata
 }
 ```
 
 ---
 
-## @Index - Configuración de GSI
+## @Index - GSI Configuration
 
-El decorador `@Index` marca una propiedad como **Partition Key** (clave de partición). Es fundamental para consultas eficientes en DynamoDB.
+The `@Index` decorator marks a property as **Partition Key**. It is fundamental for efficient queries in DynamoDB.
 
-### Sintaxis
+### Syntax
 
 ```typescript
 @Index(): PropertyDecorator
 ```
 
-### Índice Simple
+### Simple Index
 
 ```typescript
 class Customer extends Table<Customer> {
@@ -205,7 +209,7 @@ class Customer extends Table<Customer> {
   declare phone: string;
 }
 
-// Consultas por email (partition key)
+// Queries by email (partition key)
 const customers = await Customer.where({ email: "john@example.com" });
 ```
 
@@ -228,39 +232,39 @@ class Article extends Table<Article> {
   declare published_at: string;
 }
 
-// Consultas por categoría
+// Queries by category
 const tech_articles = await Article.where({ category: "technology" });
 
-// Consultas por autor
+// Queries by author
 const author_articles = await Article.where({ author_id: "author-123" });
 ```
 
-### Validaciones del Decorador
+### Decorator Validations
 
 ```typescript
 class InvalidModel extends Table<InvalidModel> {
   @Index()
   declare field1: string;
 
-  @Index() // Error: Solo puede haber un @Index por tabla
+  @Index() // Error: Only one @Index per table allowed
   declare field2: string;
-  // Lanza: "La tabla invalid_models ya tiene definida una PartitionKey"
+  // Throws: "Table invalid_models already has a PartitionKey defined"
 }
 ```
 
 ---
 
-## @IndexSort - Configuración de LSI
+## @IndexSort - LSI Configuration
 
-El decorador `@IndexSort` marca una propiedad como **Sort Key** (clave de ordenación). Requiere que exista una Partition Key definida.
+The `@IndexSort` decorator marks a property as **Sort Key**. It requires a Partition Key to be defined.
 
-### Sintaxis
+### Syntax
 
 ```typescript
 @IndexSort(): PropertyDecorator
 ```
 
-### Sort Key Básico
+### Basic Sort Key
 
 ```typescript
 class Message extends Table<Message> {
@@ -274,7 +278,7 @@ class Message extends Table<Message> {
   declare content: string;
 }
 
-// Crear mensajes
+// Create messages
 await Message.create({
   conversation_id: "conv-123",
   timestamp: "2025-01-15T10:30:00Z",
@@ -282,19 +286,19 @@ await Message.create({
   content: "Hello!"
 });
 
-// Consultas ordenadas por timestamp
+// Queries ordered by timestamp
 const messages = await Message.where({ conversation_id: "conv-123" }, {
-  order: "ASC" // Orden ascendente por timestamp
+  order: "ASC" // Ascending order by timestamp
 });
 
-// Mensajes más recientes
+// Most recent messages
 const recent = await Message.where({ conversation_id: "conv-123" }, {
   order: "DESC",
   limit: 20
 });
 ```
 
-### Rango de Consultas con Sort Key
+### Range Queries with Sort Key
 
 ```typescript
 class Event extends Table<Event> {
@@ -308,7 +312,7 @@ class Event extends Table<Event> {
   declare capacity: number;
 }
 
-// Eventos en un rango de fechas
+// Events in a date range
 const upcoming = await Event.where("event_date", ">=", "2025-01-01");
 const past = await Event.where("event_date", "<", "2025-01-01");
 ```
@@ -328,23 +332,23 @@ class Transaction extends Table<Transaction> {
   declare description: string;
 }
 
-// Transacciones de una cuenta ordenadas por fecha
+// Account transactions ordered by date
 const transactions = await Transaction.where({ account_id: "acc-123" }, {
   order: "DESC",
   limit: 50
 });
 
-// Últimas transacciones
+// Last transaction
 const last_transaction = await Transaction.last({ account_id: "acc-123" });
 ```
 
-### Validaciones
+### Validations
 
 ```typescript
 class InvalidSort extends Table<InvalidSort> {
-  @IndexSort() // Error: Se requiere @Index primero
+  @IndexSort() // Error: @Index required first
   declare date: string;
-  // Lanza: "No se puede definir una SortKey sin una PartitionKey"
+  // Throws: "Cannot define a SortKey without a PartitionKey"
 }
 
 class DuplicateSort extends Table<DuplicateSort> {
@@ -354,25 +358,25 @@ class DuplicateSort extends Table<DuplicateSort> {
   @IndexSort()
   declare date1: string;
 
-  @IndexSort() // Error: Solo un @IndexSort permitido
+  @IndexSort() // Error: Only one @IndexSort allowed
   declare date2: string;
-  // Lanza: "La tabla ya tiene una SortKey definida"
+  // Throws: "Table already has a SortKey defined"
 }
 ```
 
 ---
 
-## @Default - Valores por Defecto
+## @Default - Default Values
 
-El decorador `@Default` establece valores por defecto estáticos o dinámicos para propiedades.
+The `@Default` decorator sets static or dynamic default values for properties.
 
-### Sintaxis
+### Syntax
 
 ```typescript
 @Default(value: any | (() => any)): PropertyDecorator
 ```
 
-### Valores Estáticos
+### Static Values
 
 ```typescript
 class Settings extends Table<Settings> {
@@ -393,15 +397,15 @@ class Settings extends Table<Settings> {
   declare tags: CreationOptional<string[]>;
 }
 
-// Uso
-const settings = await Settings.create({}); // Todos los campos opcionales
+// Usage
+const settings = await Settings.create({}); // All fields optional
 console.log(settings.theme); // "dark"
 console.log(settings.notifications); // true
 console.log(settings.volume); // 100
 console.log(settings.tags); // []
 ```
 
-### Valores Dinámicos (Funciones)
+### Dynamic Values (Functions)
 
 ```typescript
 class Document extends Table<Document> {
@@ -419,7 +423,7 @@ class Document extends Table<Document> {
   declare reference_number: CreationOptional<number>;
 }
 
-// Cada instancia obtiene valores únicos
+// Each instance gets unique values
 const doc1 = await Document.create({});
 const doc2 = await Document.create({});
 
@@ -427,7 +431,7 @@ console.log(doc1.id !== doc2.id); // true
 console.log(doc1.code !== doc2.code); // true
 ```
 
-### Valores por Defecto Complejos
+### Complex Default Values
 
 ```typescript
 class UserProfile extends Table<UserProfile> {
@@ -453,13 +457,13 @@ class UserProfile extends Table<UserProfile> {
   declare recent_searches: CreationOptional<string[]>;
 }
 
-// Uso
+// Usage
 const profile = await UserProfile.create({});
 console.log(profile.preferences); // { theme: "light", language: "en", ... }
 console.log(profile.notifications); // { email: true, sms: false, push: true }
 ```
 
-### Combinando con CreationOptional
+### Combining with CreationOptional
 
 ```typescript
 import { CreationOptional } from "@arcaelas/dynamite";
@@ -469,19 +473,19 @@ class Task extends Table<Task> {
   @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
-  declare title: string; // Requerido
+  declare title: string; // Required
 
   @Default(() => "pending")
-  declare status: CreationOptional<string>; // Opcional
+  declare status: CreationOptional<string>; // Optional
 
   @Default(() => false)
-  declare completed: CreationOptional<boolean>; // Opcional
+  declare completed: CreationOptional<boolean>; // Optional
 
   @Default(() => new Date().toISOString())
-  declare due_date: CreationOptional<string>; // Opcional
+  declare due_date: CreationOptional<string>; // Optional
 }
 
-// Solo title es requerido
+// Only title is required
 const task = await Task.create({ title: "Complete project" });
 console.log(task.status); // "pending"
 console.log(task.completed); // false
@@ -489,18 +493,18 @@ console.log(task.completed); // false
 
 ---
 
-## @Validate - Funciones de Validación
+## @Validate - Validation Functions
 
-El decorador `@Validate` permite definir funciones de validación personalizadas que se ejecutan antes de guardar datos.
+The `@Validate` decorator allows defining custom validation functions that run before saving data.
 
-### Sintaxis
+### Syntax
 
 ```typescript
 @Validate(validator: (value: unknown) => true | string): PropertyDecorator
 @Validate(validators: Array<(value: unknown) => true | string>): PropertyDecorator
 ```
 
-### Validación Simple
+### Simple Validation
 
 ```typescript
 class User extends Table<User> {
@@ -509,25 +513,25 @@ class User extends Table<User> {
 
   @Validate((value) => {
     const email = value as string;
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || "Email inválido";
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || "Invalid email";
   })
   declare email: string;
 
   @Validate((value) => {
     const age = value as number;
-    return age >= 18 || "Debe ser mayor de edad";
+    return age >= 18 || "Must be 18 or older";
   })
   declare age: number;
 }
 
-// Válido
+// Valid
 const user1 = await User.create({
   id: "user-1",
   email: "john@example.com",
   age: 25
 });
 
-// Inválido - lanza error
+// Invalid - throws error
 try {
   await User.create({
     id: "user-2",
@@ -535,11 +539,11 @@ try {
     age: 25
   });
 } catch (error) {
-  console.error(error.message); // "Email inválido"
+  console.error(error.message); // "Invalid email"
 }
 ```
 
-### Múltiples Validadores
+### Multiple Validators
 
 ```typescript
 class Password extends Table<Password> {
@@ -547,33 +551,33 @@ class Password extends Table<Password> {
   declare user_id: string;
 
   @Validate([
-    (v) => (v as string).length >= 8 || "Mínimo 8 caracteres",
-    (v) => /[A-Z]/.test(v as string) || "Debe contener mayúscula",
-    (v) => /[a-z]/.test(v as string) || "Debe contener minúscula",
-    (v) => /[0-9]/.test(v as string) || "Debe contener número",
-    (v) => /[^A-Za-z0-9]/.test(v as string) || "Debe contener símbolo"
+    (v) => (v as string).length >= 8 || "Minimum 8 characters",
+    (v) => /[A-Z]/.test(v as string) || "Must contain uppercase",
+    (v) => /[a-z]/.test(v as string) || "Must contain lowercase",
+    (v) => /[0-9]/.test(v as string) || "Must contain number",
+    (v) => /[^A-Za-z0-9]/.test(v as string) || "Must contain symbol"
   ])
   declare password: string;
 }
 
-// Todas las validaciones deben pasar
+// All validations must pass
 try {
   await Password.create({
     user_id: "user-1",
     password: "weak"
   });
 } catch (error) {
-  console.error(error.message); // "Mínimo 8 caracteres"
+  console.error(error.message); // "Minimum 8 characters"
 }
 
-// Válido
+// Valid
 await Password.create({
   user_id: "user-1",
   password: "Str0ng!Pass"
 });
 ```
 
-### Validaciones Complejas
+### Complex Validations
 
 ```typescript
 class Product extends Table<Product> {
@@ -582,10 +586,10 @@ class Product extends Table<Product> {
 
   @Validate((value) => {
     const price = value as number;
-    if (price < 0) return "El precio no puede ser negativo";
-    if (price > 999999.99) return "El precio es demasiado alto";
+    if (price < 0) return "Price cannot be negative";
+    if (price > 999999.99) return "Price is too high";
     if (!/^\d+(\.\d{1,2})?$/.test(price.toString())) {
-      return "El precio debe tener máximo 2 decimales";
+      return "Price must have at most 2 decimal places";
     }
     return true;
   })
@@ -593,7 +597,7 @@ class Product extends Table<Product> {
 
   @Validate((value) => {
     const stock = value as number;
-    return Number.isInteger(stock) && stock >= 0 || "Stock debe ser entero positivo";
+    return Number.isInteger(stock) && stock >= 0 || "Stock must be a positive integer";
   })
   declare stock: number;
 
@@ -603,14 +607,14 @@ class Product extends Table<Product> {
       new URL(url);
       return true;
     } catch {
-      return "URL inválida";
+      return "Invalid URL";
     }
   })
   declare image_url: string;
 }
 ```
 
-### Validaciones con Contexto
+### Validations with Context
 
 ```typescript
 class DateRange extends Table<DateRange> {
@@ -622,7 +626,7 @@ class DateRange extends Table<DateRange> {
   @Validate(function(value) {
     const end = new Date(value as string);
     const start = new Date(this.start_date);
-    return end > start || "La fecha final debe ser posterior a la inicial";
+    return end > start || "End date must be after start date";
   })
   declare end_date: string;
 }
@@ -630,17 +634,17 @@ class DateRange extends Table<DateRange> {
 
 ---
 
-## @Mutate - Transformación de Datos
+## @Mutate - Data Transformation
 
-El decorador `@Mutate` transforma valores antes de guardarlos en la base de datos.
+The `@Mutate` decorator transforms values before saving them to the database.
 
-### Sintaxis
+### Syntax
 
 ```typescript
 @Mutate(transformer: (value: any) => any): PropertyDecorator
 ```
 
-### Transformaciones Básicas
+### Basic Transformations
 
 ```typescript
 class User extends Table<User> {
@@ -658,7 +662,7 @@ class User extends Table<User> {
   declare phone: string;
 }
 
-// Uso
+// Usage
 const user = await User.create({
   id: "user-1",
   email: "  JOHN@EXAMPLE.COM  ",
@@ -671,9 +675,9 @@ console.log(user.name); // "John doe"
 console.log(user.phone); // "15551234567"
 ```
 
-### Transformaciones Múltiples
+### Multiple Transformations
 
-Las mutaciones se ejecutan en orden de declaración:
+Mutations are executed in declaration order:
 
 ```typescript
 class Article extends Table<Article> {
@@ -692,7 +696,7 @@ class Article extends Table<Article> {
 }
 ```
 
-### Transformaciones Numéricas
+### Numeric Transformations
 
 ```typescript
 class Financial extends Table<Financial> {
@@ -709,7 +713,7 @@ class Financial extends Table<Financial> {
   declare quantity: number;
 }
 
-// Uso
+// Usage
 const transaction = await Financial.create({
   transaction_id: "txn-1",
   amount: 123.456789,
@@ -722,7 +726,7 @@ console.log(transaction.percentage); // 100
 console.log(transaction.quantity); // 10
 ```
 
-### Transformaciones de Objetos
+### Object Transformations
 
 ```typescript
 class Settings extends Table<Settings> {
@@ -745,24 +749,24 @@ class Settings extends Table<Settings> {
 
 ---
 
-## @Serialize - Transformación Bidireccional
+## @Serialize - Bidirectional Transformation
 
-El decorador `@Serialize` permite transformar valores en ambas direcciones: al leer de la base de datos y al guardar. A diferencia de `@Mutate` (solo escritura), `@Serialize` maneja la conversión completa del ciclo de datos.
+The `@Serialize` decorator allows transforming values in both directions: when reading from the database and when saving. Unlike `@Mutate` (write-only), `@Serialize` handles the complete data cycle conversion.
 
-### Sintaxis
+### Syntax
 
 ```typescript
 @Serialize(fromDB: ((value: any) => any) | null, toDB?: ((value: any) => any) | null): PropertyDecorator
 ```
 
-### Parámetros
+### Parameters
 
-| Parámetro | Tipo | Descripción |
+| Parameter | Type | Description |
 |-----------|------|-------------|
-| `fromDB` | `Function \| null` | Transforma el valor al leer de la base de datos. Usa `null` para omitir. |
-| `toDB` | `Function \| null` | Transforma el valor al guardar en la base de datos. Usa `null` para omitir. |
+| `fromDB` | `Function \| null` | Transforms the value when reading from database. Use `null` to skip. |
+| `toDB` | `Function \| null` | Transforms the value when saving to database. Use `null` to skip. |
 
-### Transformación Bidireccional
+### Bidirectional Transformation
 
 ```typescript
 import { Serialize } from "@arcaelas/dynamite";
@@ -771,75 +775,75 @@ class User extends Table<User> {
   @PrimaryKey()
   declare id: string;
 
-  // Boolean almacenado como número en DynamoDB
+  // Boolean stored as number in DynamoDB
   @Serialize(
-    (from) => from === 1,     // DB: 1 → App: true
-    (to) => to ? 1 : 0        // App: true → DB: 1
+    (from) => from === 1,     // DB: 1 -> App: true
+    (to) => to ? 1 : 0        // App: true -> DB: 1
   )
   declare active: boolean;
 
-  // JSON almacenado como string
+  // JSON stored as string
   @Serialize(
-    (from) => JSON.parse(from),           // DB: '{"a":1}' → App: {a:1}
-    (to) => JSON.stringify(to)            // App: {a:1} → DB: '{"a":1}'
+    (from) => JSON.parse(from),           // DB: '{"a":1}' -> App: {a:1}
+    (to) => JSON.stringify(to)            // App: {a:1} -> DB: '{"a":1}'
   )
   declare metadata: Record<string, any>;
 }
 
-// Uso
+// Usage
 const user = await User.create({
   id: "user-1",
-  active: true,        // Se guarda como 1 en DynamoDB
-  metadata: { role: "admin" }  // Se guarda como '{"role":"admin"}'
+  active: true,        // Saved as 1 in DynamoDB
+  metadata: { role: "admin" }  // Saved as '{"role":"admin"}'
 });
 
-// Al leer
+// When reading
 const fetched = await User.first({ id: "user-1" });
-console.log(fetched.active);   // true (no 1)
-console.log(fetched.metadata); // { role: "admin" } (no string)
+console.log(fetched.active);   // true (not 1)
+console.log(fetched.metadata); // { role: "admin" } (not string)
 ```
 
-### Solo Transformar al Guardar
+### Transform Only on Save
 
-Usa `null` como primer parámetro para omitir la transformación al leer:
+Use `null` as the first parameter to skip transformation when reading:
 
 ```typescript
 class Product extends Table<Product> {
   @PrimaryKey()
   declare sku: string;
 
-  // Solo normalizar al guardar, no transformar al leer
+  // Only normalize when saving, no transformation when reading
   @Serialize(null, (to) => (to as string).toUpperCase().trim())
   declare code: string;
 }
 
-// El código se guarda en mayúsculas
+// Code is saved in uppercase
 await Product.create({ sku: "prod-1", code: "  abc123  " });
-// En DB: code = "ABC123"
+// In DB: code = "ABC123"
 ```
 
-### Solo Transformar al Leer
+### Transform Only on Read
 
-Omite el segundo parámetro o usa `null` para solo transformar al leer:
+Omit the second parameter or use `null` to only transform when reading:
 
 ```typescript
 class Settings extends Table<Settings> {
   @PrimaryKey()
   declare user_id: string;
 
-  // Parse JSON solo al leer (se guarda como string directamente)
+  // Parse JSON only when reading (saved as string directly)
   @Serialize((from) => JSON.parse(from))
   declare preferences: Record<string, any>;
 
-  // Convertir timestamp a Date solo al leer
+  // Convert timestamp to Date only when reading
   @Serialize((from) => new Date(from), null)
   declare last_login: Date;
 }
 ```
 
-### Casos de Uso Comunes
+### Common Use Cases
 
-#### Encriptación de Datos Sensibles
+#### Encrypting Sensitive Data
 
 ```typescript
 import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
@@ -874,7 +878,7 @@ class UserSecret extends Table<UserSecret> {
 }
 ```
 
-#### Compresión de Datos
+#### Data Compression
 
 ```typescript
 import { gzipSync, gunzipSync } from "zlib";
@@ -891,21 +895,21 @@ class Document extends Table<Document> {
 }
 ```
 
-#### Conversión de Tipos DynamoDB
+#### DynamoDB Type Conversion
 
 ```typescript
 class Analytics extends Table<Analytics> {
   @PrimaryKey()
   declare event_id: string;
 
-  // Set de DynamoDB a Array de JavaScript
+  // DynamoDB Set to JavaScript Array
   @Serialize(
-    (from) => Array.from(from),           // Set → Array
-    (to) => new Set(to)                   // Array → Set
+    (from) => Array.from(from),           // Set -> Array
+    (to) => new Set(to)                   // Array -> Set
   )
   declare tags: string[];
 
-  // BigInt para números grandes
+  // BigInt for large numbers
   @Serialize(
     (from) => BigInt(from),
     (to) => to.toString()
@@ -914,45 +918,45 @@ class Analytics extends Table<Analytics> {
 }
 ```
 
-### Diferencias con @Mutate
+### Differences from @Mutate
 
-| Característica | @Mutate | @Serialize |
-|----------------|---------|------------|
-| Dirección | Solo al guardar | Bidireccional |
-| Parámetros | Una función | Dos funciones (fromDB, toDB) |
-| Caso de uso | Normalización | Conversión de tipos |
+| Feature | @Mutate | @Serialize |
+|---------|---------|------------|
+| Direction | Save only | Bidirectional |
+| Parameters | One function | Two functions (fromDB, toDB) |
+| Use case | Normalization | Type conversion |
 
 ```typescript
 class Example extends Table<Example> {
   @PrimaryKey()
   declare id: string;
 
-  // @Mutate: Solo normaliza al guardar
+  // @Mutate: Only normalizes when saving
   @Mutate((v) => (v as string).toLowerCase())
-  declare email: string;  // "JOHN@EXAMPLE.COM" → "john@example.com" (solo escritura)
+  declare email: string;  // "JOHN@EXAMPLE.COM" -> "john@example.com" (write only)
 
-  // @Serialize: Transforma en ambas direcciones
+  // @Serialize: Transforms in both directions
   @Serialize(
     (from) => from === 1,
     (to) => to ? 1 : 0
   )
-  declare active: boolean;  // true ↔ 1 (lectura y escritura)
+  declare active: boolean;  // true <-> 1 (read and write)
 }
 ```
 
 ---
 
-## @NotNull - Campos Requeridos
+## @NotNull - Required Fields
 
-El decorador `@NotNull` marca campos como requeridos, validando que no sean nulos, undefined o strings vacíos.
+The `@NotNull` decorator marks fields as required, validating that they are not null, undefined, or empty strings.
 
-### Sintaxis
+### Syntax
 
 ```typescript
-@NotNull(): PropertyDecorator
+@NotNull(message?: string): PropertyDecorator
 ```
 
-### Campos Obligatorios
+### Required Fields
 
 ```typescript
 class Customer extends Table<Customer> {
@@ -969,17 +973,17 @@ class Customer extends Table<Customer> {
   @NotNull()
   declare phone: string;
 
-  declare address: string; // Opcional
+  declare address: string; // Optional
 }
 
-// Válido
+// Valid
 const customer1 = await Customer.create({
   name: "John Doe",
   email: "john@example.com",
   phone: "555-1234"
 });
 
-// Inválido - lanza error
+// Invalid - throws error
 try {
   await Customer.create({
     name: "",
@@ -987,11 +991,11 @@ try {
     phone: "555-1234"
   });
 } catch (error) {
-  console.error("Validación fallida"); // name está vacío
+  console.error("Validation failed"); // name is empty
 }
 ```
 
-### Combinando con @Validate
+### Combining with @Validate
 
 ```typescript
 class Registration extends Table<Registration> {
@@ -1000,16 +1004,16 @@ class Registration extends Table<Registration> {
 
   @NotNull()
   @Mutate((v) => (v as string).toLowerCase().trim())
-  @Validate((v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v as string) || "Email inválido")
+  @Validate((v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v as string) || "Invalid email")
   declare email: string;
 
   @NotNull()
-  @Validate((v) => (v as string).length >= 8 || "Mínimo 8 caracteres")
+  @Validate((v) => (v as string).length >= 8 || "Minimum 8 characters")
   declare password: string;
 }
 ```
 
-### Validación en Arrays y Objetos
+### Validation on Arrays and Objects
 
 ```typescript
 class Project extends Table<Project> {
@@ -1020,13 +1024,13 @@ class Project extends Table<Project> {
   declare title: string;
 
   @NotNull()
-  @Validate((v) => Array.isArray(v) && v.length > 0 || "Debe tener al menos un miembro")
+  @Validate((v) => Array.isArray(v) && v.length > 0 || "Must have at least one member")
   declare team_members: string[];
 
   @NotNull()
   @Validate((v) => {
     const config = v as Record<string, any>;
-    return Object.keys(config).length > 0 || "Configuración no puede estar vacía";
+    return Object.keys(config).length > 0 || "Configuration cannot be empty";
   })
   declare config: Record<string, any>;
 }
@@ -1034,17 +1038,17 @@ class Project extends Table<Project> {
 
 ---
 
-## @CreatedAt - Timestamp de Creación
+## @CreatedAt - Creation Timestamp
 
-El decorador `@CreatedAt` establece automáticamente la fecha y hora de creación en formato ISO 8601.
+The `@CreatedAt` decorator automatically sets the creation date and time in ISO 8601 format.
 
-### Sintaxis
+### Syntax
 
 ```typescript
 @CreatedAt(): PropertyDecorator
 ```
 
-### Uso Básico
+### Basic Usage
 
 ```typescript
 class Post extends Table<Post> {
@@ -1059,16 +1063,16 @@ class Post extends Table<Post> {
   declare created_at: CreationOptional<string>;
 }
 
-// La fecha se establece automáticamente
+// Date is set automatically
 const post = await Post.create({
-  title: "Mi primer post",
-  content: "Contenido del post"
+  title: "My first post",
+  content: "Post content"
 });
 
 console.log(post.created_at); // "2025-01-15T10:30:00.123Z"
 ```
 
-### Auditoría Completa
+### Complete Auditing
 
 ```typescript
 class AuditLog extends Table<AuditLog> {
@@ -1087,7 +1091,7 @@ class AuditLog extends Table<AuditLog> {
   declare user_agent: string;
 }
 
-// Registro de auditoría con timestamp automático
+// Audit log with automatic timestamp
 const log = await AuditLog.create({
   user_id: "user-123",
   action: "DELETE",
@@ -1097,7 +1101,7 @@ const log = await AuditLog.create({
 });
 ```
 
-### Consultas por Fecha
+### Queries by Date
 
 ```typescript
 class Event extends Table<Event> {
@@ -1112,29 +1116,29 @@ class Event extends Table<Event> {
   declare description: string;
 }
 
-// Eventos recientes por categoría
+// Recent events by category
 const recent_events = await Event.where({ category: "news" }, {
   order: "DESC",
   limit: 20
 });
 
-// Eventos en un rango de fechas
+// Events in a date range
 const events = await Event.where("created_at", ">=", "2025-01-01T00:00:00Z");
 ```
 
 ---
 
-## @UpdatedAt - Timestamp de Actualización
+## @UpdatedAt - Update Timestamp
 
-El decorador `@UpdatedAt` actualiza automáticamente la fecha y hora cada vez que se guarda el registro.
+The `@UpdatedAt` decorator automatically updates the date and time each time the record is saved.
 
-### Sintaxis
+### Syntax
 
 ```typescript
 @UpdatedAt(): PropertyDecorator
 ```
 
-### Uso Básico
+### Basic Usage
 
 ```typescript
 class Document extends Table<Document> {
@@ -1152,24 +1156,24 @@ class Document extends Table<Document> {
   declare updated_at: CreationOptional<string>;
 }
 
-// Creación
+// Creation
 const doc = await Document.create({
-  title: "Documento",
-  content: "Contenido inicial"
+  title: "Document",
+  content: "Initial content"
 });
 
 console.log(doc.created_at); // "2025-01-15T10:00:00Z"
 console.log(doc.updated_at); // "2025-01-15T10:00:00Z"
 
-// Actualización
-doc.content = "Contenido actualizado";
+// Update
+doc.content = "Updated content";
 await doc.save();
 
-console.log(doc.created_at); // "2025-01-15T10:00:00Z" (sin cambios)
-console.log(doc.updated_at); // "2025-01-15T10:15:00Z" (actualizado)
+console.log(doc.created_at); // "2025-01-15T10:00:00Z" (unchanged)
+console.log(doc.updated_at); // "2025-01-15T10:15:00Z" (updated)
 ```
 
-### Sistema de Versiones
+### Version System
 
 ```typescript
 class Article extends Table<Article> {
@@ -1193,18 +1197,18 @@ class Article extends Table<Article> {
   declare last_edited_by: string;
 }
 
-// Actualización con versión
+// Update with version
 const article = await Article.first({ id: "article-123" });
 if (article) {
-  article.content = "Nuevo contenido";
+  article.content = "New content";
   article.version = article.version + 1;
   article.last_edited_by = "user-456";
   await article.save();
-  // updated_at se actualiza automáticamente
+  // updated_at is automatically updated
 }
 ```
 
-### Tracking de Cambios
+### Change Tracking
 
 ```typescript
 class UserProfile extends Table<UserProfile> {
@@ -1224,13 +1228,13 @@ class UserProfile extends Table<UserProfile> {
   declare modification_count: number;
 }
 
-// Incrementar contador en cada modificación
+// Increment counter on each modification
 const profile = await UserProfile.first({ user_id: "user-123" });
 if (profile) {
-  profile.name = "Nuevo Nombre";
+  profile.name = "New Name";
   profile.modification_count = (profile.modification_count || 0) + 1;
   await profile.save();
-  // last_modified se actualiza automáticamente
+  // last_modified is automatically updated
 }
 ```
 
@@ -1238,15 +1242,15 @@ if (profile) {
 
 ## @DeleteAt - Soft Delete
 
-El decorador `@DeleteAt` marca una propiedad como columna de soft delete. Cuando se llama `destroy()`, en lugar de eliminar físicamente el registro, se establece esta columna con un timestamp ISO 8601.
+The `@DeleteAt` decorator marks a property as a soft delete column. When `destroy()` is called, instead of physically deleting the record, this column is set with an ISO 8601 timestamp.
 
-### Sintaxis
+### Syntax
 
 ```typescript
 @DeleteAt(): PropertyDecorator
 ```
 
-### Uso Básico
+### Basic Usage
 
 ```typescript
 import { DeleteAt } from "@arcaelas/dynamite";
@@ -1263,22 +1267,22 @@ class User extends Table<User> {
   declare deleted_at?: string;
 }
 
-// Crear usuario
+// Create user
 const user = await User.create({
   name: "John Doe",
   email: "john@example.com"
 });
 
-// Soft delete - NO elimina el registro, marca deleted_at
+// Soft delete - does NOT delete the record, marks deleted_at
 await user.destroy();
 
 console.log(user.deleted_at); // "2025-01-15T10:30:00.123Z"
-// El registro sigue en la base de datos con deleted_at establecido
+// The record remains in the database with deleted_at set
 ```
 
-### Comportamiento de Queries
+### Query Behavior
 
-Con `@DeleteAt`, las consultas normales excluyen automáticamente los registros soft-deleted:
+With `@DeleteAt`, normal queries automatically exclude soft-deleted records:
 
 ```typescript
 class Article extends Table<Article> {
@@ -1292,29 +1296,29 @@ class Article extends Table<Article> {
   declare deleted_at?: string;
 }
 
-// Crear artículos
-await Article.create({ id: "1", title: "Artículo 1", content: "..." });
-await Article.create({ id: "2", title: "Artículo 2", content: "..." });
-await Article.create({ id: "3", title: "Artículo 3", content: "..." });
+// Create articles
+await Article.create({ id: "1", title: "Article 1", content: "..." });
+await Article.create({ id: "2", title: "Article 2", content: "..." });
+await Article.create({ id: "3", title: "Article 3", content: "..." });
 
-// Soft delete uno
+// Soft delete one
 const article = await Article.first({ id: "2" });
 await article.destroy();
 
-// Query normal - excluye soft-deleted automáticamente
+// Normal query - excludes soft-deleted automatically
 const active = await Article.where({});
-console.log(active.length); // 2 (artículos 1 y 3)
+console.log(active.length); // 2 (articles 1 and 3)
 
-// Incluir registros soft-deleted
+// Include soft-deleted records
 const all = await Article.withTrashed({});
-console.log(all.length); // 3 (todos)
+console.log(all.length); // 3 (all)
 
-// Solo registros soft-deleted
+// Only soft-deleted records
 const deleted = await Article.onlyTrashed();
-console.log(deleted.length); // 1 (artículo 2)
+console.log(deleted.length); // 1 (article 2)
 ```
 
-### Restaurar Registros
+### Restore Records
 
 ```typescript
 class Document extends Table<Document> {
@@ -1331,16 +1335,16 @@ class Document extends Table<Document> {
 const doc = await Document.first({ id: "doc-1" });
 await doc.destroy();
 
-// Restaurar
+// Restore
 const deleted_doc = await Document.withTrashed({ id: "doc-1" });
 if (deleted_doc[0]) {
   deleted_doc[0].deleted_at = undefined;
   await deleted_doc[0].save();
-  // El documento vuelve a aparecer en queries normales
+  // Document appears again in normal queries
 }
 ```
 
-### Sistema de Papelera
+### Trash System
 
 ```typescript
 class File extends Table<File> {
@@ -1359,25 +1363,25 @@ class File extends Table<File> {
   declare deleted_at?: string;
 }
 
-// Mover a papelera
-async function moveToTrash(file_id: string): Promise<void> {
+// Move to trash
+async function move_to_trash(file_id: string): Promise<void> {
   const file = await File.first({ id: file_id });
   if (file) await file.destroy();
 }
 
-// Vaciar papelera (eliminar permanentemente)
-async function emptyTrash(owner_id: string): Promise<void> {
+// Empty trash (permanently delete)
+async function empty_trash(owner_id: string): Promise<void> {
   const trashed = await File.onlyTrashed();
   const user_trashed = trashed.filter(f => f.owner_id === owner_id);
 
   for (const file of user_trashed) {
-    // Forzar eliminación permanente
+    // Force permanent deletion
     await File.delete({ id: file.id });
   }
 }
 
-// Restaurar de papelera
-async function restoreFromTrash(file_id: string): Promise<void> {
+// Restore from trash
+async function restore_from_trash(file_id: string): Promise<void> {
   const files = await File.withTrashed({ id: file_id });
   if (files[0]?.deleted_at) {
     files[0].deleted_at = undefined;
@@ -1385,14 +1389,14 @@ async function restoreFromTrash(file_id: string): Promise<void> {
   }
 }
 
-// Listar papelera
-async function listTrash(owner_id: string): Promise<File[]> {
+// List trash
+async function list_trash(owner_id: string): Promise<File[]> {
   const trashed = await File.onlyTrashed();
   return trashed.filter(f => f.owner_id === owner_id);
 }
 ```
 
-### Combinando con Timestamps
+### Combining with Timestamps
 
 ```typescript
 class Post extends Table<Post> {
@@ -1413,16 +1417,16 @@ class Post extends Table<Post> {
   declare deleted_at?: string;
 }
 
-// Ciclo de vida completo
+// Complete lifecycle
 const post = await Post.create({
-  title: "Mi Post",
-  content: "Contenido"
+  title: "My Post",
+  content: "Content"
 });
 // created_at = "2025-01-15T10:00:00Z"
 // updated_at = "2025-01-15T10:00:00Z"
 // deleted_at = undefined
 
-post.title = "Título Actualizado";
+post.title = "Updated Title";
 await post.save();
 // updated_at = "2025-01-15T11:00:00Z"
 
@@ -1430,7 +1434,7 @@ await post.destroy();
 // deleted_at = "2025-01-15T12:00:00Z"
 ```
 
-### Soft Delete en Transacciones
+### Soft Delete in Transactions
 
 ```typescript
 const dynamite = new Dynamite({
@@ -1438,45 +1442,45 @@ const dynamite = new Dynamite({
   tables: [User, Order]
 });
 
-dynamite.connect();
+await dynamite.connect();
 
-// Soft delete atómico de usuario y sus órdenes
+// Atomic soft delete of user and their orders
 await dynamite.tx(async (tx) => {
   const user = await User.first({ id: "user-123" });
   const orders = await Order.where({ user_id: "user-123" });
 
-  // Soft delete de todas las órdenes
+  // Soft delete all orders
   for (const order of orders) {
     await order.destroy(tx);
   }
 
-  // Soft delete del usuario
+  // Soft delete user
   await user.destroy(tx);
 });
 ```
 
-### Características Automáticas
+### Automatic Characteristics
 
-Al aplicar `@DeleteAt`:
+When applying `@DeleteAt`:
 
-1. **nullable = true**: La columna se marca automáticamente como nullable
-2. **softDelete = true**: Activa el comportamiento de soft delete en `destroy()`
-3. **Filtrado automático**: `where()` excluye registros con `deleted_at` establecido
-4. **Métodos adicionales**: Habilita `withTrashed()` y `onlyTrashed()`
+1. **nullable = true**: The column is automatically marked as nullable
+2. **softDelete = true**: Activates soft delete behavior in `destroy()`
+3. **Automatic filtering**: `where()` excludes records with `deleted_at` set
+4. **Additional methods**: Enables `withTrashed()` and `onlyTrashed()`
 
 ---
 
-## @Name - Nombres Personalizados
+## @Name - Custom Names
 
-El decorador `@Name` permite personalizar los nombres de tablas y columnas en la base de datos.
+The `@Name` decorator allows customizing table and column names in the database.
 
-### Sintaxis
+### Syntax
 
 ```typescript
 @Name(name: string): ClassDecorator & PropertyDecorator
 ```
 
-### Nombre de Tabla Personalizado
+### Custom Table Name
 
 ```typescript
 @Name("custom_users_table")
@@ -1488,10 +1492,10 @@ class User extends Table<User> {
   declare email: string;
 }
 
-// La tabla se crea con el nombre "custom_users_table"
+// Table is created with the name "custom_users_table"
 ```
 
-### Nombres de Columnas Personalizados
+### Custom Column Names
 
 ```typescript
 class Customer extends Table<Customer> {
@@ -1509,10 +1513,10 @@ class Customer extends Table<Customer> {
   declare phone: string;
 }
 
-// En DynamoDB: { customer_id, full_name, email_address, phone_number }
+// In DynamoDB: { customer_id, full_name, email_address, phone_number }
 ```
 
-### Compatibilidad con Sistemas Legados
+### Legacy System Compatibility
 
 ```typescript
 @Name("legacy_orders")
@@ -1537,17 +1541,25 @@ class Order extends Table<Order> {
 
 ---
 
-## @HasMany - Relaciones Uno a Muchos
+## @HasMany - One to Many Relationships
 
-El decorador `@HasMany` define relaciones donde un modelo tiene múltiples instancias de otro modelo.
+The `@HasMany` decorator defines relationships where one model has multiple instances of another model.
 
-### Sintaxis
+### Syntax
 
 ```typescript
-@HasMany(targetModel: () => Model, foreignKey: string, localKey?: string): PropertyDecorator
+@HasMany(model: () => Model, foreignKey: string, localKey?: string): PropertyDecorator
 ```
 
-### Relación Básica
+### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `model` | `() => Model` | Function that returns the related model class |
+| `foreignKey` | `string` | Foreign key in the related model |
+| `localKey` | `string` | Local key (default: `'id'`) |
+
+### Basic Relationship
 
 ```typescript
 import { HasMany, NonAttribute } from "@arcaelas/dynamite";
@@ -1559,8 +1571,8 @@ class User extends Table<User> {
   declare name: string;
   declare email: string;
 
-  @HasMany(() => Order, "user_id")
-  declare orders: NonAttribute<HasMany<Order>>;
+  @HasMany(() => Order, "user_id", "id")
+  declare orders: NonAttribute<Order[]>;
 }
 
 class Order extends Table<Order> {
@@ -1575,7 +1587,7 @@ class Order extends Table<Order> {
   declare status: string;
 }
 
-// Cargar usuario con órdenes
+// Load user with orders
 const users = await User.where({ id: "user-123" }, {
   include: {
     orders: {}
@@ -1585,10 +1597,10 @@ const users = await User.where({ id: "user-123" }, {
 console.log(users[0].orders); // Order[]
 ```
 
-### Relaciones Filtradas
+### Filtered Relationships
 
 ```typescript
-// Obtener usuario con órdenes completadas
+// Get user with completed orders
 const users = await User.where({ id: "user-123" }, {
   include: {
     orders: {
@@ -1600,7 +1612,7 @@ const users = await User.where({ id: "user-123" }, {
 });
 ```
 
-### Relaciones Anidadas
+### Nested Relationships
 
 ```typescript
 class User extends Table<User> {
@@ -1609,8 +1621,8 @@ class User extends Table<User> {
 
   declare name: string;
 
-  @HasMany(() => Order, "user_id")
-  declare orders: NonAttribute<HasMany<Order>>;
+  @HasMany(() => Order, "user_id", "id")
+  declare orders: NonAttribute<Order[]>;
 }
 
 class Order extends Table<Order> {
@@ -1620,8 +1632,8 @@ class Order extends Table<Order> {
   declare user_id: string;
   declare total: number;
 
-  @HasMany(() => OrderItem, "order_id")
-  declare items: NonAttribute<HasMany<OrderItem>>;
+  @HasMany(() => OrderItem, "order_id", "id")
+  declare items: NonAttribute<OrderItem[]>;
 }
 
 class OrderItem extends Table<OrderItem> {
@@ -1634,7 +1646,7 @@ class OrderItem extends Table<OrderItem> {
   declare price: number;
 }
 
-// Cargar usuarios con órdenes e items
+// Load users with orders and items
 const users = await User.where({}, {
   include: {
     orders: {
@@ -1648,17 +1660,118 @@ const users = await User.where({}, {
 
 ---
 
-## @BelongsTo - Relaciones Muchos a Uno
+## @HasOne - One to One Relationships
 
-El decorador `@BelongsTo` define relaciones donde un modelo pertenece a otro modelo.
+The `@HasOne` decorator defines relationships where one model has exactly one instance of another model.
 
-### Sintaxis
+### Syntax
 
 ```typescript
-@BelongsTo(targetModel: () => Model, localKey: string, foreignKey?: string): PropertyDecorator
+@HasOne(model: () => Model, foreignKey: string, localKey?: string): PropertyDecorator
 ```
 
-### Relación Básica
+### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `model` | `() => Model` | Function that returns the related model class |
+| `foreignKey` | `string` | Foreign key in the related model |
+| `localKey` | `string` | Local key (default: `'id'`) |
+
+### Basic Relationship
+
+```typescript
+import { HasOne, NonAttribute } from "@arcaelas/dynamite";
+
+class User extends Table<User> {
+  @PrimaryKey()
+  declare id: string;
+
+  declare name: string;
+  declare email: string;
+
+  @HasOne(() => Profile, "user_id", "id")
+  declare profile: NonAttribute<Profile | null>;
+}
+
+class Profile extends Table<Profile> {
+  @PrimaryKey()
+  @Default(() => crypto.randomUUID())
+  declare id: CreationOptional<string>;
+
+  @NotNull()
+  declare user_id: string;
+
+  declare bio: string;
+  declare avatar_url: string;
+  declare website: string;
+}
+
+// Load user with profile
+const users = await User.where({ id: "user-123" }, {
+  include: {
+    profile: {}
+  }
+});
+
+console.log(users[0].profile?.bio); // "Software developer..."
+```
+
+### User with Settings
+
+```typescript
+class User extends Table<User> {
+  @PrimaryKey()
+  declare id: string;
+
+  declare name: string;
+
+  @HasOne(() => UserSettings, "user_id", "id")
+  declare settings: NonAttribute<UserSettings | null>;
+}
+
+class UserSettings extends Table<UserSettings> {
+  @PrimaryKey()
+  declare user_id: string;
+
+  declare theme: string;
+  declare language: string;
+  declare notifications_enabled: boolean;
+}
+
+// Load user with settings
+const user = await User.first({ id: "user-123" }, {
+  include: {
+    settings: {}
+  }
+});
+
+if (user?.settings) {
+  console.log(user.settings.theme); // "dark"
+}
+```
+
+---
+
+## @BelongsTo - Many to One Relationships
+
+The `@BelongsTo` decorator defines relationships where a model belongs to another model.
+
+### Syntax
+
+```typescript
+@BelongsTo(model: () => Model, localKey: string, foreignKey?: string): PropertyDecorator
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `model` | `() => Model` | Function that returns the related model class |
+| `localKey` | `string` | Local key that references the parent model |
+| `foreignKey` | `string` | Key in the parent model (default: `'id'`) |
+
+### Basic Relationship
 
 ```typescript
 import { BelongsTo, NonAttribute } from "@arcaelas/dynamite";
@@ -1673,8 +1786,8 @@ class Order extends Table<Order> {
   declare total: number;
   declare status: string;
 
-  @BelongsTo(() => User, "user_id")
-  declare user: NonAttribute<BelongsTo<User>>;
+  @BelongsTo(() => User, "user_id", "id")
+  declare user: NonAttribute<User | null>;
 }
 
 class User extends Table<User> {
@@ -1685,7 +1798,7 @@ class User extends Table<User> {
   declare email: string;
 }
 
-// Cargar orden con usuario
+// Load order with user
 const orders = await Order.where({ id: "order-123" }, {
   include: {
     user: {}
@@ -1695,7 +1808,7 @@ const orders = await Order.where({ id: "order-123" }, {
 console.log(orders[0].user?.name); // "John Doe"
 ```
 
-### Múltiples Relaciones
+### Multiple Relationships
 
 ```typescript
 class OrderItem extends Table<OrderItem> {
@@ -1706,14 +1819,14 @@ class OrderItem extends Table<OrderItem> {
   declare product_id: string;
   declare quantity: number;
 
-  @BelongsTo(() => Order, "order_id")
-  declare order: NonAttribute<BelongsTo<Order>>;
+  @BelongsTo(() => Order, "order_id", "id")
+  declare order: NonAttribute<Order | null>;
 
-  @BelongsTo(() => Product, "product_id")
-  declare product: NonAttribute<BelongsTo<Product>>;
+  @BelongsTo(() => Product, "product_id", "id")
+  declare product: NonAttribute<Product | null>;
 }
 
-// Cargar item con orden y producto
+// Load item with order and product
 const items = await OrderItem.where({ id: "item-123" }, {
   include: {
     order: {},
@@ -1724,9 +1837,154 @@ const items = await OrderItem.where({ id: "item-123" }, {
 
 ---
 
-## Combinando Múltiples Decoradores
+## @ManyToMany - Many to Many Relationships
 
-### Modelo Completo con Todos los Decoradores
+The `@ManyToMany` decorator defines relationships where multiple instances of one model can be associated with multiple instances of another model through a pivot table.
+
+### Syntax
+
+```typescript
+@ManyToMany(
+  model: () => Model,
+  pivotTable: string,
+  foreignKey: string,
+  relatedKey: string,
+  localKey?: string,
+  relatedPK?: string
+): PropertyDecorator
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `model` | `() => Model` | Function that returns the related model class |
+| `pivotTable` | `string` | Name of the pivot table |
+| `foreignKey` | `string` | Foreign key in pivot table pointing to current model |
+| `relatedKey` | `string` | Foreign key in pivot table pointing to related model |
+| `localKey` | `string` | Local key (default: `'id'`) |
+| `relatedPK` | `string` | Related model's primary key (default: `'id'`) |
+
+### Basic Relationship
+
+```typescript
+import { ManyToMany, NonAttribute } from "@arcaelas/dynamite";
+
+class User extends Table<User> {
+  @PrimaryKey()
+  declare id: string;
+
+  declare name: string;
+  declare email: string;
+
+  @ManyToMany(() => Role, "users_roles", "user_id", "role_id", "id", "id")
+  declare roles: NonAttribute<Role[]>;
+}
+
+class Role extends Table<Role> {
+  @PrimaryKey()
+  declare id: string;
+
+  declare name: string;
+  declare permissions: string[];
+
+  @ManyToMany(() => User, "users_roles", "role_id", "user_id", "id", "id")
+  declare users: NonAttribute<User[]>;
+}
+
+// Load user with roles
+const users = await User.where({ id: "user-123" }, {
+  include: {
+    roles: {}
+  }
+});
+
+console.log(users[0].roles); // Role[]
+```
+
+### Tags System
+
+```typescript
+class Article extends Table<Article> {
+  @PrimaryKey()
+  declare id: string;
+
+  declare title: string;
+  declare content: string;
+
+  @ManyToMany(() => Tag, "articles_tags", "article_id", "tag_id", "id", "id")
+  declare tags: NonAttribute<Tag[]>;
+}
+
+class Tag extends Table<Tag> {
+  @PrimaryKey()
+  declare id: string;
+
+  declare name: string;
+  declare slug: string;
+
+  @ManyToMany(() => Article, "articles_tags", "tag_id", "article_id", "id", "id")
+  declare articles: NonAttribute<Article[]>;
+}
+
+// Load articles with tags
+const articles = await Article.where({}, {
+  include: {
+    tags: {}
+  }
+});
+
+// Load tag with articles
+const tags = await Tag.where({ slug: "javascript" }, {
+  include: {
+    articles: {
+      limit: 10,
+      order: "DESC"
+    }
+  }
+});
+```
+
+### Course Enrollment System
+
+```typescript
+class Student extends Table<Student> {
+  @PrimaryKey()
+  declare id: string;
+
+  declare name: string;
+  declare email: string;
+
+  @ManyToMany(() => Course, "enrollments", "student_id", "course_id", "id", "id")
+  declare courses: NonAttribute<Course[]>;
+}
+
+class Course extends Table<Course> {
+  @PrimaryKey()
+  declare id: string;
+
+  declare title: string;
+  declare instructor_id: string;
+
+  @ManyToMany(() => Student, "enrollments", "course_id", "student_id", "id", "id")
+  declare students: NonAttribute<Student[]>;
+}
+
+// Load student with enrolled courses
+const student = await Student.first({ id: "student-123" }, {
+  include: {
+    courses: {}
+  }
+});
+
+console.log(student?.courses); // Course[]
+```
+
+---
+
+## Combining Multiple Decorators
+
+### Complete Model with All Decorators
 
 ```typescript
 import {
@@ -1744,7 +2002,9 @@ import {
   DeleteAt,
   Name,
   HasMany,
+  HasOne,
   BelongsTo,
+  ManyToMany,
   CreationOptional,
   NonAttribute
 } from "@arcaelas/dynamite";
@@ -1757,24 +2017,24 @@ class User extends Table<User> {
 
   @NotNull()
   @Mutate((v) => (v as string).toLowerCase().trim())
-  @Validate((v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v as string) || "Email inválido")
+  @Validate((v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v as string) || "Invalid email")
   @Name("email_address")
   declare email: string;
 
   @NotNull()
   @Mutate((v) => (v as string).trim())
   @Validate([
-    (v) => (v as string).length >= 2 || "Nombre muy corto",
-    (v) => (v as string).length <= 50 || "Nombre muy largo"
+    (v) => (v as string).length >= 2 || "Name too short",
+    (v) => (v as string).length <= 50 || "Name too long"
   ])
   declare name: string;
 
   @Default(() => 18)
-  @Validate((v) => (v as number) >= 0 && (v as number) <= 150 || "Edad inválida")
+  @Validate((v) => (v as number) >= 0 && (v as number) <= 150 || "Invalid age")
   declare age: CreationOptional<number>;
 
   @Default(() => "customer")
-  @Validate((v) => ["customer", "admin", "moderator"].includes(v as string) || "Rol inválido")
+  @Validate((v) => ["customer", "admin", "moderator"].includes(v as string) || "Invalid role")
   declare role: CreationOptional<string>;
 
   @Default(() => true)
@@ -1799,13 +2059,19 @@ class User extends Table<User> {
   @DeleteAt()
   declare deleted_at?: string;
 
-  @HasMany(() => Order, "user_id")
-  declare orders: NonAttribute<HasMany<Order>>;
+  @HasOne(() => Profile, "user_id", "id")
+  declare profile: NonAttribute<Profile | null>;
 
-  @HasMany(() => Review, "user_id")
-  declare reviews: NonAttribute<HasMany<Review>>;
+  @HasMany(() => Order, "user_id", "id")
+  declare orders: NonAttribute<Order[]>;
 
-  // Propiedad computada
+  @HasMany(() => Review, "user_id", "id")
+  declare reviews: NonAttribute<Review[]>;
+
+  @ManyToMany(() => Role, "users_roles", "user_id", "role_id", "id", "id")
+  declare roles: NonAttribute<Role[]>;
+
+  // Computed property
   declare display_name: NonAttribute<string>;
 
   constructor(data?: any) {
@@ -1820,81 +2086,81 @@ class User extends Table<User> {
 
 ---
 
-## Patrones de Decoradores Personalizados
+## Custom Decorator Patterns
 
-Dynamite exporta dos funciones factory que permiten crear decoradores personalizados con acceso completo al sistema de metadatos: `decorator()` para propiedades y `relationDecorator()` para relaciones.
+Dynamite exports two factory functions that allow creating custom decorators with full access to the metadata system: `decorator()` for properties and `relationDecorator()` for relationships.
 
-### API de `decorator()`
+### API of `decorator()`
 
 ```typescript
 import { decorator, ColumnBuilder, WrapperEntry } from "@arcaelas/dynamite";
 
 /**
- * @description Factory para crear decoradores de propiedad
- * @param handler Función que recibe (col: ColumnBuilder, args: Args, entry: WrapperEntry)
- * @returns Función decoradora parametrizada
+ * @description Factory for creating property decorators
+ * @param handler Function that receives (col: ColumnBuilder, args: Args, entry: WrapperEntry)
+ * @returns Parameterized decorator function
  */
 function decorator<Args extends any[] = []>(
   handler: (col: ColumnBuilder, args: Args, entry: WrapperEntry) => void
 ): (...args: Args) => PropertyDecorator;
 ```
 
-### Clase `ColumnBuilder`
+### `ColumnBuilder` Class
 
-El `ColumnBuilder` proporciona acceso fluido a los metadatos de la columna:
+The `ColumnBuilder` provides fluent access to column metadata:
 
 ```typescript
 interface ColumnBuilder {
-  // Metadatos de columna
-  name: string;           // Nombre de la columna
-  default: any;           // Valor por defecto
-  index: boolean;         // Es partition key
-  indexSort: boolean;     // Es sort key
-  primaryKey: boolean;    // Es primary key
-  nullable: boolean;      // Permite null
-  unique: boolean;        // Valores únicos
-  createdAt: boolean;     // Timestamp de creación
-  updatedAt: boolean;     // Timestamp de actualización
-  softDelete: boolean;    // Soft delete habilitado
+  // Column metadata
+  name: string;           // Column name
+  default: any;           // Default value
+  index: boolean;         // Is partition key
+  indexSort: boolean;     // Is sort key
+  primaryKey: boolean;    // Is primary key
+  nullable: boolean;      // Allows null
+  unique: boolean;        // Unique values
+  createdAt: boolean;     // Creation timestamp
+  updatedAt: boolean;     // Update timestamp
+  softDelete: boolean;    // Soft delete enabled
   serialize: { fromDB?: Function, toDB?: Function };
 
-  // Pipeline de transformación
-  set(fn: (current: any, next: any) => any): this;  // Agregar setter
-  get(fn: (current: any) => any): this;              // Agregar getter
+  // Transformation pipeline
+  set(fn: (current: any, next: any) => any): this;  // Add setter
+  get(fn: (current: any) => any): this;              // Add getter
 
-  // Validadores lazy
+  // Lazy validators
   lazy_validators: Array<(value: any) => boolean | string>;
 }
 ```
 
-### Crear Decorador Simple
+### Create Simple Decorator
 
 ```typescript
 import { decorator } from "@arcaelas/dynamite";
 
-// Decorador sin parámetros
+// Decorator without parameters
 export const Uppercase = decorator((col) => {
   col.set((current, next) => {
     return typeof next === "string" ? next.toUpperCase() : next;
   });
 });
 
-// Uso
+// Usage
 class User extends Table<User> {
   @Uppercase()
   declare country_code: string;
 }
 
 await User.create({ country_code: "us" });
-// Se guarda como "US"
+// Saved as "US"
 ```
 
-### Crear Decorador con Parámetros
+### Create Decorator with Parameters
 
 ```typescript
 import { decorator } from "@arcaelas/dynamite";
 
-// Decorador con parámetros tipados
+// Decorator with typed parameters
 export const MaxLength = decorator<[max: number]>((col, [max]) => {
   col.set((current, next) => {
     if (typeof next === "string" && next.length > max) {
@@ -1904,19 +2170,19 @@ export const MaxLength = decorator<[max: number]>((col, [max]) => {
   });
 });
 
-// Uso
+// Usage
 class Comment extends Table<Comment> {
   @MaxLength(500)
   declare content: string;
 }
 ```
 
-### Crear Decorador con Múltiples Parámetros
+### Create Decorator with Multiple Parameters
 
 ```typescript
 import { decorator } from "@arcaelas/dynamite";
 
-// Decorador con múltiples parámetros opcionales
+// Decorator with multiple optional parameters
 export const Range = decorator<[min: number, max: number, clamp?: boolean]>(
   (col, [min, max, clamp = true]) => {
     col.set((current, next) => {
@@ -1925,31 +2191,31 @@ export const Range = decorator<[min: number, max: number, clamp?: boolean]>(
         return Math.max(min, Math.min(max, next));
       }
       if (next < min || next > max) {
-        throw new Error(`Valor debe estar entre ${min} y ${max}`);
+        throw new Error(`Value must be between ${min} and ${max}`);
       }
       return next;
     });
   }
 );
 
-// Uso
+// Usage
 class Product extends Table<Product> {
-  @Range(0, 100, true)    // Clamp valores a [0, 100]
+  @Range(0, 100, true)    // Clamp values to [0, 100]
   declare discount: number;
 
-  @Range(1, 1000, false)  // Lanza error si está fuera de rango
+  @Range(1, 1000, false)  // Throw error if out of range
   declare quantity: number;
 }
 ```
 
-### Decorador con Getter y Setter
+### Decorator with Getter and Setter
 
 ```typescript
 import { decorator } from "@arcaelas/dynamite";
 
-// Transformación bidireccional (similar a @Serialize pero personalizado)
+// Bidirectional transformation (similar to @Serialize but customized)
 export const JsonColumn = decorator((col) => {
-  // Al guardar: objeto → JSON string
+  // On save: object -> JSON string
   col.set((current, next) => {
     if (next !== null && typeof next === "object") {
       return JSON.stringify(next);
@@ -1957,7 +2223,7 @@ export const JsonColumn = decorator((col) => {
     return next;
   });
 
-  // Al leer: JSON string → objeto
+  // On read: JSON string -> object
   col.get((current) => {
     if (typeof current === "string") {
       try {
@@ -1970,51 +2236,51 @@ export const JsonColumn = decorator((col) => {
   });
 });
 
-// Uso
+// Usage
 class Settings extends Table<Settings> {
   @JsonColumn()
   declare preferences: Record<string, any>;
 }
 ```
 
-### Decorador con Validación Lazy
+### Decorator with Lazy Validation
 
-Los validadores lazy se ejecutan en `save()`, no en el setter:
+Lazy validators are executed in `save()`, not in the setter:
 
 ```typescript
 import { decorator } from "@arcaelas/dynamite";
 
 export const UniqueEmail = decorator((col) => {
-  // Normalizar al guardar
+  // Normalize on save
   col.set((current, next) => {
     return typeof next === "string" ? next.toLowerCase().trim() : next;
   });
 
-  // Validación lazy (ejecutada en save())
+  // Lazy validation (executed in save())
   col.lazy_validators.push(async (value) => {
-    // Aquí podrías verificar unicidad en la base de datos
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(value) || "Email inválido";
+    // Here you could verify uniqueness in the database
+    const email_regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return email_regex.test(value) || "Invalid email";
   });
 });
 ```
 
-### Decorador que Modifica Metadatos
+### Decorator that Modifies Metadata
 
 ```typescript
 import { decorator } from "@arcaelas/dynamite";
 
-// Marcar columna como índice único
+// Mark column as unique index
 export const UniqueIndex = decorator((col) => {
   col.index = true;
   col.unique = true;
   col.nullable = false;
 });
 
-// Marcar como timestamp automático personalizado
+// Mark as custom auto-timestamp
 export const AutoTimestamp = decorator<[format?: string]>((col, [format]) => {
   col.set((current, next) => {
-    // Siempre establecer timestamp actual al guardar
+    // Always set current timestamp on save
     const now = new Date();
     if (format === "epoch") {
       return now.getTime();
@@ -2023,7 +2289,7 @@ export const AutoTimestamp = decorator<[format?: string]>((col, [format]) => {
   });
 });
 
-// Uso
+// Usage
 class AuditLog extends Table<AuditLog> {
   @UniqueIndex()
   declare event_id: string;
@@ -2033,21 +2299,21 @@ class AuditLog extends Table<AuditLog> {
 }
 ```
 
-### Decorador con Acceso a WrapperEntry
+### Decorator with Access to WrapperEntry
 
-El tercer parámetro `entry` proporciona acceso a todos los metadatos de la tabla:
+The third parameter `entry` provides access to all table metadata:
 
 ```typescript
 import { decorator } from "@arcaelas/dynamite";
 
-// Verificar que existe una clave primaria antes de crear índice
+// Verify that a primary key exists before creating an index
 export const SecondaryIndex = decorator((col, args, entry) => {
-  // Verificar que hay al menos una columna con @Index
-  const hasPartitionKey = Array.from(entry.columns.values()).some(c => c.index);
+  // Check that there is at least one column with @Index
+  const has_partition_key = Array.from(entry.columns.values()).some(c => c.index);
 
-  if (!hasPartitionKey) {
+  if (!has_partition_key) {
     throw new Error(
-      `No se puede crear índice secundario en "${entry.name}" sin @Index definido`
+      `Cannot create secondary index on "${entry.name}" without @Index defined`
     );
   }
 
@@ -2055,15 +2321,15 @@ export const SecondaryIndex = decorator((col, args, entry) => {
 });
 ```
 
-### API de `relationDecorator()`
+### API of `relationDecorator()`
 
-Para crear decoradores de relación personalizados:
+For creating custom relationship decorators:
 
 ```typescript
 import { relationDecorator } from "@arcaelas/dynamite";
 
 /**
- * @description Factory para crear decoradores de relación
+ * @description Factory for creating relationship decorators
  * @param type "hasMany" | "belongsTo"
  */
 function relationDecorator(
@@ -2071,22 +2337,22 @@ function relationDecorator(
 ): (targetModel: () => any, keyArg: string, secondaryKey?: string) => PropertyDecorator;
 ```
 
-### Crear Decoradores de Relación Personalizados
+### Create Custom Relationship Decorators
 
 ```typescript
 import { relationDecorator } from "@arcaelas/dynamite";
 
-// Alias tipados para relaciones
+// Typed aliases for relationships
 export const HasMany = relationDecorator("hasMany");
 export const BelongsTo = relationDecorator("belongsTo");
 
-// Uso
+// Usage
 class Author extends Table<Author> {
   @PrimaryKey()
   declare id: string;
 
   @HasMany(() => Book, "author_id", "id")
-  declare books: NonAttribute<HasMany<Book>>;
+  declare books: NonAttribute<Book[]>;
 }
 
 class Book extends Table<Book> {
@@ -2096,20 +2362,20 @@ class Book extends Table<Book> {
   declare author_id: string;
 
   @BelongsTo(() => Author, "author_id", "id")
-  declare author: NonAttribute<BelongsTo<Author>>;
+  declare author: NonAttribute<Author | null>;
 }
 ```
 
-### Crear Decoradores Compuestos
+### Create Composite Decorators
 
-Combina múltiples decoradores existentes en uno:
+Combine multiple existing decorators into one:
 
 ```typescript
 function EmailField(): PropertyDecorator {
   return (target: any, prop: string | symbol) => {
     NotNull()(target, prop);
     Mutate((v) => (v as string).toLowerCase().trim())(target, prop);
-    Validate((v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v as string) || "Email inválido")(target, prop);
+    Validate((v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v as string) || "Invalid email")(target, prop);
   };
 }
 
@@ -2118,7 +2384,7 @@ function SlugField(): PropertyDecorator {
     Mutate((v) => (v as string).toLowerCase())(target, prop);
     Mutate((v) => (v as string).replace(/[^a-z0-9]+/g, "-"))(target, prop);
     Mutate((v) => (v as string).replace(/^-+|-+$/g, ""))(target, prop);
-    Validate((v) => (v as string).length > 0 || "Slug no puede estar vacío")(target, prop);
+    Validate((v) => (v as string).length > 0 || "Slug cannot be empty")(target, prop);
   };
 }
 
@@ -2134,7 +2400,7 @@ class Article extends Table<Article> {
 }
 ```
 
-### Ejemplo Completo: Decorador de Encriptación
+### Complete Example: Encryption Decorator
 
 ```typescript
 import { decorator } from "@arcaelas/dynamite";
@@ -2144,7 +2410,7 @@ const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY!;
 const IV_LENGTH = 16;
 
 export const Encrypted = decorator((col) => {
-  // Al guardar: encriptar
+  // On save: encrypt
   col.set((current, next) => {
     if (typeof next !== "string" || !next) return next;
 
@@ -2154,14 +2420,14 @@ export const Encrypted = decorator((col) => {
     return iv.toString("hex") + ":" + encrypted.toString("hex");
   });
 
-  // Al leer: desencriptar
+  // On read: decrypt
   col.get((current) => {
     if (typeof current !== "string" || !current.includes(":")) return current;
 
     try {
-      const [ivHex, encryptedHex] = current.split(":");
-      const iv = Buffer.from(ivHex, "hex");
-      const encrypted = Buffer.from(encryptedHex, "hex");
+      const [iv_hex, encrypted_hex] = current.split(":");
+      const iv = Buffer.from(iv_hex, "hex");
+      const encrypted = Buffer.from(encrypted_hex, "hex");
       const decipher = createDecipheriv("aes-256-cbc", Buffer.from(ENCRYPTION_KEY, "hex"), iv);
       return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
     } catch {
@@ -2169,81 +2435,106 @@ export const Encrypted = decorator((col) => {
     }
   });
 
-  // Marcar como sensible en metadatos
-  col.serialize = { fromDB: null, toDB: null }; // Evitar doble transformación
+  // Mark as sensitive in metadata
+  col.serialize = { fromDB: null, toDB: null }; // Avoid double transformation
 });
 
-// Uso
+// Usage
 class User extends Table<User> {
   @PrimaryKey()
   declare id: string;
 
   @Encrypted()
-  declare ssn: string;  // Número de seguro social encriptado
+  declare ssn: string;  // Social security number encrypted
 }
 ```
 
 ---
 
-## Mejores Prácticas
+## Best Practices
 
-### 1. Usar CreationOptional Apropiadamente
+### 1. Use CreationOptional Appropriately
 
 ```typescript
 class User extends Table<User> {
-  // Siempre CreationOptional con @Default
+  // Always CreationOptional with @Default
   @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
-  // Siempre CreationOptional con @CreatedAt/@UpdatedAt
+  // Always CreationOptional with @CreatedAt/@UpdatedAt
   @CreatedAt()
   declare created_at: CreationOptional<string>;
 
-  // Campos requeridos sin CreationOptional
+  // Required fields without CreationOptional
   @NotNull()
   declare email: string;
 }
 ```
 
-### 2. Orden de Decoradores
+### 2. Decorator Order
 
 ```typescript
 class User extends Table<User> {
-  // Orden recomendado: Clave → Validación → Transformación → Defaults → Timestamps
+  // Recommended order: Key -> Validation -> Transformation -> Defaults -> Timestamps
   @PrimaryKey()
   @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   @NotNull()
-  @Validate((v) => /^[^\s@]+@/.test(v as string) || "Inválido")
+  @Validate((v) => /^[^\s@]+@/.test(v as string) || "Invalid")
   @Mutate((v) => (v as string).toLowerCase())
   @Name("email_address")
   declare email: string;
 }
 ```
 
-### 3. Validaciones Descriptivas
+### 3. Descriptive Validations
 
 ```typescript
-// Mal
+// Bad
 @Validate((v) => (v as number) > 0)
 declare price: number;
 
-// Bien
-@Validate((v) => (v as number) > 0 || "El precio debe ser mayor a 0")
+// Good
+@Validate((v) => (v as number) > 0 || "Price must be greater than 0")
 declare price: number;
 ```
 
-### 4. Relaciones con NonAttribute
+### 4. Relationships with NonAttribute
 
 ```typescript
 class User extends Table<User> {
-  // Siempre marcar relaciones como NonAttribute
-  @HasMany(() => Order, "user_id")
-  declare orders: NonAttribute<HasMany<Order>>;
+  // Always mark relationships as NonAttribute
+  @HasMany(() => Order, "user_id", "id")
+  declare orders: NonAttribute<Order[]>;
+
+  @HasOne(() => Profile, "user_id", "id")
+  declare profile: NonAttribute<Profile | null>;
+
+  @BelongsTo(() => Company, "company_id", "id")
+  declare company: NonAttribute<Company | null>;
+
+  @ManyToMany(() => Role, "users_roles", "user_id", "role_id", "id", "id")
+  declare roles: NonAttribute<Role[]>;
+}
+```
+
+### 5. Use snake_case for Field Names
+
+```typescript
+class User extends Table<User> {
+  // Good: snake_case
+  declare user_id: string;
+  declare created_at: string;
+  declare first_name: string;
+
+  // Bad: camelCase
+  // declare userId: string;
+  // declare createdAt: string;
+  // declare firstName: string;
 }
 ```
 
 ---
 
-Esta guía cubre todos los decoradores disponibles en Dynamite con ejemplos prácticos y patrones recomendados para construir modelos robustos y type-safe.
+This guide covers all decorators available in Dynamite with practical examples and recommended patterns for building robust and type-safe models.

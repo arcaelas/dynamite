@@ -1438,7 +1438,7 @@ const dynamite = new Dynamite({
   tables: [User, Order]
 });
 
-dynamite.connect();
+await dynamite.connect();
 
 // Soft delete atómico de usuario y sus órdenes
 await dynamite.tx(async (tx) => {
@@ -1560,7 +1560,7 @@ class User extends Table<User> {
   declare email: string;
 
   @HasMany(() => Order, "user_id")
-  declare orders: NonAttribute<HasMany<Order>>;
+  declare orders: NonAttribute<Order[]>;
 }
 
 class Order extends Table<Order> {
@@ -1610,7 +1610,7 @@ class User extends Table<User> {
   declare name: string;
 
   @HasMany(() => Order, "user_id")
-  declare orders: NonAttribute<HasMany<Order>>;
+  declare orders: NonAttribute<Order[]>;
 }
 
 class Order extends Table<Order> {
@@ -1621,7 +1621,7 @@ class Order extends Table<Order> {
   declare total: number;
 
   @HasMany(() => OrderItem, "order_id")
-  declare items: NonAttribute<HasMany<OrderItem>>;
+  declare items: NonAttribute<OrderItem[]>;
 }
 
 class OrderItem extends Table<OrderItem> {
@@ -1674,7 +1674,7 @@ class Order extends Table<Order> {
   declare status: string;
 
   @BelongsTo(() => User, "user_id")
-  declare user: NonAttribute<BelongsTo<User>>;
+  declare user: NonAttribute<User | null>;
 }
 
 class User extends Table<User> {
@@ -1707,10 +1707,10 @@ class OrderItem extends Table<OrderItem> {
   declare quantity: number;
 
   @BelongsTo(() => Order, "order_id")
-  declare order: NonAttribute<BelongsTo<Order>>;
+  declare order: NonAttribute<Order | null>;
 
   @BelongsTo(() => Product, "product_id")
-  declare product: NonAttribute<BelongsTo<Product>>;
+  declare product: NonAttribute<Product | null>;
 }
 
 // Cargar item con orden y producto
@@ -1800,10 +1800,10 @@ class User extends Table<User> {
   declare deleted_at?: string;
 
   @HasMany(() => Order, "user_id")
-  declare orders: NonAttribute<HasMany<Order>>;
+  declare orders: NonAttribute<Order[]>;
 
   @HasMany(() => Review, "user_id")
-  declare reviews: NonAttribute<HasMany<Review>>;
+  declare reviews: NonAttribute<Review[]>;
 
   // Propiedad computada
   declare display_name: NonAttribute<string>;
@@ -2086,7 +2086,7 @@ class Author extends Table<Author> {
   declare id: string;
 
   @HasMany(() => Book, "author_id", "id")
-  declare books: NonAttribute<HasMany<Book>>;
+  declare books: NonAttribute<Book[]>;
 }
 
 class Book extends Table<Book> {
@@ -2096,7 +2096,7 @@ class Book extends Table<Book> {
   declare author_id: string;
 
   @BelongsTo(() => Author, "author_id", "id")
-  declare author: NonAttribute<BelongsTo<Author>>;
+  declare author: NonAttribute<Author | null>;
 }
 ```
 
@@ -2240,7 +2240,7 @@ declare price: number;
 class User extends Table<User> {
   // Siempre marcar relaciones como NonAttribute
   @HasMany(() => Order, "user_id")
-  declare orders: NonAttribute<HasMany<Order>>;
+  declare orders: NonAttribute<Order[]>;
 }
 ```
 

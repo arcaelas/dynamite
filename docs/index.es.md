@@ -33,7 +33,7 @@ class User extends Table<User> {
   declare email: string;
 
   @CreatedAt()
-  declare created_at: Date;
+  declare created_at: string;
 }
 
 // Configura y conecta
@@ -41,8 +41,7 @@ const dynamite = new Dynamite({
   region: 'us-east-1',
   tables: [User]
 });
-dynamite.connect();
-await dynamite.sync();
+await dynamite.connect();
 
 // Crear
 const user = await User.create({
@@ -89,7 +88,7 @@ class User extends Table<User> {
   declare id: string;
 
   @HasMany(() => Post, 'user_id')
-  declare posts: HasMany<Post>;
+  declare posts: NonAttribute<Post[]>;
 }
 
 class Post extends Table<Post> {
@@ -99,7 +98,7 @@ class Post extends Table<Post> {
   declare user_id: string;
 
   @BelongsTo(() => User, 'user_id')
-  declare user: BelongsTo<User>;
+  declare user: NonAttribute<User | null>;
 }
 
 // Cargar con relaciones

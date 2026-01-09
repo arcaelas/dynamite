@@ -308,8 +308,8 @@ export async function ConfigureDatabase() {
       };
 
   const dynamite = new Dynamite(config);
-  dynamite.connect();
-  await dynamite.sync();
+  await dynamite.connect();
+  
   return dynamite;
 }
 ```
@@ -338,8 +338,8 @@ async function ConfigureDatabase() {
       };
 
   const dynamite = new Dynamite(config);
-  dynamite.connect();
-  await dynamite.sync();
+  await dynamite.connect();
+  
   return dynamite;
 }
 
@@ -533,8 +533,8 @@ async function TestConnection() {
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "test"
       }
     });
-    dynamite.connect();
-    await dynamite.sync();
+    await dynamite.connect();
+    
 
     console.log("✓ Dynamite erfolgreich konfiguriert");
     console.log("✓ Verbindungstest bestanden");
@@ -599,7 +599,7 @@ async function TestModelOperations() {
 
     // Test 3: Update
     console.log("\nTest 3: Updating user...");
-    await User.update(user.id, { name: "Updated Name" });
+    await User.update({ name: "Updated Name" }, { id: user.id });
     const updatedUser = await User.first({ id: user.id });
     console.log("✓ User updated:", updatedUser?.name);
 
@@ -610,7 +610,7 @@ async function TestModelOperations() {
 
     // Test 5: Delete
     console.log("\nTest 5: Deleting user...");
-    await User.delete(user.id);
+    await User.delete({ id: user.id });
     const deletedUser = await User.first({ id: user.id });
     console.log("✓ User deleted:", deletedUser === undefined);
 

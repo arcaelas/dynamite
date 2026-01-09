@@ -82,7 +82,7 @@ await user.save();
 
 ## Instanzmethoden
 
-### `save(): Promise<this>`
+### `save(): Promise<boolean>`
 
 Speichert oder aktualisiert den aktuellen Datensatz in der Datenbank.
 
@@ -92,7 +92,7 @@ Speichert oder aktualisiert den aktuellen Datensatz in der Datenbank.
 - Aktualisiert automatisch das Feld `updatedAt`, wenn es definiert ist
 - Setzt `createdAt` nur bei neuen Datensätzen
 
-**Rückgabe:** Die aktualisierte aktuelle Instanz
+**Rückgabe:** `true` wenn die Operation erfolgreich war
 
 **Beispiel:**
 
@@ -111,14 +111,14 @@ await user.save(); // Nur updatedAt wird aktualisiert
 
 ---
 
-### `update(patch: Partial<InferAttributes<T>>): Promise<this>`
+### `update(patch: Partial<InferAttributes<T>>): Promise<boolean>`
 
 Aktualisiert den Datensatz teilweise mit den bereitgestellten Feldern.
 
 **Parameter:**
 - `patch` - Objekt mit den zu aktualisierenden Feldern
 
-**Rückgabe:** Die aktualisierte aktuelle Instanz
+**Rückgabe:** `true` wenn die Operation erfolgreich war
 
 **Beispiel:**
 
@@ -359,9 +359,7 @@ Sucht nach Datensätzen mit einem bestimmten Operator.
 | `">"` | Größer als | `where("balance", ">", 1000)` |
 | `">="` | Größer oder gleich | `where("rating", ">=", 4)` |
 | `"in"` | Enthalten im Array | `where("status", "in", ["active", "pending"])` |
-| `"not-in"` | Nicht enthalten im Array | `where("role", "not-in", ["banned"])` |
 | `"contains"` | Enthält Substring | `where("name", "contains", "John")` |
-| `"begins-with"` | Beginnt mit | `where("email", "begins-with", "admin@")` |
 
 **Beispiele:**
 
@@ -375,11 +373,9 @@ const notBanned = await User.where("status", "!=", "banned");
 
 // Array-Operatoren
 const staff = await User.where("role", "in", ["admin", "employee"]);
-const customers = await User.where("role", "not-in", ["admin", "employee"]);
 
 // Text-Operatoren
 const johns = await User.where("name", "contains", "John");
-const admins = await User.where("email", "begins-with", "admin@");
 ```
 
 ---
@@ -656,13 +652,13 @@ const activeJohns = johns.filter(u => u.active === true);
 @Name("users")
 class User extends Table<User> {
   @HasMany(() => Order, "user_id")
-  declare orders: HasMany<Order>;
+  declare orders: NonAttribute<Order[]>;
 }
 
 @Name("orders")
 class Order extends Table<Order> {
   @BelongsTo(() => User, "user_id")
-  declare user: BelongsTo<User>;
+  declare user: NonAttribute<User | null>;
 }
 
 // Benutzer mit seinen Bestellungen abrufen
@@ -842,16 +838,16 @@ import { HasMany, BelongsTo } from '@arcaelas/dynamite';
 @Name("users")
 class User extends Table<User> {
   @HasMany(() => Order, "user_id")
-  declare orders: HasMany<Order>; // Array von Order
+  declare orders: NonAttribute<Order[]>; // Array von Order
 
   @HasMany(() => Review, "user_id")
-  declare reviews: HasMany<Review>;
+  declare reviews: NonAttribute<Review[]>;
 }
 
 @Name("orders")
 class Order extends Table<Order> {
   @BelongsTo(() => User, "user_id")
-  declare user: BelongsTo<User>; // User oder null
+  declare user: NonAttribute<User | null>; // User oder null
 }
 ```
 

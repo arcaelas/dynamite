@@ -449,8 +449,8 @@ const client = new Dynamite({
   tables: [User, Order]
 });
 
-client.connect();
-await client.sync();
+await client.connect();
+
 ```
 
 ## Migración de Esquema
@@ -593,7 +593,7 @@ class MigrationTester {
 
   async Setup(): Promise<void> {
     this.client.connect();
-    await this.client.sync();
+    await this.
     await this.SeedData();
   }
 

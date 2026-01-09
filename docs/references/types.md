@@ -1,6 +1,6 @@
 # Types API Reference
 
-This guide documents all TypeScript types exported by Dynamite ORM that enable creating models with complete type-safety.
+This guide documents all TypeScript types exported by Dynamite ORM.
 
 ## Table of Contents
 
@@ -9,16 +9,14 @@ This guide documents all TypeScript types exported by Dynamite ORM that enable c
   - [NonAttribute\<T\>](#nonattributet)
 - [Inference Types](#inference-types)
   - [InferAttributes\<T\>](#inferattributest)
-  - [FilterableAttributes\<T\>](#filterableattributest)
-- [Relationship Types](#relationship-types)
-  - [HasMany\<T\>](#hasmanyt)
-  - [HasOne\<T\>](#hasonet)
-  - [BelongsTo\<T\>](#belongstot)
+  - [InferRelations\<T\>](#inferrelationst)
+  - [PickRelations\<T\>](#pickrelationst)
+- [Input Types](#input-types)
+  - [CreateInput\<T\>](#createinputt)
+  - [UpdateInput\<T\>](#updateinputt)
 - [Query Types](#query-types)
   - [QueryOperator](#queryoperator)
-  - [QueryOptions\<T\>](#queryoptionst)
   - [WhereOptions\<T\>](#whereoptionst)
-  - [IncludeRelationOptions](#includerelationoptions)
 
 ---
 
@@ -137,12 +135,12 @@ import type { InferAttributes } from '@arcaelas/dynamite';
 type UserAttributes = InferAttributes<User>;
 // Result:
 // {
-//   id: string;
-//   email: string;
-//   name: string;
-//   role: string;
-//   created_at: string;
-//   updated_at: string;
+//   id?: string;            // CreationOptional becomes optional
+//   email: string;          // Required
+//   name: string;           // Required
+//   role?: string;          // CreationOptional becomes optional
+//   created_at?: string;    // CreationOptional becomes optional
+//   updated_at?: string;    // CreationOptional becomes optional
 // }
 ```
 
@@ -160,12 +158,12 @@ import type { InferAttributes } from '@arcaelas/dynamite';
 async function updateUser(
   id: string,
   data: Partial<InferAttributes<User>>
-): Promise<User | undefined> {
+): Promise<boolean> {
   const user = await User.first({ id });
   if (user) {
-    await user.update(data);
+    return user.update(data);
   }
-  return user;
+  return false;
 }
 
 // Usage
@@ -174,144 +172,98 @@ await updateUser("user-123", { name: "New Name", role: "admin" });
 
 ---
 
-### FilterableAttributes\<T\>
+### InferRelations\<T\>
 
-Extracts only the filterable attributes (excludes relationships and non-attributes).
+Extracts only the relationship fields from a model (fields marked with `NonAttribute`).
 
 **Usage:**
 ```typescript
-import type { FilterableAttributes } from '@arcaelas/dynamite';
+import type { InferRelations } from '@arcaelas/dynamite';
 
-type UserFilters = FilterableAttributes<User>;
-// Result: { id?: string; email?: string; name?: string; role?: string; ... }
+type UserRelations = InferRelations<User>;
+// Result:
+// {
+//   orders: Order[];        // HasMany resolves to array
+//   profile: Profile;       // HasOne resolves to single
+// }
 ```
-
----
-
-## Relationship Types
-
-### HasMany\<T\>
-
-Type for one-to-many relationships. Resolves to an array of the related model.
-
-**Syntax:**
-```typescript
-@HasMany(() => RelatedModel, "foreign_key")
-declare relation_name: NonAttribute<HasMany<RelatedModel>>;
-```
-
-**Characteristics:**
-- Returns `T[]` (array of related records)
-- Empty array if no related records exist
-- Must be wrapped in `NonAttribute<>`
 
 **Example:**
 
 ```typescript
-import { Table, HasMany, NonAttribute } from '@arcaelas/dynamite';
+import type { InferRelations } from '@arcaelas/dynamite';
 
 class User extends Table<User> {
   @PrimaryKey()
   declare id: string;
 
   @HasMany(() => Post, "user_id")
-  declare posts: NonAttribute<HasMany<Post>>;
-
-  @HasMany(() => Comment, "user_id")
-  declare comments: NonAttribute<HasMany<Comment>>;
-}
-
-// Usage
-const users = await User.where({}, {
-  include: { posts: true, comments: true }
-});
-
-users.forEach(user => {
-  console.log(`${user.name} has ${user.posts.length} posts`);
-  console.log(`${user.name} has ${user.comments.length} comments`);
-});
-```
-
----
-
-### HasOne\<T\>
-
-Type for one-to-one relationships. Resolves to a single related record or null.
-
-**Syntax:**
-```typescript
-@HasOne(() => RelatedModel, "foreign_key")
-declare relation_name: NonAttribute<HasOne<RelatedModel>>;
-```
-
-**Characteristics:**
-- Returns `T | null` (single related record or null)
-- Only the first matching record is returned
-- Must be wrapped in `NonAttribute<>`
-
-**Example:**
-
-```typescript
-import { Table, HasOne, NonAttribute } from '@arcaelas/dynamite';
-
-class User extends Table<User> {
-  @PrimaryKey()
-  declare id: string;
+  declare posts: NonAttribute<Post[]>;
 
   @HasOne(() => Profile, "user_id")
-  declare profile: NonAttribute<HasOne<Profile>>;
+  declare profile: NonAttribute<Profile | null>;
 }
 
-// Usage
-const user = await User.first({ id: "user-123" }, {
-  include: { profile: true }
-});
-
-if (user?.profile) {
-  console.log(user.profile.bio);
-}
+// InferRelations<User> = { posts: Post[], profile: Profile | null }
 ```
 
 ---
 
-### BelongsTo\<T\>
+### PickRelations\<T\>
 
-Type for many-to-one relationships. Resolves to a single parent record or null.
+Extracts only relationship fields. Used internally for validation.
 
-**Syntax:**
+**Usage:**
 ```typescript
-@BelongsTo(() => ParentModel, "local_foreign_key")
-declare relation_name: NonAttribute<BelongsTo<ParentModel>>;
+import type { PickRelations } from '@arcaelas/dynamite';
+
+type UserRelations = PickRelations<User>;
+// { posts: Post[], profile: Profile | null }
 ```
 
-**Characteristics:**
-- Returns `T | null` (single parent record or null)
-- Requires a foreign key field in the model
-- Must be wrapped in `NonAttribute<>`
+---
 
-**Example:**
+## Input Types
 
+### CreateInput\<T\>
+
+Type for `Model.create()` input. Alias of `InferAttributes<T>`.
+
+**Usage:**
 ```typescript
-import { Table, BelongsTo, NonAttribute } from '@arcaelas/dynamite';
+import type { CreateInput } from '@arcaelas/dynamite';
 
-class Post extends Table<Post> {
-  @PrimaryKey()
-  declare id: string;
+type UserCreateData = CreateInput<User>;
+// { email: string; name: string; id?: string; role?: string; ... }
 
-  declare user_id: string; // Foreign key
+const data: CreateInput<User> = {
+  email: "john@example.com",
+  name: "John"
+  // id, role, timestamps are optional
+};
 
-  @BelongsTo(() => User, "user_id")
-  declare author: NonAttribute<BelongsTo<User>>;
-}
+await User.create(data);
+```
 
-// Usage
-const posts = await Post.where({}, {
-  include: { author: true }
-});
+---
 
-posts.forEach(post => {
-  console.log(`${post.title} by ${post.author?.name || 'Unknown'}`);
-});
+### UpdateInput\<T\>
+
+Type for `instance.update()` input. All fields are optional.
+
+**Usage:**
+```typescript
+import type { UpdateInput } from '@arcaelas/dynamite';
+
+type UserUpdateData = UpdateInput<User>;
+// { email?: string; name?: string; role?: string; ... }
+
+const data: UpdateInput<User> = {
+  name: "New Name"
+  // All fields are optional
+};
+
+await user.update(data);
 ```
 
 ---
@@ -325,16 +277,25 @@ Union type of all supported query operators.
 **Definition:**
 ```typescript
 type QueryOperator =
-  | "="
-  | "!="
-  | "<"
-  | "<="
-  | ">"
-  | ">="
-  | "in"
-  | "not-in"
-  | "contains"
-  | "begins-with";
+  | "="        // Equal
+  | "$eq"      // Equal (alias)
+  | "<>"       // Not equal
+  | "!="       // Not equal (alias)
+  | "$ne"      // Not equal (alias)
+  | "<"        // Less than
+  | "$lt"      // Less than (alias)
+  | "<="       // Less than or equal
+  | "$lte"     // Less than or equal (alias)
+  | ">"        // Greater than
+  | "$gt"      // Greater than (alias)
+  | ">="       // Greater than or equal
+  | "$gte"     // Greater than or equal (alias)
+  | "in"       // In array
+  | "$in"      // In array (alias)
+  | "include"  // Contains substring
+  | "$include" // Contains (alias)
+  | "contains" // Contains (alias for include)
+  | "$contains" // Contains (alias)
 ```
 
 **Usage:**
@@ -342,34 +303,53 @@ type QueryOperator =
 ```typescript
 // Equality
 await User.where("role", "=", "admin");
+await User.where("role", "$eq", "admin");
 
 // Comparison
 await User.where("age", ">=", 18);
+await User.where("age", "$gte", 18);
 await User.where("balance", "<", 100);
+await User.where("balance", "$lt", 100);
+
+// Not equal
+await User.where("status", "!=", "banned");
+await User.where("status", "<>", "banned");
+await User.where("status", "$ne", "banned");
 
 // Array membership
 await User.where("status", "in", ["active", "pending"]);
-await User.where("role", "not-in", ["banned"]);
+await User.where("status", "$in", ["active", "pending"]);
 
-// String matching
+// Contains substring (all equivalent)
+await User.where("email", "include", "@gmail.com");
 await User.where("email", "contains", "@gmail.com");
-await User.where("name", "begins-with", "John");
+await User.where("email", "$include", "@gmail.com");
+await User.where("email", "$contains", "@gmail.com");
 ```
 
 ---
 
-### QueryOptions\<T\>
+### WhereOptions\<T\>
 
 Options for configuring query behavior.
 
 **Definition:**
 ```typescript
-interface QueryOptions<T> {
+interface WhereOptions<T> {
+  where?: {
+    [K in keyof InferAttributes<T>]?:
+      | InferAttributes<T>[K]
+      | { [op in QueryOperator]?: InferAttributes<T>[K] };
+  };
   order?: "ASC" | "DESC";
-  skip?: number;
-  limit?: number;
-  attributes?: (keyof InferAttributes<T>)[];
-  include?: Record<string, IncludeRelationOptions | boolean>;
+  skip?: number;              // Alias of offset
+  offset?: number;            // Number of records to skip
+  limit?: number;             // Maximum records to return
+  attributes?: (keyof InferAttributes<T>)[];  // Fields to select
+  include?: {                 // Relationships to include
+    [relation: string]: boolean | WhereOptions<any>;
+  };
+  _includeTrashed?: boolean;  // Include soft-deleted records
 }
 ```
 
@@ -377,11 +357,14 @@ interface QueryOptions<T> {
 
 | Property | Type | Description |
 |----------|------|-------------|
+| `where` | `object` | Filter conditions with operator support |
 | `order` | `"ASC" \| "DESC"` | Sort order |
-| `skip` | `number` | Number of records to skip (offset) |
+| `skip` | `number` | Number of records to skip (alias: offset) |
+| `offset` | `number` | Number of records to skip |
 | `limit` | `number` | Maximum records to return |
 | `attributes` | `string[]` | Specific fields to select |
 | `include` | `object` | Relationships to include |
+| `_includeTrashed` | `boolean` | Include soft-deleted records |
 
 **Example:**
 
@@ -393,65 +376,9 @@ const users = await User.where({ active: true }, {
   attributes: ["id", "name", "email"],
   include: {
     orders: {
-      limit: 5,
-      order: "DESC"
-    }
-  }
-});
-```
-
----
-
-### WhereOptions\<T\>
-
-Extended options for where queries including relationship filtering.
-
-**Definition:**
-```typescript
-interface WhereOptions<T> extends QueryOptions<T> {
-  _includeTrashed?: boolean;
-}
-```
-
----
-
-### IncludeRelationOptions
-
-Options for configuring included relationships.
-
-**Definition:**
-```typescript
-interface IncludeRelationOptions {
-  where?: Record<string, any>;
-  attributes?: string[];
-  order?: "ASC" | "DESC";
-  skip?: number;
-  limit?: number;
-  include?: Record<string, IncludeRelationOptions | boolean>;
-}
-```
-
-**Properties:**
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `where` | `object` | Filters for related records |
-| `attributes` | `string[]` | Specific fields to select |
-| `order` | `"ASC" \| "DESC"` | Sort order for related records |
-| `skip` | `number` | Skip N related records |
-| `limit` | `number` | Limit related records |
-| `include` | `object` | Nested relationships |
-
-**Example:**
-
-```typescript
-const users = await User.where({}, {
-  include: {
-    orders: {
       where: { status: "completed" },
-      attributes: ["id", "total", "created_at"],
+      limit: 5,
       order: "DESC",
-      limit: 10,
       include: {
         items: {
           include: {
@@ -485,7 +412,7 @@ declare status: string;
 ```typescript
 // Good
 @HasMany(() => Post, "user_id")
-declare posts: NonAttribute<HasMany<Post>>;
+declare posts: NonAttribute<Post[]>;
 
 // Bad - posts would be treated as a database column
 @HasMany(() => Post, "user_id")
@@ -510,12 +437,12 @@ class Post extends Table<Post> {
   declare user_id: string; // FK field
 
   @BelongsTo(() => User, "user_id")
-  declare author: NonAttribute<BelongsTo<User>>;
+  declare author: NonAttribute<User | null>;
 }
 
 // Bad - foreign key not declared
 class Post extends Table<Post> {
   @BelongsTo(() => User, "user_id")
-  declare author: NonAttribute<BelongsTo<User>>;
+  declare author: NonAttribute<User | null>;
 }
 ```
