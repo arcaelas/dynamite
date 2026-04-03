@@ -5,12 +5,45 @@ Alle wichtigen Änderungen an diesem Projekt werden in dieser Datei dokumentiert
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 und dieses Projekt hält sich an [Semantische Versionierung](https://semver.org/spec/v2.0.0.html).
 
-## [Unveröffentlicht]
+## [2.0.0] - 2026-04-02
 
-### Geplant
-- Leistungsoptimierungen für Batch-Operationen
-- Zusätzliche Abfrageoperatoren und Filter
-- Verbesserte Fehlerbehandlung und Debugging-Tools
+### Inkompatible Änderungen
+
+- **Primitive Dekoratoren**: `@Get`, `@Set`, `@Validate` ersetzen `@Mutate`, `@Column`, `@Serialize` (entfernt).
+- **`@Default`** von Get- in Set-Pipeline verschoben. Wird bei Konstruktion aufgelöst, nicht beim Lesen.
+- **`@PrimaryKey`** generiert ULID statt UUID. Validiert ULID-Format. Unveränderlich nach erster Zuweisung.
+- **`@NotNull`** ist Komposition von `@Validate`. `store.nullable` aus Schema entfernt.
+- **`@UpdatedAt`** respektiert explizite Werte. Generiert `now()` nur wenn kein Wert übergeben wird.
+- **`@BelongsTo`** Signatur vereinheitlicht zu `(model, foreignKey, localKey)`, wie `@HasMany`/`@HasOne`.
+- **Set-Pipeline** Argumentreihenfolge von `(current, next)` zu `(next, current)` geändert.
+- **Konstruktor** führt Setter für alle Felder aus, nicht nur für in Props vorhandene.
+- **`connect()`** erstellt keine Tabellen mehr. Konfiguriert nur den DynamoDB-Client.
+- **Entfernt**: `withTrashed()`, `onlyTrashed()`, `relationDecorator()`, `@Column`, `@Mutate`, `@Serialize`.
+- **`where()`** wirft Fehler wenn Feld nicht in `schema.columns` existiert.
+
+### Hinzugefügt
+
+- **`sync()`**: erstellt Tabellen, GSIs und Pivot-Tabellen. Erkennt GSIs automatisch aus Relationen. Parallele Operationen mit Polling.
+- **Intelligentes `where()`**: `QueryCommand` mit PK oder GSI, Fallback zu `ScanCommand`. Self-Healing wenn GSI nicht existiert.
+- **`connect()`** berechnet erwartete GSIs aus Schemas ohne API-Aufrufe.
+- **`update()`/`delete()` PK-Optimierung**: direktes `GetItemCommand`/`DeleteItemCommand`.
+- **`increment()`/`decrement()`**: atomar via `UpdateItemCommand`. Statisch, Instanz und transaktional.
+- **`create()` Eindeutigkeit**: `ConditionExpression: attribute_not_exists(pk)`.
+- **ULID**: interner Generator ohne Abhängigkeiten. Monoton, sequentiell, lexikographisch sortierbar.
+- **Transaktionen**: `addUpdate()`, `onCommit()`, `__isPersisted` nach Commit, Auto-Chunking in 25er-Batches.
+- **Typisierung**: `Schema` mit echten Typen. `WhereOptions` mit rekursivem typisierten `include`. `PickByType<T, V>`. `order` akzeptiert Objekte.
+
+### Behoben
+
+- `@CreatedAt` setzt jetzt `store.createdAt = true` für Standard-Sortierung.
+- Relationen-Cache vereinfacht mit Dirty-Flag.
+- `processIncludes` weist via Setter zu.
+- `_mapPropertiesToDB` entfernt (toter Code).
+- `where()` Normalisierung vereinheitlicht.
+
+### Tests
+
+- 165 Tests gegen DynamoDB Local: Dekoratoren, CRUD, rekursive Relationen, ManyToMany, kombinierte Filter, Bulk 3000, Query vs Scan, Pipeline-Verträge, PK-Unveränderlichkeit, PK-Duplikate, ULID-Sequenzialität.
 
 ---
 
