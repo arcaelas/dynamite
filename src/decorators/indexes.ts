@@ -1,61 +1,48 @@
 /**
  * @file indexes.ts
- * @description Decoradores de índices con Symbol storage
- * @autor Miguel Alejandro
- * @fecha 2025-01-28
+ * @description Index decorators: @Index, @IndexSort, @PrimaryKey
+ * @description Decoradores de índices: @Index, @IndexSort, @PrimaryKey
  */
 
 import { decorator, SCHEMA } from "../core/decorator";
+import { ulid } from "../utils/ulid";
+
+const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
 /**
- * @description Decorador para marcar propiedad como Partition Key
- * @example
- * ```typescript
- * class User extends Table<User> {
- *   @Index() id: string;
- * }
- * ```
+ * @description Marks a property as Partition Key for a GSI
+ * @description Marca una propiedad como Partition Key de un GSI
  */
 export const Index = decorator((_schema, col) => {
   col.store.index = true;
-  col.store.nullable = col.store.nullable ?? false;
 });
 
 /**
- * @description Decorador para marcar propiedad como Sort Key
- * @example
- * ```typescript
- * class Post extends Table<Post> {
- *   @Index() user_id: string;
- *   @IndexSort() created_at: string;
- * }
- * ```
+ * @description Marks a property as Sort Key
+ * @description Marca una propiedad como Sort Key
  */
 export const IndexSort = decorator((_schema, col) => {
   col.store.indexSort = true;
-  col.store.nullable = col.store.nullable ?? false;
 });
 
 /**
- * @description Decorador para marcar una propiedad como clave primaria
- * @example
- * ```typescript
- * class User extends Table<User> {
- *   @PrimaryKey() id: string;
- *   name: string;
- * }
- * ```
+ * @description Primary key: Default(ulid) + NotNull + ULID validation + Index + IndexSort
+ * @description Clave primaria: Default(ulid) + NotNull + validación ULID + Index + IndexSort
  */
 export const PrimaryKey = decorator((table_class, col) => {
   const schema = (table_class as any)[SCHEMA];
 
-  // Configurar como primary key
-  Object.assign(col.store, {
-    index: true,
-    primaryKey: true,
-    nullable: false
-  });
-
-  // Obtener nombre de columna desde col.name
+  // Metadata: Index + primaryKey (IndexSort only when separate SK exists)
+  col.store.index = true;
+  col.store.primaryKey = true;
   schema.primary_key = col.name;
+
+  // Set pipeline: immutable after first assignment, Default(ulid), validate ULID format
+  col.set.push((next: any, current: any) => {
+    const value = current ?? next ?? ulid();
+    if (typeof value !== 'string' || !ULID_RE.test(value)) {
+      throw new Error(`Invalid ULID for ${col.name}: '${value}'`);
+    }
+    return value;
+  });
 });

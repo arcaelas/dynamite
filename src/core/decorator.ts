@@ -1,14 +1,39 @@
 /**
  * @file decorator.ts
+ * @description Minimal decorator system with Symbol storage
  * @description Sistema de decoradores minimalista con Symbol storage
- * @autor Miguel Alejandro
- * @fecha 2025-01-28
  */
 
-// Symbols para autocontención (exportados desde table.ts pero también aquí compatibilidad)
 export const SCHEMA = Symbol('dynamite:schema');
 
-// Helper simple para snake_case plural
+export interface Schema {
+  name: string;
+  primary_key: string;
+  gsis: Set<string>;
+  columns: Record<string, {
+    name: string;
+    get: ((value: any) => any)[];
+    set: ((current: any, next: any) => any)[];
+    store: {
+      index?: boolean;
+      indexSort?: boolean;
+      primaryKey?: boolean;
+      softDelete?: boolean;
+      createdAt?: boolean;
+      updatedAt?: boolean;
+      relation?: {
+        type: 'HasMany' | 'HasOne' | 'BelongsTo' | 'ManyToMany';
+        model: () => any;
+        foreignKey: string;
+        localKey: string;
+        relatedKey?: string;
+        pivotTable?: string;
+        relatedPK?: string;
+      };
+    };
+  }>;
+}
+
 function toSnakePlural(str: string): string {
   const snake = str
     .replace(/([A-Z])/g, "_$1")
@@ -17,99 +42,25 @@ function toSnakePlural(str: string): string {
   return snake.endsWith("s") ? snake : snake + "s";
 }
 
-/**
- * @description Factory para crear decoradores con soporte de argumentos y composición
- * @param callback Función que recibe (schema, col, params) para configurar la columna
- * @returns Función que acepta argumentos y retorna PropertyDecorator
- * @example
- * ```typescript
- * const Default = decorator((schema, col, params) => {
- *   const fallback = params[0];
- *   col.get.push((value) => value ?? fallback());
- * });
- * // Uso: @Default(uuid)
- * ```
- */
-export function decorator(
-  callback: (schema: any, col: any, params: any[]) => void
-) {
-  return (...params: any[]) => {
-    return function (target: any, propertyKey: string | symbol) {
-      const table_class = target.constructor;
-      const column_name = String(propertyKey);
-
-      // Inicializar SCHEMA SI NO TIENE UNO PROPIO (no heredado)
-      if (!Object.prototype.hasOwnProperty.call(table_class, SCHEMA)) {
-        table_class[SCHEMA] = {
-          name: toSnakePlural(table_class.name),
-          primary_key: 'id',
-          columns: {}
-        };
-      }
-
-      // Crear columna si no existe
-      if (!table_class[SCHEMA].columns[column_name]) {
-        table_class[SCHEMA].columns[column_name] = {
-          name: column_name,
-          get: [],
-          set: [],
-          store: {}
-        };
-      }
-
-      const col = table_class[SCHEMA].columns[column_name];
-
-      // Ejecutar callback con (schema, col, params)
-      callback(table_class, col, params);
-    };
-  };
+function resolve(target: any, propertyKey: string | symbol): [Schema, Schema['columns'][string]] {
+  const ctor = target.constructor;
+  if (!Object.prototype.hasOwnProperty.call(ctor, SCHEMA)) {
+    ctor[SCHEMA] = { name: toSnakePlural(ctor.name), primary_key: 'id', gsis: new Set(), columns: {} };
+  }
+  const key = String(propertyKey);
+  const schema: Schema = ctor[SCHEMA];
+  schema.columns[key] ||= { name: key, get: [], set: [], store: {} };
+  return [schema, schema.columns[key]];
 }
 
 /**
- * @description Factory para decoradores de relación
- * @param relation_type Tipo de relación ("hasMany", "hasOne", "belongsTo")
- * @param RelatedTable Clase de la tabla relacionada
- * @param options Opciones de relación (foreignKey, localKey)
- * @returns PropertyDecorator
+ * @description Factory to create decorators with argument support and composition
+ * @description Factory para crear decoradores con soporte de argumentos y composición
  */
-export function relationDecorator(
-  relation_type: string,
-  RelatedTable: any,
-  options: any = {}
-) {
-  return function (target: any, propertyKey: string | symbol) {
-    const table_class = target.constructor;
-    const column_name = String(propertyKey);
-
-    // Inicializar SCHEMA SI NO TIENE UNO PROPIO (no heredado)
-    if (!Object.prototype.hasOwnProperty.call(table_class, SCHEMA)) {
-      table_class[SCHEMA] = {
-        name: toSnakePlural(table_class.name),
-        primary_key: 'id',
-        columns: {}
-      };
-    }
-
-    // **Validación: No sobreescribir columnas existentes**
-    if (table_class[SCHEMA].columns[column_name]) {
-      throw new Error(`Column '${column_name}' already exists. Cannot apply relation decorator.`);
-    }
-
-    // Crear columna virtual para relación
-    table_class[SCHEMA].columns[column_name] = {
-      name: column_name,
-      get: [],
-      set: [],
-      store: {
-        relation: {
-          type: relation_type,
-          target: RelatedTable,
-          foreignKey: options.foreignKey,
-          localKey: options.localKey,
-          nullable: options.nullable
-        }
-      }
-    };
+export function decorator(callback: (table_class: any, col: Schema['columns'][string], params: any[]) => void) {
+  return (...params: any[]) => (target: any, propertyKey: string | symbol) => {
+    const [, col] = resolve(target, propertyKey);
+    callback(target.constructor, col, params);
   };
 }
 

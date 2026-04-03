@@ -4,21 +4,14 @@
  * @autor Miguel Alejandro
  * @fecha 2025-01-28
  */
-
-// ============================================================================
-// 1. BRANDS Y WRAPPERS
-// ============================================================================
-
 /**
  * Marca para identificar campos que no son atributos de BD (relaciones, métodos).
  */
 export declare const NonAttributeBrand: unique symbol;
-
 /**
  * Marca para identificar campos opcionales en create() pero presentes en el modelo.
  */
 export declare const CreationOptionalBrand: unique symbol;
-
 /**
  * Wrapper para marcar relaciones y campos virtuales que no se persisten en BD.
  * @example
@@ -29,8 +22,9 @@ export declare const CreationOptionalBrand: unique symbol;
  * }
  * ```
  */
-export type NonAttribute<T> = T & { [NonAttributeBrand]?: true };
-
+export type NonAttribute<T> = T & {
+    [NonAttributeBrand]?: true;
+};
 /**
  * Wrapper para marcar campos opcionales en create() (auto-generados: id, timestamps).
  * @example
@@ -43,12 +37,9 @@ export type NonAttribute<T> = T & { [NonAttributeBrand]?: true };
  * await User.create({ name: 'Juan' }); // id y created_at opcionales
  * ```
  */
-export type CreationOptional<T> = T & { [CreationOptionalBrand]?: true };
-
-// ============================================================================
-// 2. EXTRACCIÓN DE ATRIBUTOS
-// ============================================================================
-
+export type CreationOptional<T> = T & {
+    [CreationOptionalBrand]?: true;
+};
 /**
  * Extrae atributos de BD usando intersección:
  * - Primera parte: atributos REQUERIDOS con modificador `-?`
@@ -69,18 +60,16 @@ export type CreationOptional<T> = T & { [CreationOptionalBrand]?: true };
  * ```
  */
 export type InferAttributes<T> = {
-  [K in keyof T as T[K] extends
-    | ((...args: any[]) => any)
-    | { [NonAttributeBrand]?: true }
-    | { [CreationOptionalBrand]?: true }
-    ? never
-    : K]-?: Exclude<T[K], null | undefined | never>;
+    [K in keyof T as T[K] extends ((...args: any[]) => any) | {
+        [NonAttributeBrand]?: true;
+    } | {
+        [CreationOptionalBrand]?: true;
+    } ? never : K]-?: Exclude<T[K], null | undefined | never>;
 } & {
-  [K in keyof T as T[K] extends { [CreationOptionalBrand]?: true }
-    ? K
-    : never]?: Exclude<T[K], null | undefined | never>;
+    [K in keyof T as T[K] extends {
+        [CreationOptionalBrand]?: true;
+    } ? K : never]?: Exclude<T[K], null | undefined | never>;
 };
-
 /**
  * Extrae solo relaciones (NonAttribute) preservando tipo Model | Model[]
  * Excluye propiedades de Object.prototype para evitar conflictos
@@ -96,19 +85,9 @@ export type InferAttributes<T> = {
  * ```
  */
 type ObjectBuiltinKeys = keyof Record<string, never> | 'toString' | 'valueOf' | 'hasOwnProperty' | 'isPrototypeOf' | 'propertyIsEnumerable' | 'toLocaleString' | 'constructor';
-
 export type InferRelations<T> = {
-  [K in keyof T as T[K] extends NonAttribute<any>
-    ? K extends ObjectBuiltinKeys
-      ? never
-      : K
-    : never]: T[K] extends NonAttribute<infer P> ? P : never;
+    [K in keyof T as T[K] extends NonAttribute<any> ? K extends ObjectBuiltinKeys ? never : K : never]: T[K] extends NonAttribute<infer P> ? P : never;
 };
-
-// ============================================================================
-// 3. TIPOS AUXILIARES
-// ============================================================================
-
 /**
  * Extrae solo relaciones (campos NonAttribute).
  * Usado internamente para validación.
@@ -124,42 +103,13 @@ export type InferRelations<T> = {
  * ```
  */
 export type PickRelations<T> = {
-  [K in keyof T as T[K] extends NonAttribute<any>
-    ? K
-    : never]: T[K] extends NonAttribute<infer U> ? U : never;
+    [K in keyof T as T[K] extends NonAttribute<any> ? K : never]: T[K] extends NonAttribute<infer U> ? U : never;
 };
-
-// ============================================================================
-// 4. SISTEMA DE OPERADORES TIPADOS
-// ============================================================================
-
 /**
  * Operadores de comparación soportados.
  * Solo 8 operadores permitidos según especificación del usuario.
  */
-export type QueryOperator =
-  | "="
-  | "$eq"
-  | "<>"
-  | "!="
-  | "$ne"
-  | "<"
-  | "$lt"
-  | "<="
-  | "$lte"
-  | ">"
-  | "$gt"
-  | ">="
-  | "$gte"
-  | "in"
-  | "$in"
-  | "include"
-  | "$include";
-
-// ============================================================================
-// 5. QUERY OPTIONS CONSOLIDADO
-// ============================================================================
-
+export type QueryOperator = "=" | "$eq" | "<>" | "!=" | "$ne" | "<" | "$lt" | "<=" | "$lte" | ">" | "$gt" | ">=" | "$gte" | "in" | "$in" | "include" | "$include";
 /**
  * Opciones de query con pre-cache de atributos (A) y relaciones (R)
  * @template T - Modelo de tabla
@@ -188,43 +138,32 @@ export type QueryOperator =
  * });
  * ```
  */
-export interface WhereOptions<
-  T,
-  A = InferAttributes<T>,
-  R = InferRelations<T>
-> {
-  /** Filtros de búsqueda */
-  where?: {
-    [K in keyof A]?:
-      | A[K]
-      | {
-          [N in QueryOperator]?: A[K];
+export interface WhereOptions<T, A = InferAttributes<T>, R = InferRelations<T>> {
+    /** Filtros de búsqueda */
+    where?: {
+        [K in keyof A]?: A[K] | {
+            [N in QueryOperator]?: A[K];
         };
-  };
-  /** Orden de resultados */
-  order?: "ASC" | "DESC" | { [K in keyof A]?: "ASC" | "DESC" };
-  /** Número de items a saltar */
-  offset?: number;
-  /** Alias de offset */
-  skip?: number;
-  /** Número máximo de items a retornar */
-  limit?: number;
-  /** Campos a seleccionar */
-  attributes?: Array<keyof A>;
-  /** Relaciones a cargar (recursivo) */
-  include?: {
-    [K in keyof R]?: NonNullable<R[K]> extends Array<infer U>
-      ? true | WhereOptions<U>
-      : true | Pick<WhereOptions<NonNullable<R[K]>>, "attributes" | "include">;
-  };
-  /** Incluir registros soft-deleted */
-  _includeTrashed?: boolean;
+    };
+    /** Orden de resultados */
+    order?: "ASC" | "DESC" | {
+        [K in keyof A]?: "ASC" | "DESC";
+    };
+    /** Número de items a saltar */
+    offset?: number;
+    /** Alias de offset */
+    skip?: number;
+    /** Número máximo de items a retornar */
+    limit?: number;
+    /** Campos a seleccionar */
+    attributes?: Array<keyof A>;
+    /** Relaciones a cargar (recursivo) */
+    include?: {
+        [K in keyof R]?: NonNullable<R[K]> extends Array<infer U> ? true | WhereOptions<U> : true | Pick<WhereOptions<NonNullable<R[K]>>, "attributes" | "include">;
+    };
+    /** Incluir registros soft-deleted */
+    _includeTrashed?: boolean;
 }
-
-// ============================================================================
-// 6. TIPOS PARA CREATE/UPDATE
-// ============================================================================
-
 /**
  * Input para create() - InferAttributes ya maneja opcional/requerido con intersección
  * @example
@@ -240,7 +179,6 @@ export interface WhereOptions<
  * ```
  */
 export type CreateInput<T> = InferAttributes<T>;
-
 /**
  * Tipo para update() - todos los campos parciales.
  * @example
@@ -249,7 +187,6 @@ export type CreateInput<T> = InferAttributes<T>;
  * ```
  */
 export type UpdateInput<T> = Partial<InferAttributes<T>>;
-
 /**
  * Picks only keys from T whose value extends V.
  * Selecciona solo las keys de T cuyo valor extiende V.
@@ -259,13 +196,18 @@ export type UpdateInput<T> = Partial<InferAttributes<T>>;
  * // PickByType<InferAttributes<User>, number> = { age: number, score: number }
  * ```
  */
-type StripBrands<T> = T extends number & { [NonAttributeBrand]?: any } ? number
-  : T extends string & { [NonAttributeBrand]?: any } ? string
-  : T extends number & { [CreationOptionalBrand]?: any } ? number
-  : T extends string & { [CreationOptionalBrand]?: any } ? string
-  : T extends boolean & { [CreationOptionalBrand]?: any } ? boolean
-  : T;
-
+type StripBrands<T> = T extends number & {
+    [NonAttributeBrand]?: any;
+} ? number : T extends string & {
+    [NonAttributeBrand]?: any;
+} ? string : T extends number & {
+    [CreationOptionalBrand]?: any;
+} ? number : T extends string & {
+    [CreationOptionalBrand]?: any;
+} ? string : T extends boolean & {
+    [CreationOptionalBrand]?: any;
+} ? boolean : T;
 export type PickByType<T, V> = {
-  [K in keyof T as StripBrands<NonNullable<T[K]>> extends V ? K : never]: T[K];
+    [K in keyof T as StripBrands<NonNullable<T[K]>> extends V ? K : never]: T[K];
 };
+export {};

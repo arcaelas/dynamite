@@ -1,75 +1,47 @@
 /**
  * @file transforms.ts
- * @description Decoradores de transformación con pipelines directas
- * @autor Miguel Alejandro
- * @fecha 2025-01-28
+ * @description Primitive decorators: @Get, @Set, @Validate. Composed: @Default, @NotNull, @Name
+ * @description Decoradores primitivos: @Get, @Set, @Validate. Compuestos: @Default, @NotNull, @Name
  */
 
 import { decorator, SCHEMA } from "../core/decorator";
 
 /**
- * @description Decorador para establecer valor por defecto usando pipeline de getter
- * @param factory Valor por defecto o función que lo genera
- * @example
- * ```typescript
- * class User extends Table<User> {
- *   @Default(uuid)
- *   declare id: string;
- *
- *   @Default(() => 0)
- *   declare score: number;
- * }
- * ```
+ * @description Output pipeline -- transforms value on read
+ * @description Pipeline de salida -- transforma el valor al leer
+ * @param fn (current) => any
  */
-export const Default = decorator((_schema, col, params) => {
-  const fallback = params[0];
-  // Usar pipeline de getter con ?? para valores nullish
-  col.get.push((value: any) => value ?? (typeof fallback === 'function' ? fallback() : fallback));
+export const Get = decorator((_schema, col, params) => {
+  col.get.push(params[0]);
 });
 
 /**
- * @description Decorador para transformar valores en cada asignación
- * @param fn Función de transformación
- * @example
- * ```typescript
- * class User extends Table<User> {
- *   @Mutate((v) => v.toLowerCase())
- *   declare email: string;
- * }
- * ```
+ * @description Input pipeline -- transforms value on write
+ * @description Pipeline de entrada -- transforma el valor al escribir
+ * @param fn (next, current) => any
  */
-export const Mutate = decorator((_schema, col, params) => {
-  const fn = params[0];
-  col.set.push((current: any, next: any) => fn(next));
+export const Set = decorator((_schema, col, params) => {
+  col.set.push(params[0]);
 });
 
 /**
- * @description Decorador para validar valores (se ejecuta en el setter)
- * @param validators Función o array de funciones validadoras
- * @example
- * ```typescript
- * class User extends Table<User> {
- *   @Validate((v) => v.length > 0 || 'Email requerido')
- *   declare email: string;
- *
- *   @Validate([isEmail, isNotEmpty])
- *   declare email2: string;
- * }
- * ```
+ * @description Validates value on write. Returns true to pass, or string as error message.
+ * @description Valida valor al escribir. Retorna true para pasar, o string como mensaje de error.
+ * @param validators (next, current) => true | string
  */
 export const Validate = decorator((_schema, col, params) => {
   const validators = params[0];
   const list = Array.isArray(validators) ? validators : [validators];
 
   if (!list.length || list.some((v: any) => typeof v !== 'function')) {
-    throw new TypeError('@Validate requiere funciones');
+    throw new TypeError('@Validate requires functions');
   }
 
-  col.set.push((current: any, next: any) => {
+  col.set.push((next: any, current: any) => {
     for (const fn of list) {
-      const result = fn(next);
+      const result = fn(next, current);
       if (result !== true) {
-        throw new Error(typeof result === 'string' ? result : 'Validación fallida');
+        throw new Error(typeof result === 'string' ? result : `Validation failed for '${col.name}'`);
       }
     }
     return next;
@@ -77,61 +49,39 @@ export const Validate = decorator((_schema, col, params) => {
 });
 
 /**
- * @description Decorador para transformar valores entre DB y aplicación
- * @param fromDB Función que transforma al leer de DB
- * @param toDB Función que transforma al guardar en DB
- * @example
- * ```typescript
- * class User extends Table<User> {
- *   @Serialize(JSON.parse, JSON.stringify)
- *   declare metadata: Record<string, any>;
- * }
- * ```
+ * @description Assigns default value when nullish. Lives in set pipeline.
+ * @description Asigna valor default cuando es nullish. Vive en el set pipeline.
+ * @param val Static value or () => value
  */
-export const Serialize = decorator((_schema, col, params) => {
-  const [fromDB, toDB] = params;
-  if (fromDB) col.get.push((v: any) => v !== null && v !== undefined ? fromDB(v) : v);
-  if (toDB) col.set.push((current: any, next: any) => next !== null && next !== undefined ? toDB(next) : next);
-});
+export const Default = (val: any) => {
+  const fn = typeof val === 'function'
+    ? (next: any) => next ?? val()
+    : (next: any) => next ?? val;
+  return Set(fn);
+};
 
 /**
- * @description Decorador que valida que el valor no sea null, undefined o string vacío
- * @example
- * ```typescript
- * class User extends Table<User> {
- *   @NotNull()
- *   declare name: string;
- * }
- * ```
+ * @description Rejects null, undefined, and empty string. Composed from @Validate.
+ * @description Rechaza null, undefined y string vacío. Compuesto desde @Validate.
+ * @param msg Optional error message
  */
-export const NotNull = decorator((_schema, col, params) => {
-  const custom_message = params[0];
-  col.store.nullable = false;
-  col.store.notNullMessage = custom_message;
-  col.set.push((current: any, next: any) => {
-    const is_empty = next === null || next === undefined || (typeof next === 'string' && next.trim() === '');
-    if (is_empty) {
-      throw new Error(custom_message || `El campo ${col.name} no puede estar vacío`);
+export const NotNull = (msg?: string) => {
+  return Validate((next: any) => {
+    if (next === null || next === undefined || (typeof next === 'string' && next.trim() === '')) {
+      return typeof msg === 'string' ? msg : false;
     }
-    return next;
+    return true;
   });
-});
+};
 
 /**
- * @description Decorador dual para renombrar tabla o columna
- * @param label Nombre personalizado
- * @example
- * ```typescript
- * @Name('usuarios')
- * class User extends Table<User> {
- *   @Name('user_email')
- *   declare email: string;
- * }
- * ```
+ * @description Renames table (on class) or column (on property)
+ * @description Renombra tabla (en clase) o columna (en propiedad)
+ * @param label Custom name
  */
 export function Name(label: string): ClassDecorator & PropertyDecorator {
   if (!label || typeof label !== 'string') {
-    throw new TypeError('@Name requiere una cadena no vacía');
+    throw new TypeError('@Name requires a non-empty string');
   }
 
   return (target: any, prop?: string | symbol): void => {
@@ -139,34 +89,13 @@ export function Name(label: string): ClassDecorator & PropertyDecorator {
     const schema = (ctor as any)[SCHEMA];
 
     if (prop === undefined) {
-      // @Name en clase - renombrar tabla
       schema.name = label;
     } else {
-      // @Name en propiedad - renombrar columna
-      const column_name = String(prop);
-
-      if (!schema.columns[column_name]) {
-        schema.columns[column_name] = { name: column_name, get: [], set: [], store: {} };
+      const key = String(prop);
+      if (!schema.columns[key]) {
+        schema.columns[key] = { name: key, get: [], set: [], store: {} };
       }
-
-      schema.columns[column_name].name = label;
+      schema.columns[key].name = label;
     }
   };
 }
-
-/**
- * @description Decorador para marcar una propiedad como columna sin agregar comportamiento especial
- * @example
- * ```typescript
- * class Product extends Table<Product> {
- *   @Column()
- *   price!: number;
- *
- *   @Column()
- *   category_id!: string;
- * }
- * ```
- */
-export const Column = decorator((_schema, _col) => {
-  // No hace nada, solo marca la propiedad como columna en schema.columns
-});

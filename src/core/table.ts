@@ -6,55 +6,41 @@
  */
 import {
   DeleteItemCommand,
+  GetItemCommand,
   PutItemCommand,
+  QueryCommand,
   ScanCommand,
+  UpdateItemCommand,
 } from "@aws-sdk/client-dynamodb";
 import { marshall, unmarshall } from "@aws-sdk/util-dynamodb";
 import type {
   InferAttributes,
+  PickByType,
   QueryOperator,
   WhereOptions,
 } from "../@types/index";
 import { processIncludes } from "../utils/relations";
 import { requireClient, TransactionContext } from "./client";
+import type { Schema } from "./decorator";
 import { SCHEMA } from "./decorator";
 
-type SimpleWhereOptions<M> = {
-  order?: "ASC" | "DESC" | { [key: string]: "ASC" | "DESC" };
-  offset?: number;
-  skip?: number;
-  limit?: number;
-  attributes?: (keyof InferAttributes<M>)[];
-  include?: NonNullable<WhereOptions<M>["include"]>;
-  _includeTrashed?: boolean;
+const OP_MAP: Record<string, string> = {
+  '=': '=', '<>': '<>', '!=': '<>', '<': '<', '<=': '<=', '>': '>', '>=': '>=',
+  in: 'in', include: 'include', contains: 'include',
+  $eq: '=', $ne: '<>', $lt: '<', $lte: '<=', $gt: '>', $gte: '>=',
+  $in: 'in', $include: 'include', $contains: 'include',
+  $exists: 'attribute_exists', $notExists: 'attribute_not_exists',
+};
+const OPERATORS = new Set(Object.keys(OP_MAP));
+
+type WhereFilters<M> = {
+  [K in keyof InferAttributes<M>]?:
+  | InferAttributes<M>[K]
+  | { [N in QueryOperator]?: InferAttributes<M>[K] };
 };
 
-type Noop = (...args: any) => any;
-interface Schema {
-  name: string;
-  primary_key: string;
-  columns: {
-    [K: string]: {
-      get: Noop;
-      set: Noop;
-      store: {
-        [K: string]: any;
-        relation: {
-          type: "HasMany" | "HasOne" | "BelongsTo" | "ManyToMany";
-          local: string;
-          foreign: string;
-          pivot?: string;
-        };
-      };
-    };
-  };
-}
-
 export default class Table<T = any> {
-  static [SCHEMA]: Schema; // Declaración sin inicialización
-
-  // Cache para instancias de relaciones (único Map necesario)
-  private readonly _relationCache: Map<string, any> = new Map();
+  static [SCHEMA]: Schema;
 
   constructor(props: Partial<T> = {} as Partial<T>) {
     requireClient();
@@ -75,48 +61,41 @@ export default class Table<T = any> {
       const column = schema.columns[column_name];
 
       if (column.store?.relation) {
-        // Relación con closure
         let relation_value = (props as any)[column_name] ?? undefined;
+        let cached: any = undefined;
+        let dirty = true;
 
         Object.defineProperty(this, column_name, {
           enumerable: true,
           configurable: true,
           set: (v: any) => {
             relation_value = v;
+            dirty = true;
           },
           get: () => {
             if (relation_value === undefined) return undefined;
+            if (!dirty) return cached;
 
-            // Cachear instancias para evitar recreación
-            const cache_key = `${column_name}:${JSON.stringify(
-              relation_value
-            )}`;
-            if (this._relationCache.has(cache_key)) {
-              return this._relationCache.get(cache_key);
-            }
+            const RelatedModel = column.store.relation!.model();
+            const type = column.store.relation!.type;
 
-            const RelatedModel = column.store.relation.model();
-            const type = column.store.relation.type;
-
-            let result: any;
             if (type === "HasMany" || type === "ManyToMany") {
-              result = []
+              cached = []
                 .concat(relation_value ?? [])
                 .filter(Boolean)
                 .map((item: any) =>
                   item instanceof RelatedModel ? item : new RelatedModel(item)
                 );
             } else {
-              if (relation_value === null) return null;
-              result =
+              if (relation_value === null) { cached = null; dirty = false; return null; }
+              cached =
                 relation_value instanceof RelatedModel
                   ? relation_value
                   : new RelatedModel(relation_value);
             }
 
-            // Guardar en caché
-            this._relationCache.set(cache_key, result);
-            return result;
+            dirty = false;
+            return cached;
           },
         });
       } else {
@@ -135,18 +114,14 @@ export default class Table<T = any> {
             return computed;
           },
           set: (next: any) => {
-            // Pipeline de setters recibe (current, accumulated)
             value = column.set.reduce(
-              (accumulated: any, fn: any) => fn(value, accumulated),
+              (accumulated: any, fn: any) => fn(accumulated, value),
               next
             );
           },
         });
 
-        // Asignar valor inicial a través del setter para que se procese
-        if (column_name in props) {
-          (this as any)[column_name] = (props as any)[column_name];
-        }
+        (this as any)[column_name] = (props as any)[column_name];
       }
     }
   }
@@ -165,61 +140,14 @@ export default class Table<T = any> {
         result[column_name] = Array.isArray(value)
           ? value.map((item) => (item?.toJSON ? item.toJSON() : item))
           : value?.toJSON
-          ? value.toJSON()
-          : value;
+            ? value.toJSON()
+            : value;
       } else {
         result[column_name] = value;
       }
     }
 
     return result;
-  }
-
-  /**
-   * @description Mapea nombres de propiedades TypeScript a nombres de columnas de DB
-   * @param data Objeto con propiedades TypeScript
-   * @returns Objeto con nombres de columnas de DB
-   */
-  private _mapPropertiesToDB(data: Record<string, any>): Record<string, any> {
-    const schema = (this.constructor as any)[SCHEMA];
-    const mapped: Record<string, any> = {};
-
-    for (const prop_name in data) {
-      const column = schema.columns[prop_name];
-      if (!column) {
-        mapped[prop_name] = data[prop_name];
-        continue;
-      }
-      const db_name = column.name || prop_name;
-      mapped[db_name] = data[prop_name];
-    }
-
-    return mapped;
-  }
-
-  /**
-   * @description Mapea nombres de columnas de DB a nombres de propiedades TypeScript
-   * @param data Objeto con nombres de columnas de DB
-   * @returns Objeto con propiedades TypeScript
-   */
-  private static _mapDBToProperties(data: Record<string, any>): Record<string, any> {
-    const schema = (this as any)[SCHEMA];
-    const mapped: Record<string, any> = {};
-
-    // Crear índice inverso: db_name → prop_name
-    const db_to_prop: Record<string, string> = {};
-    for (const prop_name in schema.columns) {
-      const db_name = schema.columns[prop_name].name;
-      db_to_prop[db_name] = prop_name;
-    }
-
-    // Mapear datos de DB a propiedades
-    for (const db_name in data) {
-      const prop_name = db_to_prop[db_name] || db_name;
-      mapped[prop_name] = data[db_name];
-    }
-
-    return mapped;
   }
 
   /**
@@ -255,47 +183,33 @@ export default class Table<T = any> {
   }
 
   public async save(): Promise<boolean> {
-    const schema = (this.constructor as any)[SCHEMA];
-    const primary_key_name = schema.primary_key || "id";
-    const primary_key_value = (this as any)[primary_key_name];
+    const schema: Schema = (this.constructor as any)[SCHEMA];
+    const payload = (this as any)._toDBPayload();
 
-    const data: any = {};
-    for (const column_name in schema.columns) {
-      const column = schema.columns[column_name];
-      if (!column.store?.relation) {
-        data[column_name] = (this as any)[column_name];
+    if ((this as any).__isPersisted) {
+      await requireClient().send(
+        new PutItemCommand({
+          TableName: schema.name,
+          Item: marshall(payload, { removeUndefinedValues: true }),
+        })
+      );
+      return true;
+    }
+
+    const created = await (this.constructor as any).create(
+      Object.fromEntries(
+        Object.keys(schema.columns)
+          .filter(k => !schema.columns[k].store?.relation)
+          .map(k => [k, (this as any)[k]])
+      )
+    );
+    for (const key in schema.columns) {
+      if (!schema.columns[key].store?.relation) {
+        (this as any)[key] = (created as any)[key];
       }
     }
-
-    // Intentar UPDATE primero
-    const updated = await this.update(data);
-
-    // Si no actualizó nada (registro no existe), hacer INSERT
-    if (!updated && primary_key_value) {
-      // Verificar si el registro existe
-      const existing = await (this.constructor as any).where({
-        [primary_key_name]: primary_key_value,
-      });
-
-      if (existing.length === 0) {
-        // No existe, crear nuevo registro
-        const created = await (this.constructor as any).create(data);
-        // Sincronizar propiedades desde el registro creado
-        for (const key in created) {
-          if (Object.prototype.hasOwnProperty.call(created, key)) {
-            (this as any)[key] = created[key];
-          }
-        }
-        (this as any).__isPersisted = true;
-        return true;
-      }
-    }
-
-    if (updated) {
-      (this as any).__isPersisted = true;
-    }
-
-    return updated;
+    (this as any).__isPersisted = true;
+    return true;
   }
 
   public async update(data: Partial<InferAttributes<T>>): Promise<boolean> {
@@ -567,42 +481,55 @@ export default class Table<T = any> {
     const instance = new this(data);
     const schema = (this as any)[SCHEMA];
 
-    // Validar campos @NotNull antes de guardar
-    for (const column_name in schema.columns) {
-      const column = schema.columns[column_name];
-      if (column.store?.nullable === false) {
-        const value = (instance as any)[column_name];
-        const is_empty =
-          value === null ||
-          value === undefined ||
-          (typeof value === "string" && value.trim() === "");
-        if (is_empty) {
-          const message =
-            column.store.notNullMessage ||
-            `El campo ${column_name} no puede estar vacío`;
-          throw new Error(message);
-        }
-      }
-    }
-
     const payload = (instance as any)._toDBPayload();
+    const pk_db_name = schema.columns[schema.primary_key]?.name || schema.primary_key;
+    const condition = {
+      expression: 'attribute_not_exists(#pk)',
+      names: { '#pk': pk_db_name },
+    };
 
     if (tx) {
-      tx.addPut(schema.name, payload);
+      tx.addPut(schema.name, payload, condition);
+      tx.onCommit(() => { (instance as any).__isPersisted = true; });
     } else {
-      const client = requireClient();
-      await client.send(
-        new PutItemCommand({
-          TableName: schema.name,
-          Item: marshall(payload, { removeUndefinedValues: true }),
-        })
-      );
+      try {
+        await requireClient().send(
+          new PutItemCommand({
+            TableName: schema.name,
+            Item: marshall(payload, { removeUndefinedValues: true }),
+            ConditionExpression: condition.expression,
+            ExpressionAttributeNames: condition.names,
+          })
+        );
+      } catch (e: any) {
+        if (e.name === 'ConditionalCheckFailedException') {
+          throw new Error(`Record with ${schema.primary_key} '${(instance as any)[schema.primary_key]}' already exists in ${schema.name}`);
+        }
+        throw e;
+      }
+      (instance as any).__isPersisted = true;
     }
 
-    // Marcar instancia como persistida
-    (instance as any).__isPersisted = true;
-
     return instance;
+  }
+
+  /**
+   * @description Extract PK value from filters if the filter is a simple PK equality. Returns null otherwise.
+   * @description Extrae el valor de PK de los filtros si es una igualdad simple por PK. Retorna null en otro caso.
+   */
+  private static _extractPK(filters: Record<string, any>): any {
+    const schema: Schema = (this as any)[SCHEMA];
+    const keys = Object.keys(filters);
+    if (keys.length !== 1 || keys[0] !== schema.primary_key) return null;
+
+    const val = filters[schema.primary_key];
+    if (val === null || val === undefined) return null;
+
+    // Valor plano o { $eq: value }
+    if (typeof val !== 'object' || Array.isArray(val)) return val;
+    const op_keys = Object.keys(val);
+    if (op_keys.length === 1 && (OP_MAP[op_keys[0]] || op_keys[0]) === '=') return val[op_keys[0]];
+    return null;
   }
 
   static async update<M extends Table>(
@@ -611,9 +538,8 @@ export default class Table<T = any> {
     filters: Partial<InferAttributes<M>>,
     tx?: TransactionContext
   ): Promise<number> {
-    const schema = (this as any)[SCHEMA];
+    const schema: Schema = (this as any)[SCHEMA];
 
-    // Filtrar solo campos que no son relaciones
     const parsed_updates: any = {};
     for (const key in updates) {
       const column = schema.columns[key];
@@ -622,13 +548,42 @@ export default class Table<T = any> {
       }
     }
 
-    const records = await (this as any).where(filters);
-    if (records.length === 0) return 0;
+    // Optimización: si el filtro es PK exacta, GetItem directo
+    const pk_value = (this as any)._extractPK(filters);
+    let records: M[];
+
+    if (pk_value !== null) {
+      const client = requireClient();
+      const result = await client.send(new GetItemCommand({
+        TableName: schema.name,
+        Key: marshall({ [schema.primary_key]: pk_value }),
+      }));
+
+      if (!result.Item) return 0;
+
+      const raw = unmarshall(result.Item);
+      const db_to_prop: Record<string, string> = {};
+      for (const p in schema.columns) db_to_prop[schema.columns[p].name] = p;
+      const mapped: Record<string, any> = {};
+      for (const k in raw) { if (raw[k] != null) mapped[db_to_prop[k] || k] = raw[k]; }
+
+      const instance = new this(mapped);
+      (instance as any).__isPersisted = true;
+      records = [instance];
+    } else {
+      records = await (this as any).where(filters);
+      if (records.length === 0) return 0;
+    }
 
     for (const record of records) {
-      // Asignar valores - los setters de la instancia procesarán automáticamente
       for (const [key, value] of Object.entries(parsed_updates)) {
         (record as any)[key] = value;
+      }
+      // Auto-renovar campos @UpdatedAt
+      for (const col_name in schema.columns) {
+        if (schema.columns[col_name].store?.updatedAt && !(col_name in parsed_updates)) {
+          (record as any)[col_name] = undefined;
+        }
       }
 
       if (tx) {
@@ -637,9 +592,7 @@ export default class Table<T = any> {
         await requireClient().send(
           new PutItemCommand({
             TableName: schema.name,
-            Item: marshall((record as any)._toDBPayload(), {
-              removeUndefinedValues: true,
-            }),
+            Item: marshall((record as any)._toDBPayload(), { removeUndefinedValues: true }),
           })
         );
       }
@@ -653,403 +606,412 @@ export default class Table<T = any> {
     filters: Partial<InferAttributes<M>>,
     tx?: TransactionContext
   ): Promise<number> {
+    const schema: Schema = (this as any)[SCHEMA];
+
+    // Optimización: si el filtro es PK exacta y no hay softDelete, DeleteItem directo
+    const pk_value = (this as any)._extractPK(filters);
+    const has_soft_delete = Object.values(schema.columns).some(c => c.store.softDelete);
+
+    if (pk_value !== null && !has_soft_delete) {
+      if (tx) {
+        tx.addDelete(schema.name, { [schema.primary_key]: pk_value });
+      } else {
+        await requireClient().send(
+          new DeleteItemCommand({
+            TableName: schema.name,
+            Key: marshall({ [schema.primary_key]: pk_value }),
+          })
+        );
+      }
+      return 1;
+    }
+
+    // Fallback: where() + delete por cada uno
     const records = await (this as any).where(filters);
     if (records.length === 0) return 0;
 
-    const schema = (this as any)[SCHEMA];
-
     for (const record of records) {
       const id = (record as any)[schema.primary_key];
+      if (!id) continue;
 
-      if (id) {
-        if (tx) {
-          tx.addDelete(schema.name, { [schema.primary_key]: id });
-        } else {
-          await requireClient().send(
-            new DeleteItemCommand({
-              TableName: schema.name,
-              Key: marshall({ [schema.primary_key]: id }),
-            })
-          );
-        }
+      if (tx) {
+        tx.addDelete(schema.name, { [schema.primary_key]: id });
+      } else {
+        await requireClient().send(
+          new DeleteItemCommand({
+            TableName: schema.name,
+            Key: marshall({ [schema.primary_key]: id }),
+          })
+        );
       }
     }
 
     return records.length;
   }
 
-  static where<M extends Table>(
-    this: new (props?: any) => M,
-    key: keyof InferAttributes<M>,
-    value: any,
-    options?: SimpleWhereOptions<M>
-  ): Promise<M[]>;
-  static where<M extends Table>(
-    this: new (props?: any) => M,
-    key: keyof InferAttributes<M>,
-    operator: QueryOperator,
-    value: any,
-    options?: SimpleWhereOptions<M>
-  ): Promise<M[]>;
-  static where<M extends Table>(
-    this: new (props?: any) => M,
-    query: object,
-    options?: SimpleWhereOptions<M>
-  ): Promise<M[]>;
-  static async where<M extends Table>(
-    this: new (props?: any) => M,
-    field_or_filters: any,
-    operator_or_value?: any,
-    value?: any,
-    options?: WhereOptions<M>
-  ): Promise<M[]> {
-    const schema = (this as any)[SCHEMA];
+  /**
+   * @description Atomically increment a numeric field by amount. Uses DynamoDB SET expression.
+   * @description Incrementa atómicamente un campo numérico. Usa expresión SET de DynamoDB.
+   */
+  private static async _atomicAdd<M extends Table>(
+    table_class: new (data: any) => M,
+    field: string,
+    amount: number,
+    filters: Record<string, any>,
+    tx?: TransactionContext
+  ): Promise<number> {
+    const schema: Schema = (table_class as any)[SCHEMA];
+    const column = schema.columns[field];
+    if (!column) throw new Error(`Unknown column '${field}' in ${schema.name}`);
+    const db_name = column.name || field;
 
-    // ========================================================================
-    // FASE 1: NORMALIZACIÓN DE ARGUMENTOS
-    // Transforma las 3 sobrecargas en un formato unificado (filters + options)
-    // ========================================================================
-    let filters: any;
-    let queryOptions: WhereOptions<M>;
-    let operator: QueryOperator = "=";
+    const expr = `SET #f = if_not_exists(#f, :zero) + :amt`;
+    const names = { '#f': db_name };
+    const values = { ':amt': amount, ':zero': 0 };
 
-    if (
-      typeof operator_or_value === "string" &&
-      [
-        "=",
-        "<>",
-        "!=",
-        "<",
-        "<=",
-        ">",
-        ">=",
-        "in",
-        "$eq",
-        "$ne",
-        "$lt",
-        "$lte",
-        "$gt",
-        "$gte",
-        "$in",
-        "$include",
-        "include",
-      ].includes(operator_or_value)
-    ) {
-      operator = operator_or_value as QueryOperator;
-      // Normalizar operadores para DynamoDB
-      if (operator === "!=" || operator === "$ne") {
-        operator = "<>";
-      }
-      // Wrap value in operator object for proper processing
-      if (operator !== "=") {
-        filters = { [field_or_filters]: { [operator]: value } };
+    const pk_value = (table_class as any)._extractPK(filters);
+
+    if (pk_value !== null) {
+      const key = { [schema.primary_key]: pk_value };
+      if (tx) {
+        tx.addUpdate(schema.name, key, expr, names, values);
       } else {
-        filters = { [field_or_filters]: value };
+        await requireClient().send(new UpdateItemCommand({
+          TableName: schema.name,
+          Key: marshall(key),
+          UpdateExpression: expr,
+          ExpressionAttributeNames: names,
+          ExpressionAttributeValues: marshall(values),
+        }));
       }
-      queryOptions = options || {};
-    } else if (value !== undefined) {
-      filters = {
-        [field_or_filters]: Array.isArray(operator_or_value)
-          ? { in: operator_or_value }
-          : operator_or_value,
-      };
-      queryOptions = value || {};
-    } else if (
-      operator_or_value !== undefined &&
-      typeof operator_or_value === "object"
-    ) {
-      filters = field_or_filters;
-      queryOptions = operator_or_value;
+      return 1;
+    }
+
+    const records = await (table_class as any).where(filters);
+    if (records.length === 0) return 0;
+
+    if (tx) {
+      for (const record of records) {
+        tx.addUpdate(schema.name, { [schema.primary_key]: (record as any)[schema.primary_key] }, expr, names, values);
+      }
     } else {
-      filters = field_or_filters;
-      queryOptions = {};
+      const client = requireClient();
+      await Promise.all(records.map((record: any) =>
+        client.send(new UpdateItemCommand({
+          TableName: schema.name,
+          Key: marshall({ [schema.primary_key]: record[schema.primary_key] }),
+          UpdateExpression: expr,
+          ExpressionAttributeNames: names,
+          ExpressionAttributeValues: marshall(values),
+        }))
+      ));
+    }
+    return records.length;
+  }
+
+  static async increment<M extends Table>(
+    this: new (data: any) => M,
+    field: keyof PickByType<InferAttributes<M>, number>,
+    amount: number,
+    filters: WhereFilters<M>,
+    tx?: TransactionContext
+  ): Promise<number> {
+    return Table._atomicAdd(this, field as string, amount, filters as any, tx);
+  }
+
+  static async decrement<M extends Table>(
+    this: new (data: any) => M,
+    field: keyof PickByType<InferAttributes<M>, number>,
+    amount: number,
+    filters: WhereFilters<M>,
+    tx?: TransactionContext
+  ): Promise<number> {
+    return Table._atomicAdd(this, field as string, -amount, filters as any, tx);
+  }
+
+  public async increment<K extends keyof PickByType<InferAttributes<T>, number>>(
+    field: K,
+    amount: number = 1
+  ): Promise<void> {
+    const schema: Schema = (this.constructor as any)[SCHEMA];
+    const pk = (this as any)[schema.primary_key];
+    if (!pk) throw new Error('Cannot increment without primary key');
+    await Table._atomicAdd(this.constructor as any, field as string, amount, { [schema.primary_key]: pk });
+    (this as any)[field as string] = ((this as any)[field as string] || 0) + amount;
+  }
+
+  public async decrement<K extends keyof PickByType<InferAttributes<T>, number>>(
+    field: K,
+    amount: number = 1
+  ): Promise<void> {
+    const schema: Schema = (this.constructor as any)[SCHEMA];
+    const pk = (this as any)[schema.primary_key];
+    if (!pk) throw new Error('Cannot decrement without primary key');
+    await Table._atomicAdd(this.constructor as any, field as string, -amount, { [schema.primary_key]: pk });
+    (this as any)[field as string] = ((this as any)[field as string] || 0) - amount;
+  }
+
+  static where<M extends Table>(this: new (props?: any) => M, key: keyof InferAttributes<M>, value: InferAttributes<M>[typeof key], options?: WhereOptions<M>): Promise<M[]>;
+  static where<M extends Table>(this: new (props?: any) => M, key: keyof InferAttributes<M>, operator: QueryOperator, value: any, options?: WhereOptions<M>): Promise<M[]>;
+  static where<M extends Table>(this: new (props?: any) => M, filters: WhereFilters<M>, options?: WhereOptions<M>): Promise<M[]>;
+  static async where<M extends Table>(this: new (props?: any) => M, field_or_filters: any, operator_or_value?: any, value?: any, options?: WhereOptions<M>): Promise<M[]> {
+    const schema: Schema = (this as any)[SCHEMA];
+
+    // -- Normalización: todas las sobrecargas -> { field: { $op: value } } --
+    let raw_filters: Record<string, any>;
+    let opts: WhereOptions<M>;
+
+    if (typeof field_or_filters === 'string') {
+      if (OPERATORS.has(operator_or_value)) {
+        raw_filters = { [field_or_filters]: { [operator_or_value]: value } };
+        opts = options || {};
+      } else {
+        raw_filters = { [field_or_filters]: { $eq: operator_or_value } };
+        opts = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+      }
+    } else {
+      raw_filters = field_or_filters ?? {};
+      opts = operator_or_value && typeof operator_or_value === 'object' && !Array.isArray(operator_or_value)
+        ? operator_or_value : {};
     }
 
-    // Validaciones de paginación
-    if (queryOptions.limit !== undefined) {
-      if (queryOptions.limit < 0)
-        throw new Error("limit debe ser mayor o igual a 0");
-      if (queryOptions.limit === 0) return []; // Retorno temprano optimizado
-    }
-    if (queryOptions.offset !== undefined && queryOptions.offset < 0)
-      throw new Error("offset debe ser mayor o igual a 0");
-
-    // Validar order: puede ser string "ASC"|"DESC" o objeto { field: "ASC"|"DESC" }
-    if (queryOptions.order) {
-      if (typeof queryOptions.order === "string") {
-        if (!["ASC", "DESC"].includes(queryOptions.order)) {
-          throw new Error('order debe ser "ASC" o "DESC"');
-        }
-      } else if (typeof queryOptions.order === "object") {
-        const keys = Object.keys(queryOptions.order);
-        if (keys.length !== 1) {
-          throw new Error("order object debe tener exactamente un campo");
-        }
-        const direction = queryOptions.order[keys[0]];
-        if (!["ASC", "DESC"].includes(direction)) {
-          throw new Error('order direction debe ser "ASC" o "DESC"');
-        }
+    const filters: Record<string, Record<string, any>> = {};
+    for (const [field, val] of Object.entries(raw_filters)) {
+      if (val === undefined) continue;
+      if (!schema.columns[field]) throw new Error(`Unknown column '${field}' in ${schema.name}`);
+      if (val !== null && typeof val === 'object' && !Array.isArray(val) && Object.keys(val).some(k => OPERATORS.has(k))) {
+        filters[field] = val;
+      } else {
+        filters[field] = { $eq: val };
       }
     }
 
-    if (!queryOptions._includeTrashed) {
-      for (const column_name in schema.columns) {
-        if (
-          schema.columns[column_name].store?.softDelete &&
-          !(column_name in filters)
-        ) {
-          // Filtrar registros soft-deleted: donde el campo NO existe (registros activos)
-          filters[column_name] = { $notExists: true };
+    if (opts.limit === 0) return [];
+
+    // Soft delete: excluir registros eliminados salvo que se pida lo contrario
+    if (!opts._includeTrashed) {
+      for (const col_name in schema.columns) {
+        if (schema.columns[col_name].store?.softDelete && !(col_name in filters)) {
+          filters[col_name] = { $notExists: true };
           break;
         }
       }
     }
 
-    // ========================================================================
-    // FASE 2: CONSTRUCCIÓN DE COMANDO DYNAMODB
-    // Construye FilterExpression, ProjectionExpression y parámetros del comando
-    // ========================================================================
-    const expressions: string[] = [];
-    const names: Record<string, string> = {};
-    const values: Record<string, any> = {};
-    const aliases: Record<string, string> = {
-      // Literal operators (identity mapping)
-      "=": "=",
-      "<>": "<>",
-      "!=": "<>",
-      "<": "<",
-      "<=": "<=",
-      ">": ">",
-      ">=": ">=",
-      in: "in",
-      include: "include",
-      contains: "include",
-      // Sugar syntax
-      $eq: "=",
-      $ne: "<>",
-      $lt: "<",
-      $lte: "<=",
-      $gt: ">",
-      $gte: ">=",
-      $in: "in",
-      $include: "include",
-      $contains: "include",
-      "attribute-not-exists": "attribute_not_exists",
-      "attribute-exists": "attribute_exists",
-      $exists: "attribute_exists",
-      $notExists: "attribute_not_exists",
-    };
+    // -- Índice inverso db_name → prop_name --
+    const db_to_prop: Record<string, string> = {};
+    for (const prop_name in schema.columns) {
+      db_to_prop[schema.columns[prop_name].name] = prop_name;
+    }
+
+    // -- Detectar mejor índice para QueryCommand --
+    // Prioridad: 1) PK con $eq  2) GSI con $eq  3) Scan
+    let query_field: string | null = null;
+    let query_value: any = null;
+    let query_index: string | undefined = undefined;
+
+    // Primero buscar PK
+    for (const [field, ops] of Object.entries(filters)) {
+      if (field !== schema.primary_key) continue;
+      const eq_key = Object.keys(ops).find(k => (OP_MAP[k] || k) === '=');
+      if (eq_key && ops[eq_key] !== null) {
+        query_field = field;
+        query_value = ops[eq_key];
+        query_index = undefined;
+        break;
+      }
+    }
+
+    // Si no hay PK, buscar el mejor GSI
+    if (!query_field) {
+      for (const [field, ops] of Object.entries(filters)) {
+        const eq_key = Object.keys(ops).find(k => (OP_MAP[k] || k) === '=');
+        if (!eq_key || ops[eq_key] === null) continue;
+        const db_name = schema.columns[field]?.name || field;
+        if (schema.gsis?.has(db_name)) {
+          query_field = field;
+          query_value = ops[eq_key];
+          query_index = `${db_name}_index`;
+          break;
+        }
+      }
+    }
+
+    // -- Construir expressions --
+    // El campo elegido para Query va a KeyConditionExpression
+    // TODO el resto (incluyendo soft delete, otros filtros) va a FilterExpression (server-side)
+    const key_expressions: string[] = [];
+    const filter_expressions: string[] = [];
+    const attr_names: Record<string, string> = {};
+    const attr_values: Record<string, any> = {};
     let idx = 0;
 
-    for (const [field, filter_val] of Object.entries(filters)) {
-      if (filter_val === undefined) continue;
-
-      // Mapear nombre de propiedad TS → nombre de columna DB
+    for (const [field, ops] of Object.entries(filters)) {
       const column = schema.columns[field];
-      const db_field_name = column?.name || field;
+      const db_name = column?.name || field;
 
-      const is_obj =
-        filter_val !== null &&
-        typeof filter_val === "object" &&
-        !Array.isArray(filter_val) &&
-        Object.keys(filter_val).some((k) => k in aliases);
+      for (const [op_key, op_val] of Object.entries(ops)) {
+        if (op_val === undefined) continue;
+        const op = OP_MAP[op_key] || op_key;
+        const nk = `#a${idx}`;
+        const vk = `:v${idx}`;
+        attr_names[nk] = db_name;
 
-      if (is_obj) {
-        for (const [op_key, op_val] of Object.entries(filter_val)) {
-          if (op_val === undefined) continue;
-          const op = aliases[op_key] || op_key;
-          if (
-            ![
-              "=",
-              "<>",
-              "!=",
-              "<",
-              "<=",
-              ">",
-              ">=",
-              "in",
-              "include",
-              "attribute_not_exists",
-              "attribute_exists",
-            ].includes(op)
-          )
-            continue;
+        // KeyConditionExpression: solo el campo de Query con $eq
+        const is_query_key = query_field === field && op === '=' && op_val === query_value;
 
-          const name_key = `#attr${idx}`;
-          const val_key = `:val${idx}`;
-          names[name_key] = db_field_name;
-
-          if (op === "in" && Array.isArray(op_val)) {
-            if (op_val.length === 0) {
-              throw new Error(
-                `Operador 'in' requiere un array no vacío. Para buscar sin filtro, omite el operador.`
-              );
-            }
-            // DynamoDB no soporta IN nativo, usar OR chain
-            const or_conditions = op_val.map((v, i) => {
-              const k = `${val_key}_${i}`;
-              values[k] = v;
-              return `${name_key} = ${k}`;
-            });
-            expressions.push(`(${or_conditions.join(" OR ")})`);
-          } else if (op === "include") {
-            values[val_key] = op_val;
-            // $include: if field is array, checks includes; if string, checks contains (LIKE)
-            expressions.push(`contains(${name_key}, ${val_key})`);
-          } else if (op === "attribute_not_exists") {
-            expressions.push(`attribute_not_exists(${name_key})`);
-          } else if (op === "attribute_exists") {
-            expressions.push(`attribute_exists(${name_key})`);
-          } else if (op === "!=" || op === "<>") {
-            if (op_val === null) {
-              expressions.push(`attribute_exists(${name_key})`);
-            } else {
-              values[val_key] = op_val;
-              expressions.push(`${name_key} <> ${val_key}`);
-            }
-          } else {
-            values[val_key] = op_val;
-            expressions.push(`${name_key} ${op} ${val_key}`);
-          }
-          idx++;
+        if ((op === '=' && op_val === null) || op === 'attribute_not_exists') {
+          filter_expressions.push(`attribute_not_exists(${nk})`);
+        } else if ((op === '<>' && op_val === null) || op === 'attribute_exists') {
+          filter_expressions.push(`attribute_exists(${nk})`);
+        } else if (op === 'in' && Array.isArray(op_val)) {
+          if (op_val.length === 0) throw new Error(`Operator 'in' requires a non-empty array.`);
+          const conds = op_val.map((v, i) => { const k = `${vk}_${i}`; attr_values[k] = v; return `${nk} = ${k}`; });
+          filter_expressions.push(`(${conds.join(' OR ')})`);
+        } else if (op === 'include') {
+          attr_values[vk] = op_val;
+          filter_expressions.push(`contains(${nk}, ${vk})`);
+        } else if (is_query_key) {
+          attr_values[vk] = op_val;
+          key_expressions.push(`${nk} ${op} ${vk}`);
+        } else {
+          attr_values[vk] = op_val;
+          filter_expressions.push(`${nk} ${op} ${vk}`);
         }
-      } else if (filter_val === null) {
-        const name_key = `#attr${idx}`;
-        names[name_key] = db_field_name;
-        expressions.push(`attribute_not_exists(${name_key})`);
-        idx++;
-      } else if (filter_val !== null) {
-        const name_key = `#attr${idx}`;
-        const val_key = `:val${idx}`;
-        names[name_key] = db_field_name;
-        values[val_key] = filter_val;
-        expressions.push(`${name_key} ${operator} ${val_key}`);
         idx++;
       }
     }
 
-    const scanParams: any = {
-      TableName: schema.name,
-      ExpressionAttributeNames: names,
+    // Proyección
+    if (opts.attributes?.length) {
+      for (const attr of opts.attributes) {
+        const col = schema.columns[String(attr)];
+        const pk = `#p${idx++}`;
+        attr_names[pk] = col?.name || String(attr);
+      }
+    }
+
+    // -- Ejecución: Query o Scan --
+    let use_query = query_field !== null && key_expressions.length > 0;
+    let items: any[] = [];
+
+    const base_params: any = { TableName: schema.name };
+    if (Object.keys(attr_names).length > 0) base_params.ExpressionAttributeNames = attr_names;
+    if (Object.keys(attr_values).length > 0) base_params.ExpressionAttributeValues = marshall(attr_values, { removeUndefinedValues: true });
+    if (filter_expressions.length > 0) base_params.FilterExpression = filter_expressions.join(' AND ');
+    if (opts.attributes?.length) {
+      base_params.ProjectionExpression = Object.keys(attr_names).filter(k => k.startsWith('#p')).join(', ');
+    }
+
+    if (use_query) {
+      base_params.KeyConditionExpression = key_expressions.join(' AND ');
+      if (query_index) base_params.IndexName = query_index;
+    }
+
+    const client = requireClient();
+    const unmarshal_items = (raw_items: any[]) => {
+      for (const item of raw_items) {
+        const raw = unmarshall(item);
+        const mapped: Record<string, any> = {};
+        for (const k in raw) {
+          if (raw[k] != null) mapped[db_to_prop[k] || k] = raw[k];
+        }
+        items.push(mapped);
+      }
     };
 
-    if (expressions.length > 0) {
-      scanParams.FilterExpression = expressions.join(" AND ");
-      // Only add ExpressionAttributeValues if there are actual values
-      if (Object.keys(values).length > 0) {
-        scanParams.ExpressionAttributeValues = marshall(values, {
-          removeUndefinedValues: true,
-        });
-      }
-    }
-
-    if (queryOptions.attributes && queryOptions.attributes.length > 0) {
-      const projectionExpressions = queryOptions.attributes.map(
-        (attr, index) => {
-          const aliasKey = `#proj${index}`;
-          // Mapear nombre de propiedad TS → nombre de columna DB
-          const column = schema.columns[String(attr)];
-          const db_attr_name = column?.name || String(attr);
-          scanParams.ExpressionAttributeNames[aliasKey] = db_attr_name;
-          return aliasKey;
+    // Intentar Query. Si el GSI no existe, fall back a Scan y desregistrar GSI.
+    if (use_query && query_index) {
+      try {
+        let last_key: any;
+        do {
+          if (last_key) base_params.ExclusiveStartKey = last_key;
+          const result = await client.send(new QueryCommand(base_params));
+          if (result.Items) unmarshal_items(result.Items);
+          last_key = result.LastEvaluatedKey;
+        } while (last_key);
+      } catch (e: any) {
+        if (e.name === 'ResourceNotFoundException' || e.message?.includes('index')) {
+          // GSI no existe: remover del cache, mover KeyCondition a Filter, reintentar como Scan
+          schema.gsis.delete(query_field!);
+          delete base_params.KeyConditionExpression;
+          delete base_params.IndexName;
+          delete base_params.ExclusiveStartKey;
+          const key_as_filter = key_expressions.join(' AND ');
+          base_params.FilterExpression = base_params.FilterExpression
+            ? `${key_as_filter} AND ${base_params.FilterExpression}`
+            : key_as_filter;
+          use_query = false;
+          items = [];
+        } else {
+          throw e;
         }
-      );
-      scanParams.ProjectionExpression = projectionExpressions.join(", ");
-    }
-
-    if (Object.keys(scanParams.ExpressionAttributeNames).length === 0) {
-      delete scanParams.ExpressionAttributeNames;
-    }
-
-    // ========================================================================
-    // FASE 3: EJECUCIÓN Y MAPEO
-    // Ejecuta comando(s), ordena resultados completos y aplica paginación
-    // ========================================================================
-    let allItems: any[] = [];
-    let lastEvaluatedKey: any = undefined;
-
-    // 1. Escanear TODOS los items que coinciden con el filtro
-    do {
-      if (lastEvaluatedKey) scanParams.ExclusiveStartKey = lastEvaluatedKey;
-
-      const result = await requireClient().send(new ScanCommand(scanParams));
-
-      if (result.Items) {
-        const items = result.Items.map((item) => {
-          const raw = unmarshall(item);
-          for (const k of Object.keys(raw)) {
-            if (raw[k] === null || raw[k] === undefined) delete raw[k];
-          }
-          return raw;
-        });
-        allItems.push(...items);
       }
+    }
 
-      lastEvaluatedKey = result.LastEvaluatedKey;
-    } while (lastEvaluatedKey);
+    // Query por PK (sin GSI, no puede fallar por índice faltante) o Scan fallback
+    if (!use_query || (use_query && !query_index)) {
+      let last_key: any;
+      const cmd = use_query ? QueryCommand : ScanCommand;
+      do {
+        if (last_key) base_params.ExclusiveStartKey = last_key;
+        const result = await client.send(new cmd(base_params));
+        if (result.Items) unmarshal_items(result.Items);
+        last_key = result.LastEvaluatedKey;
+      } while (last_key);
+    }
 
-    // 2. Ordenar ANTES de aplicar paginación (para resultados determinísticos)
-    if (queryOptions.order) {
-      let sortField = schema.primary_key;
-      let sortDirection: "ASC" | "DESC" = "ASC";
+    // Ordenar antes de paginar
+    if (opts.order) {
+      let sort_field = schema.primary_key;
+      let sort_dir: 'ASC' | 'DESC' = 'ASC';
 
-      // Determinar campo y dirección de ordenamiento
-      if (typeof queryOptions.order === "string") {
-        // Sintaxis string: usar created_at o primary_key
-        sortDirection = queryOptions.order;
-        for (const column_name in schema.columns) {
-          if (schema.columns[column_name].store?.createdAt) {
-            sortField = column_name;
-            break;
-          }
+      if (typeof opts.order === 'string') {
+        sort_dir = opts.order;
+        for (const cn in schema.columns) {
+          if (schema.columns[cn].store?.createdAt) { sort_field = cn; break; }
         }
       } else {
-        // Sintaxis objeto: { fieldName: "ASC"|"DESC" }
-        const fieldName = Object.keys(queryOptions.order)[0];
-        sortField = fieldName;
-        sortDirection = queryOptions.order[fieldName];
+        const [f] = Object.keys(opts.order);
+        sort_field = f;
+        sort_dir = opts.order[f];
       }
 
-      allItems.sort((a, b) => {
-        const aVal = a[sortField];
-        const bVal = b[sortField];
-        if (aVal < bVal) return sortDirection === "ASC" ? -1 : 1;
-        if (aVal > bVal) return sortDirection === "ASC" ? 1 : -1;
+      items.sort((a, b) => {
+        if (a[sort_field] < b[sort_field]) return sort_dir === 'ASC' ? -1 : 1;
+        if (a[sort_field] > b[sort_field]) return sort_dir === 'ASC' ? 1 : -1;
         return 0;
       });
     }
 
-    // 3. Aplicar paginación DESPUÉS de ordenar (skip es alias de offset)
-    const offset = queryOptions.skip ?? queryOptions.offset ?? 0;
-    const limit = queryOptions.limit ?? allItems.length;
-    allItems = allItems.slice(offset, offset + limit);
+    // Paginar
+    const skip = opts.skip ?? opts.offset ?? 0;
+    if (skip > 0 || opts.limit !== undefined) {
+      items = items.slice(skip, opts.limit !== undefined ? skip + opts.limit : undefined);
+    }
 
-    const instances = allItems.map((item) => {
-      // Mapear nombres de DB → propiedades TS
-      const mapped_item = (this as any)._mapDBToProperties(item);
-
-      if (queryOptions.attributes) {
+    // Instanciar
+    const instances = items.map((item) => {
+      if (opts.attributes) {
         const instance = Object.create(this.prototype);
-        for (const attr of queryOptions.attributes) {
-          const column = schema.columns[attr];
-          if (column) {
-            const value = mapped_item[attr] ?? null;
-            Object.defineProperty(instance, attr, {
-              enumerable: true,
-              configurable: true,
-              get: () => column.get.reduce((v: any, fn: any) => fn(v), value),
-            });
-          }
+        for (const attr of opts.attributes) {
+          const column = schema.columns[attr as string];
+          if (!column) continue;
+          const val = item[attr as string] ?? null;
+          Object.defineProperty(instance, attr as string, {
+            enumerable: true, configurable: true,
+            get: () => column.get.reduce((v: any, fn: any) => fn(v), val),
+          });
         }
         return instance;
       }
-      const instance = new this(mapped_item);
+      const instance = new this(item);
       (instance as any).__isPersisted = true;
       return instance;
     });
 
-    if (queryOptions.include) {
-      await processIncludes(instances, queryOptions.include as any, this);
+    if (opts.include) {
+      await processIncludes(instances, opts.include as any, this);
     }
 
     return instances;
@@ -1057,105 +1019,19 @@ export default class Table<T = any> {
 
   static async first<M extends Table>(
     this: new (props?: any) => M,
-    field_or_filters: any,
-    operator_or_value?: any,
-    value_or_options?: any
+    filters: WhereFilters<M>,
+    options?: WhereOptions<M>
   ): Promise<M | undefined> {
-    // Detect call pattern and merge options appropriately
-    let results: M[];
-
-    if (
-      arguments.length === 2 &&
-      typeof operator_or_value === "object" &&
-      !Array.isArray(operator_or_value) &&
-      operator_or_value !== null
-    ) {
-      // Called as first(query, options) - 2 args
-      const options = { ...operator_or_value, limit: 1 };
-      results = await (this as any).where(field_or_filters, options);
-    } else {
-      // Called as first(field, operator, value, options) - 3-4 args
-      const options =
-        typeof value_or_options === "object" && !Array.isArray(value_or_options)
-          ? { ...value_or_options, limit: 1 }
-          : { limit: 1 };
-      results = await (this as any).where(
-        field_or_filters,
-        operator_or_value,
-        value_or_options,
-        options
-      );
-    }
-
+    const results = await (this as any).where(filters, { ...options, limit: 1 });
     return results[0];
   }
 
   static async last<M extends Table>(
     this: new (props?: any) => M,
-    field_or_filters?: any,
-    operator_or_value?: any
+    filters?: WhereFilters<M>,
+    options?: WhereOptions<M>
   ): Promise<M | undefined> {
-    if (field_or_filters === undefined) {
-      // Called as last() or last(options)
-      const options =
-        typeof operator_or_value === "object" &&
-        !Array.isArray(operator_or_value)
-          ? { ...operator_or_value, order: "DESC", limit: 1 }
-          : { order: "DESC", limit: 1 };
-      const results = await (this as any).where({}, options);
-      return results[0];
-    }
-
-    // Called as last(query) or last(query, options) - 1-2 args
-    if (
-      typeof operator_or_value === "object" &&
-      !Array.isArray(operator_or_value) &&
-      operator_or_value !== null
-    ) {
-      // 2 args: last(query, options)
-      const options = { ...operator_or_value, order: "DESC", limit: 1 };
-      const results = await (this as any).where(field_or_filters, options);
-      return results[0];
-    } else {
-      // 1 arg: last(query) - no options provided
-      const results = await (this as any).where(field_or_filters, {
-        order: "DESC",
-        limit: 1,
-      });
-      return results[0];
-    }
-  }
-
-  static async withTrashed<M extends Table>(
-    this: new (props?: any) => M,
-    filters?: any,
-    options?: WhereOptions<M>
-  ): Promise<M[]> {
-    return await (this as any).where(filters ?? {}, {
-      ...options,
-      _includeTrashed: true,
-    });
-  }
-
-  static async onlyTrashed<M extends Table>(
-    this: new (props?: any) => M,
-    filters?: any,
-    options?: WhereOptions<M>
-  ): Promise<M[]> {
-    const schema = (this as any)[SCHEMA];
-
-    for (const column_name in schema.columns) {
-      if (schema.columns[column_name].store?.softDelete) {
-        return await (this as any).where(
-          {
-            ...filters,
-            [column_name]: { "!=": null },
-          },
-          { ...options, _includeTrashed: true }
-        );
-      }
-    }
-
-    throw new Error("onlyTrashed() requiere un campo @SoftDelete configurado");
+    const results = await (this as any).where(filters ?? {}, { ...options, order: 'DESC' as const, limit: 1 });
+    return results[0];
   }
 }

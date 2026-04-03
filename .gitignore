@@ -40,3 +40,4 @@ npm-debug.log*
 .vscode
 .cache
 site/
+.claude/.arko/

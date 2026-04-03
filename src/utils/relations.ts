@@ -255,19 +255,11 @@ export const processIncludes = async (
       queryCache.set(cache_key, data);
     }
 
-    // Asignar datos relacionados a cada item
     for (const item of items) {
       const key = String(item[relation.localKey]);
-      const value = (relation.type === 'HasMany' || relation.type === 'ManyToMany')
+      item[relation_key] = (relation.type === 'HasMany' || relation.type === 'ManyToMany')
         ? data.get(key) ?? []
         : data.get(key) ?? null;
-
-      Object.defineProperty(item, relation_key, {
-        value,
-        writable: true,
-        enumerable: true,
-        configurable: true
-      });
     }
 
     // Recursión para includes anidados con caché propagado

@@ -58,23 +58,24 @@ export const HasOne = decorator((_schema, col, params) => {
 });
 
 /**
- * @description Decorador para relaciones muchos a uno (N:1)
- * @param model Función que retorna la clase del modelo relacionado
- * @param localKey Clave local que referencia al modelo padre
- * @param foreignKey Clave en el modelo padre (por defecto 'id')
+ * @description Many-to-one relation (N:1)
+ * @description Relación muchos a uno (N:1)
+ * @param model () => RelatedClass
+ * @param foreignKey Key in the related model (default 'id')
+ * @param localKey Key in the current model that references the parent
  * @example
  * ```typescript
  * class Post extends Table<Post> {
  *   @PrimaryKey() id: string;
- *   id_user: string;
+ *   @Default('') id_user: string;
  *
- *   @BelongsTo(() => User, 'id_user', 'id')
- *   declare author: BelongsTo<User>;
+ *   @BelongsTo(() => User, 'id', 'id_user')
+ *   declare author: NonAttribute<User>;
  * }
  * ```
  */
 export const BelongsTo = decorator((_schema, col, params) => {
-  const [model, localKey, foreignKey = 'id'] = params;
+  const [model, foreignKey = 'id', localKey = 'id'] = params;
   col.store.relation = {
     type: 'BelongsTo',
     model,
