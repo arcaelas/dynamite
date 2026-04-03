@@ -5,12 +5,45 @@ Todos los cambios notables de este proyecto se documentarán en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 y este proyecto adhiere a [Versionado Semántico](https://semver.org/spec/v2.0.0.html).
 
-## [Sin Publicar]
+## [2.0.0] - 2026-04-02
 
-### Planificado
-- Optimizaciones de rendimiento para operaciones en lote
-- Operadores y filtros de consulta adicionales
-- Herramientas mejoradas de manejo de errores y depuración
+### Cambios Incompatibles
+
+- **Decoradores primitivos**: `@Get`, `@Set`, `@Validate` reemplazan a `@Mutate`, `@Column`, `@Serialize` (eliminados).
+- **`@Default`** movido del get al set pipeline. Se resuelve en la construccion, no en la lectura.
+- **`@PrimaryKey`** genera ULID en vez de UUID. Valida formato ULID. Inmutable despues de la primera asignacion.
+- **`@NotNull`** es composicion de `@Validate`. Eliminado `store.nullable` del schema.
+- **`@UpdatedAt`** respeta valores explicitos. Solo genera `now()` cuando no se pasa valor.
+- **`@BelongsTo`** firma unificada a `(model, foreignKey, localKey)`, igual que `@HasMany`/`@HasOne`.
+- **Set pipeline** orden de argumentos cambiado de `(current, next)` a `(next, current)`.
+- **Constructor** ejecuta setters para todos los campos, no solo los presentes en props.
+- **`connect()`** ya no crea tablas. Solo configura el cliente DynamoDB.
+- **Eliminados**: `withTrashed()`, `onlyTrashed()`, `relationDecorator()`, `@Column`, `@Mutate`, `@Serialize`.
+- **`where()`** lanza error si el campo no existe en `schema.columns`.
+
+### Agregado
+
+- **`sync()`**: crea tablas, GSIs y pivot tables. Detecta GSIs desde relaciones. Operaciones en paralelo con polling.
+- **`where()` inteligente**: `QueryCommand` con PK o GSI, fallback a `ScanCommand`. Self-healing si GSI no existe.
+- **`connect()`** computa GSIs esperados desde schemas sin llamadas API.
+- **`update()`/`delete()` por PK**: `GetItemCommand`/`DeleteItemCommand` directo.
+- **`increment()`/`decrement()`**: atomicos con `UpdateItemCommand`. Estatico, instancia y transaccional.
+- **`create()` con unicidad**: `ConditionExpression: attribute_not_exists(pk)`.
+- **ULID**: generador interno sin dependencias. Monotónico, secuencial, lexicograficamente ordenable.
+- **Transacciones**: `addUpdate()`, `onCommit()`, `__isPersisted` post-commit, auto-chunking en lotes de 25.
+- **Tipado**: `Schema` con tipos reales. `WhereOptions` con `include` recursivo. `PickByType<T, V>`. `order` acepta objetos.
+
+### Corregido
+
+- `@CreatedAt` setea `store.createdAt = true` para sort default.
+- Cache de relaciones simplificado con dirty flag.
+- `processIncludes` asigna via setter.
+- `_mapPropertiesToDB` eliminado (dead code).
+- Normalización de `where()` unificada.
+
+### Tests
+
+- 165 tests contra DynamoDB Local: decoradores, CRUD, relaciones recursivas, ManyToMany, filtros combinados, bulk 3000, Query vs Scan, contratos de pipeline, PK immutability, PK duplicado, ULID secuencialidad.
 
 ---
 
@@ -206,7 +239,8 @@ Esta es una versión estable de @arcaelas/dynamite - un ORM moderno basado en de
 
 ## Resumen del Historial de Versiones
 
-- **v1.0.23** (Actual) - Corrección de enlaces de documentación, anclas TOC, consistencia multilingüe
+- **v2.0.0** (Actual) - Reestructuración completa: decoradores primitivos, ULID, Query inteligente, sync(), transacciones mejoradas
+- **v1.0.23** - Corrección de enlaces de documentación, anclas TOC, consistencia multilingüe
 - **v1.0.20** - Reestructuración de documentación, optimización del código base, creación de API.md
 - **v1.0.17** - Agregado @Serialize, @DeleteAt, transacciones Dynamite.tx()
 - **v1.0.13** - Versión estable con conjunto completo de características
