@@ -1,29 +1,39 @@
 {
-  "include": ["src"],
   "compilerOptions": {
-    "target": "ES2022",
+    "allowSyntheticDefaultImports": true,
+    "baseUrl": "./",
+    "declaration": true,
+    "downlevelIteration": true,
+    "emitDecoratorMetadata": true,
+    "esModuleInterop": true,
+    "experimentalDecorators": true,
+    "forceConsistentCasingInFileNames": true,
+    "lib": [
+      "ESNext",
+      "DOM"
+    ],
     "module": "commonjs",
     "moduleResolution": "node",
-    "baseUrl": "./",
-    "paths": {
-      "~/*": ["src/*"]
-    },
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "strict": true,
     "noImplicitAny": false,
-    "skipLibCheck": true,
-    "outDir": "./src",
-    "declaration": true,
-    "sourceMap": true,
+    "outDir": "./build",
+    "paths": {
+      "~/*": [
+        "src/*"
+      ]
+    },
     "resolveJsonModule": true,
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
-    "downlevelIteration": true,
-    "lib": ["ES2022", "DOM"],
-    "allowSyntheticDefaultImports": true,
-    "useDefineForClassFields": false,
-    "strictPropertyInitialization": false
+    "skipLibCheck": true,
+    "sourceMap": true,
+    "strict": true,
+    "strictPropertyInitialization": false,
+    "target": "ESNext",
+    "useDefineForClassFields": false
   },
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "build"
+  ],
+  "include": [
+    "src"
+  ]
 }
