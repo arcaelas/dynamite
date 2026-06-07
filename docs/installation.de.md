@@ -398,7 +398,6 @@ import {
 
 export class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   @NotNull()
@@ -445,7 +444,6 @@ class User extends Table {
 
 // Apply decorators
 PrimaryKey()(User.prototype, "id");
-Default(() => crypto.randomUUID())(User.prototype, "id");
 NotNull()(User.prototype, "name");
 NotNull()(User.prototype, "email");
 Default(() => "customer")(User.prototype, "role");
@@ -513,12 +511,11 @@ Erstellen Sie eine einfache Testdatei:
 import dotenv from "dotenv";
 dotenv.config();
 
-import { Dynamite, Table, PrimaryKey, Default } from "@arcaelas/dynamite";
+import { Dynamite, Table, PrimaryKey } from "@arcaelas/dynamite";
 
 // Definieren Sie ein Testmodell
 class TestModel extends Table<TestModel> {
   @PrimaryKey()
-  @Default(() => "test-id")
   declare id: string;
 }
 

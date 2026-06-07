@@ -15,18 +15,18 @@
 - **Validation & transformation** - Built-in decorators for data processing
 - **Soft deletes** - @DeleteAt decorator for recoverable records
 - **Transactions** - Full transaction support with rollback
+- **Lifecycle hooks** - Opt-in @Before/@After hooks for create, update and destroy
 
 ---
 
 ## Quick Start
 
 ```typescript
-import { Dynamite, Table, PrimaryKey, Default, CreatedAt } from '@arcaelas/dynamite';
+import { Dynamite, Table, PrimaryKey, CreatedAt } from '@arcaelas/dynamite';
 
 // Define your model
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: string;
 
   declare name: string;
@@ -70,7 +70,8 @@ await user.destroy();
 | `@Index()` | Global Secondary Index |
 | `@Default(value)` | Default value (static or function) |
 | `@Validate(fn)` | Validation on set |
-| `@Mutate(fn)` | Transform on set |
+| `@Get(fn)` | Transform on read |
+| `@Set(fn)` | Transform on write |
 | `@CreatedAt()` | Auto-set on create |
 | `@UpdatedAt()` | Auto-set on update |
 | `@DeleteAt()` | Soft delete timestamp |

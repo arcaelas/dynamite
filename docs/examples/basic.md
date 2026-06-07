@@ -33,7 +33,6 @@ import {
 class User extends Table<User> {
   // Auto-generated primary key
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   // Required field during creation
@@ -117,7 +116,7 @@ const user1 = await User.create({
   // id, role, active, timestamps are auto-generated
 });
 
-console.log(user1.id);         // "550e8400-e29b-41d4-a716-446655440000"
+console.log(user1.id);         // "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 console.log(user1.name);       // "John Doe"
 console.log(user1.email);      // "john@example.com"
 console.log(user1.role);       // "customer" (default)
@@ -452,7 +451,6 @@ import {
 // Define User model first
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -604,9 +602,9 @@ When you run the complete example, you should see output similar to this:
 === User Management System ===
 
 1. Creating users...
-Created: John Doe (550e8400-e29b-41d4-a716-446655440000)
-Created: Jane Smith (6ba7b810-9dad-11d1-80b4-00c04fd430c8)
-Created: Bob Johnson (6ba7b811-9dad-11d1-80b4-00c04fd430c9)
+Created: John Doe (01ARZ3NDEKTSV4RRFFQ69G5FAV)
+Created: Jane Smith (01ARZ3NDEKTSV4RRFFQ69G5FB0)
+Created: Bob Johnson (01ARZ3NDEKTSV4RRFFQ69G5FB1)
 
 2. Listing all users...
 Total users: 3

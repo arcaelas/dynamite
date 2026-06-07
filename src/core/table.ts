@@ -21,7 +21,7 @@ import type {
 } from "../@types/index";
 import { processIncludes } from "../utils/relations";
 import { requireClient, TransactionContext } from "./client";
-import type { Schema } from "./decorator";
+import type { HookType, Schema } from "./decorator";
 import { SCHEMA } from "./decorator";
 
 const OP_MAP: Record<string, string> = {
@@ -38,6 +38,21 @@ type WhereFilters<M> = {
   | InferAttributes<M>[K]
   | { [N in QueryOperator]?: InferAttributes<M>[K] };
 };
+
+/**
+ * @description Lifecycle hook signature. `this` is the model instance; update hooks receive the changes delta.
+ * @description Firma de un hook de ciclo de vida. `this` es la instancia del modelo; los hooks de update reciben el delta de cambios.
+ */
+export type HookFn<T = any> = (this: T, changes?: Partial<InferAttributes<T>>) => void | Promise<void>;
+
+/**
+ * @description Options for mutation operations. `hook` is opt-in (default false); `tx` runs the operation inside a transaction.
+ * @description Opciones para operaciones de mutación. `hook` es opt-in (default false); `tx` ejecuta la operación dentro de una transacción.
+ */
+export interface MutationOptions {
+  hook?: boolean;
+  tx?: TransactionContext;
+}
 
 export default class Table<T = any> {
   static [SCHEMA]: Schema;
@@ -182,26 +197,35 @@ export default class Table<T = any> {
     return JSON.stringify(this);
   }
 
-  public async save(): Promise<boolean> {
+  public async save(options?: MutationOptions): Promise<boolean> {
     const schema: Schema = (this.constructor as any)[SCHEMA];
-    const payload = (this as any)._toDBPayload();
+    const tx = options?.tx;
 
     if ((this as any).__isPersisted) {
-      await requireClient().send(
-        new PutItemCommand({
-          TableName: schema.name,
-          Item: marshall(payload, { removeUndefinedValues: true }),
-        })
-      );
+      if (options?.hook) await Table._run_hooks(this, 'beforeUpdate', {});
+      if (tx) {
+        tx.addPut(schema.name, (this as any)._toDBPayload());
+        if (options?.hook) tx.onCommit(() => Table._run_hooks(this, 'afterUpdate', {}));
+      } else {
+        await requireClient().send(
+          new PutItemCommand({
+            TableName: schema.name,
+            Item: marshall((this as any)._toDBPayload(), { removeUndefinedValues: true }),
+          })
+        );
+        if (options?.hook) await Table._run_hooks(this, 'afterUpdate', {});
+      }
       return true;
     }
 
+    if (options?.hook) await Table._run_hooks(this, 'beforeCreate');
     const created = await (this.constructor as any).create(
       Object.fromEntries(
         Object.keys(schema.columns)
           .filter(k => !schema.columns[k].store?.relation)
           .map(k => [k, (this as any)[k]])
-      )
+      ),
+      { hook: false, tx }
     );
     for (const key in schema.columns) {
       if (!schema.columns[key].store?.relation) {
@@ -209,10 +233,11 @@ export default class Table<T = any> {
       }
     }
     (this as any).__isPersisted = true;
+    if (options?.hook) await Table._run_hooks(this, 'afterCreate');
     return true;
   }
 
-  public async update(data: Partial<InferAttributes<T>>): Promise<boolean> {
+  public async update(data: Partial<InferAttributes<T>>, options?: MutationOptions): Promise<boolean> {
     const schema = (this.constructor as any)[SCHEMA];
 
     // Filtrar relaciones (ignorarlas) en vez de lanzar error
@@ -225,9 +250,39 @@ export default class Table<T = any> {
       }
     }
 
+    // Ruta con hooks: aplicar cambios y persistir sobre esta misma instancia
+    if (options?.hook) {
+      for (const key in filtered_data) {
+        (this as any)[key] = filtered_data[key];
+      }
+      // Auto-renovar campos @UpdatedAt no incluidos en los cambios
+      for (const col_name in schema.columns) {
+        if (schema.columns[col_name].store?.updatedAt && !(col_name in filtered_data)) {
+          (this as any)[col_name] = undefined;
+        }
+      }
+
+      await Table._run_hooks(this, 'beforeUpdate', filtered_data);
+
+      const tx = options.tx;
+      if (tx) {
+        tx.addPut(schema.name, (this as any)._toDBPayload());
+        tx.onCommit(() => Table._run_hooks(this, 'afterUpdate', filtered_data));
+      } else {
+        await requireClient().send(
+          new PutItemCommand({
+            TableName: schema.name,
+            Item: marshall((this as any)._toDBPayload(), { removeUndefinedValues: true }),
+          })
+        );
+        await Table._run_hooks(this, 'afterUpdate', filtered_data);
+      }
+      return true;
+    }
+
     const affected = await (this.constructor as any).update(filtered_data, {
       [schema.primary_key]: (this as any)[schema.primary_key],
-    });
+    }, { tx: options?.tx });
 
     if (affected > 0) {
       // Actualizar la instancia con los nuevos valores (incluyendo updated_at)
@@ -239,35 +294,58 @@ export default class Table<T = any> {
     return affected > 0;
   }
 
-  public async destroy(): Promise<null> {
+  public async destroy(options?: MutationOptions): Promise<null> {
     const schema = (this.constructor as any)[SCHEMA];
     const id = (this as any)[schema.primary_key];
 
     if (!id) throw new Error("Cannot destroy record without ID");
 
+    if (options?.hook) await Table._run_hooks(this, 'beforeDestroy');
+
+    let soft_col: string | null = null;
     for (const column_name in schema.columns) {
-      if (schema.columns[column_name].store?.softDelete) {
-        (this as any)[column_name] = new Date().toISOString();
-        await this.save();
-        return null;
-      }
+      if (schema.columns[column_name].store?.softDelete) { soft_col = column_name; break; }
     }
 
-    return this.forceDestroy();
+    if (soft_col) {
+      (this as any)[soft_col] = new Date().toISOString();
+      await this.save({ tx: options?.tx });
+    } else {
+      await this.forceDestroy({ tx: options?.tx });
+    }
+
+    if (options?.hook) {
+      if (options.tx) options.tx.onCommit(() => Table._run_hooks(this, 'afterDestroy'));
+      else await Table._run_hooks(this, 'afterDestroy');
+    }
+
+    return null;
   }
 
-  public async forceDestroy(): Promise<null> {
+  public async forceDestroy(options?: MutationOptions): Promise<null> {
     const schema = (this.constructor as any)[SCHEMA];
     const id = (this as any)[schema.primary_key];
 
     if (!id) throw new Error("Cannot destroy record without ID");
 
-    await requireClient().send(
-      new DeleteItemCommand({
-        TableName: schema.name,
-        Key: marshall({ [schema.primary_key]: id }),
-      })
-    );
+    if (options?.hook) await Table._run_hooks(this, 'beforeDestroy');
+
+    const tx = options?.tx;
+    if (tx) {
+      tx.addDelete(schema.name, { [schema.primary_key]: id });
+    } else {
+      await requireClient().send(
+        new DeleteItemCommand({
+          TableName: schema.name,
+          Key: marshall({ [schema.primary_key]: id }),
+        })
+      );
+    }
+
+    if (options?.hook) {
+      if (tx) tx.onCommit(() => Table._run_hooks(this, 'afterDestroy'));
+      else await Table._run_hooks(this, 'afterDestroy');
+    }
 
     return null;
   }
@@ -473,13 +551,27 @@ export default class Table<T = any> {
     }
   }
 
+  /**
+   * @description Run the registered hooks of a given type on an instance, in declaration order.
+   * @description Ejecuta los hooks registrados de un tipo dado sobre una instancia, en orden de declaración.
+   */
+  private static async _run_hooks(instance: any, type: HookType, changes?: any): Promise<void> {
+    const schema: Schema = (instance.constructor as any)[SCHEMA];
+    for (const method_name of schema.hooks[type]) {
+      await instance[method_name]?.(changes);
+    }
+  }
+
   static async create<M extends Table>(
     this: new (data: any) => M,
     data: Partial<InferAttributes<M>>,
-    tx?: TransactionContext
+    options?: MutationOptions
   ): Promise<M> {
     const instance = new this(data);
     const schema = (this as any)[SCHEMA];
+    const tx = options?.tx;
+
+    if (options?.hook) await Table._run_hooks(instance, 'beforeCreate');
 
     const payload = (instance as any)._toDBPayload();
     const pk_db_name = schema.columns[schema.primary_key]?.name || schema.primary_key;
@@ -491,6 +583,7 @@ export default class Table<T = any> {
     if (tx) {
       tx.addPut(schema.name, payload, condition);
       tx.onCommit(() => { (instance as any).__isPersisted = true; });
+      if (options?.hook) tx.onCommit(() => Table._run_hooks(instance, 'afterCreate'));
     } else {
       try {
         await requireClient().send(
@@ -508,6 +601,7 @@ export default class Table<T = any> {
         throw e;
       }
       (instance as any).__isPersisted = true;
+      if (options?.hook) await Table._run_hooks(instance, 'afterCreate');
     }
 
     return instance;
@@ -536,9 +630,10 @@ export default class Table<T = any> {
     this: new (data: any) => M,
     updates: Partial<InferAttributes<M>>,
     filters: Partial<InferAttributes<M>>,
-    tx?: TransactionContext
+    options?: MutationOptions
   ): Promise<number> {
     const schema: Schema = (this as any)[SCHEMA];
+    const tx = options?.tx;
 
     const parsed_updates: any = {};
     for (const key in updates) {
@@ -586,8 +681,11 @@ export default class Table<T = any> {
         }
       }
 
+      if (options?.hook) await Table._run_hooks(record, 'beforeUpdate', parsed_updates);
+
       if (tx) {
         tx.addPut(schema.name, (record as any)._toDBPayload());
+        if (options?.hook) tx.onCommit(() => Table._run_hooks(record, 'afterUpdate', parsed_updates));
       } else {
         await requireClient().send(
           new PutItemCommand({
@@ -595,6 +693,7 @@ export default class Table<T = any> {
             Item: marshall((record as any)._toDBPayload(), { removeUndefinedValues: true }),
           })
         );
+        if (options?.hook) await Table._run_hooks(record, 'afterUpdate', parsed_updates);
       }
     }
 
@@ -604,15 +703,17 @@ export default class Table<T = any> {
   static async delete<M extends Table>(
     this: new (data: any) => M,
     filters: Partial<InferAttributes<M>>,
-    tx?: TransactionContext
+    options?: MutationOptions
   ): Promise<number> {
     const schema: Schema = (this as any)[SCHEMA];
+    const tx = options?.tx;
 
-    // Optimización: si el filtro es PK exacta y no hay softDelete, DeleteItem directo
+    // Optimización: si el filtro es PK exacta, sin softDelete y sin hooks de destroy, DeleteItem directo
     const pk_value = (this as any)._extractPK(filters);
     const has_soft_delete = Object.values(schema.columns).some(c => c.store.softDelete);
+    const has_destroy_hooks = !!options?.hook && (schema.hooks.beforeDestroy.length > 0 || schema.hooks.afterDestroy.length > 0);
 
-    if (pk_value !== null && !has_soft_delete) {
+    if (pk_value !== null && !has_soft_delete && !has_destroy_hooks) {
       if (tx) {
         tx.addDelete(schema.name, { [schema.primary_key]: pk_value });
       } else {
@@ -634,8 +735,11 @@ export default class Table<T = any> {
       const id = (record as any)[schema.primary_key];
       if (!id) continue;
 
+      if (options?.hook) await Table._run_hooks(record, 'beforeDestroy');
+
       if (tx) {
         tx.addDelete(schema.name, { [schema.primary_key]: id });
+        if (options?.hook) tx.onCommit(() => Table._run_hooks(record, 'afterDestroy'));
       } else {
         await requireClient().send(
           new DeleteItemCommand({
@@ -643,6 +747,7 @@ export default class Table<T = any> {
             Key: marshall({ [schema.primary_key]: id }),
           })
         );
+        if (options?.hook) await Table._run_hooks(record, 'afterDestroy');
       }
     }
 
@@ -714,9 +819,9 @@ export default class Table<T = any> {
     field: keyof PickByType<InferAttributes<M>, number>,
     amount: number,
     filters: WhereFilters<M>,
-    tx?: TransactionContext
+    options?: MutationOptions
   ): Promise<number> {
-    return Table._atomicAdd(this, field as string, amount, filters as any, tx);
+    return Table._atomicAdd(this, field as string, amount, filters as any, options?.tx);
   }
 
   static async decrement<M extends Table>(
@@ -724,9 +829,9 @@ export default class Table<T = any> {
     field: keyof PickByType<InferAttributes<M>, number>,
     amount: number,
     filters: WhereFilters<M>,
-    tx?: TransactionContext
+    options?: MutationOptions
   ): Promise<number> {
-    return Table._atomicAdd(this, field as string, -amount, filters as any, tx);
+    return Table._atomicAdd(this, field as string, -amount, filters as any, options?.tx);
   }
 
   public async increment<K extends keyof PickByType<InferAttributes<T>, number>>(

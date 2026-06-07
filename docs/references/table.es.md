@@ -80,9 +80,26 @@ await user.save();
 
 ---
 
+## Opciones de Mutación
+
+Los métodos de mutación aceptan como último argumento un objeto `options` opcional de tipo `MutationOptions`:
+
+```typescript
+interface MutationOptions {
+  hook?: boolean;          // Ejecuta los lifecycle hooks del modelo
+  tx?: TransactionContext; // Asocia la operación a una transacción
+}
+```
+
+- Con `{ hook: true }` se ejecutan los [hooks de ciclo de vida](./decorators.md#decoradores-de-hooks-de-ciclo-de-vida) (`@BeforeCreate`, `@AfterUpdate`, etc.) declarados en el modelo.
+- Con `{ tx }` la operación se encola dentro de una transacción atómica.
+- `increment()` y `decrement()` aceptan `options` para `{ tx }`, pero **no** disparan hooks.
+
+---
+
 ## Métodos de Instancia
 
-### `save(): Promise<boolean>`
+### `save(options?: MutationOptions): Promise<boolean>`
 
 Guarda o actualiza el registro actual en la base de datos.
 
@@ -111,7 +128,7 @@ await user.save(); // Solo updatedAt se actualiza
 
 ---
 
-### `update(patch: Partial<InferAttributes<T>>): Promise<boolean>`
+### `update(patch: Partial<InferAttributes<T>>, options?: MutationOptions): Promise<boolean>`
 
 Actualiza parcialmente el registro con los campos proporcionados.
 
@@ -135,7 +152,7 @@ console.log(user.age);  // 31
 
 ---
 
-### `destroy(): Promise<null>`
+### `destroy(options?: MutationOptions): Promise<null>`
 
 Elimina el registro actual de la base de datos.
 
@@ -189,7 +206,7 @@ console.log(json);
 
 ## Métodos Estáticos
 
-### `create<M>(data: InferAttributes<M>): Promise<M>`
+### `create<M>(data: InferAttributes<M>, options?: MutationOptions): Promise<M>`
 
 Crea y persiste un nuevo registro en la base de datos.
 
@@ -223,7 +240,7 @@ console.log(user.createdAt); // "2025-01-15T10:30:00.000Z"
 ```typescript
 @Name("users")
 class User extends Table<User> {
-  @Mutate(v => v.toLowerCase().trim())
+  @Set(v => v.toLowerCase().trim())
   @Validate(v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? true : "Email inválido")
   declare email: string;
 }
@@ -238,7 +255,7 @@ const user = await User.create({
 
 ---
 
-### `update<M>(updates: Partial<InferAttributes<M>>, filters: Partial<InferAttributes<M>>): Promise<number>`
+### `update<M>(updates: Partial<InferAttributes<M>>, filters: Partial<InferAttributes<M>>, options?: MutationOptions): Promise<number>`
 
 Actualiza múltiples registros que coincidan con los filtros.
 
@@ -284,7 +301,7 @@ const inactiveCount = await User.update(
 
 ---
 
-### `delete<M>(filters: Partial<InferAttributes<M>>): Promise<number>`
+### `delete<M>(filters: Partial<InferAttributes<M>>, options?: MutationOptions): Promise<number>`
 
 Elimina registros que coincidan con los filtros.
 

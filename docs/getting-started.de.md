@@ -59,9 +59,8 @@ Lassen Sie uns ein einfaches Benutzermodell erstellen. In Dynamite sind Modelle 
 import { Table, PrimaryKey, Default, CreationOptional } from "@arcaelas/dynamite";
 
 class User extends Table<User> {
-  // Primärschlüssel mit automatisch generierter UUID
+  // Primärschlüssel mit automatisch generierter ULID
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   // Erforderliches Feld während der Erstellung
@@ -295,7 +294,6 @@ import {
 
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -337,7 +335,7 @@ import {
   CreatedAt,
   UpdatedAt,
   Validate,
-  Mutate,
+  Set,
   NotNull,
   CreationOptional,
   NonAttribute,
@@ -348,12 +346,11 @@ import {
 class Task extends Table<Task> {
   // Automatisch generierte ID
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   // Erforderlicher Titel mit Validierung
   @NotNull()
-  @Mutate((value) => (value as string).trim())
+  @Set((value) => (value as string).trim())
   @Validate((value) => (value as string).length >= 3 || "Titel muss mindestens 3 Zeichen lang sein")
   declare title: string;
 
@@ -460,7 +457,6 @@ Lassen Sie uns die Schlüsselteile aufschlüsseln:
 ```typescript
 class Task extends Table<Task> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
   // ...
 }
@@ -479,10 +475,10 @@ declare title: string;
 
 ### Datentransformation
 ```typescript
-@Mutate((value) => (value as string).trim())
+@Set((value) => (value as string).trim())
 declare title: string;
 ```
-- Transformiert Daten vor dem Speichern
+- Transformiert Daten vor dem Schreiben in die Datenbank
 - Nützlich für Normalisierung (trim, lowercase, etc.)
 
 ### Berechnete Eigenschaften
@@ -520,7 +516,7 @@ Lernen Sie die grundlegenden Konzepte und Architektur kennen:
 - Verwenden Sie `CreationOptional` für Felder mit `@Default`, `@CreatedAt`, `@UpdatedAt`
 - Verwenden Sie `NonAttribute` für berechnete Eigenschaften
 - Validieren Sie Benutzereingaben mit `@Validate`
-- Transformieren Sie Daten mit `@Mutate` vor der Validierung
+- Transformieren Sie Daten beim Schreiben mit `@Set` und beim Lesen mit `@Get`
 - Verwenden Sie spezifische Attributauswahl, um Datenübertragung zu reduzieren
 - Behandeln Sie Fehler elegant mit Try-Catch-Blöcken
 
@@ -539,7 +535,8 @@ Lernen Sie die grundlegenden Konzepte und Architektur kennen:
 | `@CreatedAt()` | Auto-Zeitstempel bei Erstellung | `@CreatedAt() declare created_at: string` |
 | `@UpdatedAt()` | Auto-Zeitstempel bei Aktualisierung | `@UpdatedAt() declare updated_at: string` |
 | `@Validate(fn)` | Validierung | `@Validate((v) => v.length > 0) declare name: string` |
-| `@Mutate(fn)` | Daten transformieren | `@Mutate((v) => v.trim()) declare email: string` |
+| `@Get(fn)` | Transformation beim Lesen | `@Get((v) => new Date(v)) declare created_at: Date` |
+| `@Set(fn)` | Transformation beim Schreiben | `@Set((v) => v.trim()) declare email: string` |
 | `@NotNull()` | Nicht-Null-Prüfung | `@NotNull() declare email: string` |
 
 ### Wesentliche Typen

@@ -66,7 +66,6 @@ import {
 // Modelo User (padre)
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -80,7 +79,6 @@ class User extends Table<User> {
 // Modelo Post (hijo)
 class Post extends Table<Post> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare user_id: string; // Clave foránea
@@ -123,7 +121,6 @@ Un modelo puede tener múltiples relaciones uno-a-muchos:
 ```typescript
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -166,7 +163,6 @@ Define una relación muchos-a-uno donde un modelo hijo pertenece a un solo padre
 // Modelo Post (hijo)
 class Post extends Table<Post> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare user_id: string; // Clave foránea
@@ -181,7 +177,6 @@ class Post extends Table<Post> {
 // Modelo User (padre)
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -220,7 +215,6 @@ Un modelo hijo puede pertenecer a múltiples padres:
 ```typescript
 class Order extends Table<Order> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare user_id: string;
@@ -462,7 +456,6 @@ import {
 // Modelo User
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -488,7 +481,6 @@ class User extends Table<User> {
 // Modelo Product
 class Product extends Table<Product> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -512,7 +504,6 @@ class Product extends Table<Product> {
 // Modelo Order
 class Order extends Table<Order> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare user_id: string;
@@ -539,7 +530,6 @@ class Order extends Table<Order> {
 // Modelo OrderItem
 class OrderItem extends Table<OrderItem> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare order_id: string;
@@ -558,7 +548,6 @@ class OrderItem extends Table<OrderItem> {
 // Modelo Review
 class Review extends Table<Review> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare user_id: string;

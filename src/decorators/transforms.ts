@@ -4,7 +4,7 @@
  * @description Decoradores primitivos: @Get, @Set, @Validate. Compuestos: @Default, @NotNull, @Name
  */
 
-import { decorator, SCHEMA } from "../core/decorator";
+import { decorator, getSchema } from "../core/decorator";
 
 /**
  * @description Output pipeline -- transforms value on read
@@ -86,7 +86,7 @@ export function Name(label: string): ClassDecorator & PropertyDecorator {
 
   return (target: any, prop?: string | symbol): void => {
     const ctor = prop === undefined ? target : target.constructor;
-    const schema = (ctor as any)[SCHEMA];
+    const schema = getSchema(ctor);
 
     if (prop === undefined) {
       schema.name = label;

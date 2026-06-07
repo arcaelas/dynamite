@@ -95,8 +95,8 @@ Executes operations within an atomic transaction. If any operation fails, all ch
 **Example:**
 ```typescript
 await dynamite.tx(async (tx) => {
-  const user = await User.create({ name: "John" }, tx);
-  await Order.create({ user_id: user.id, total: 100 }, tx);
+  const user = await User.create({ name: "John" }, { tx });
+  await Order.create({ user_id: user.id, total: 100 }, { tx });
   // If any create fails, all operations are rolled back
 });
 ```
@@ -211,7 +211,6 @@ import { Dynamite, Table, PrimaryKey, Default, HasMany, NonAttribute } from "@ar
 
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: string;
 
   declare name: string;
@@ -222,7 +221,6 @@ class User extends Table<User> {
 
 class Order extends Table<Order> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: string;
 
   declare user_id: string;
@@ -241,8 +239,8 @@ async function main() {
 
   // Atomic transaction
   await dynamite.tx(async (tx) => {
-    const user = await User.create({ name: "John" }, tx);
-    await Order.create({ user_id: user.id, total: 99.99 }, tx);
+    const user = await User.create({ name: "John" }, { tx });
+    await Order.create({ user_id: user.id, total: 99.99 }, { tx });
   });
 
   // Query with relations

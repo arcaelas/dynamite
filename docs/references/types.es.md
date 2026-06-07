@@ -44,7 +44,6 @@ import { Table, PrimaryKey, Default, CreatedAt, UpdatedAt, CreationOptional } fr
 class User extends Table<User> {
   // Clave primaria auto-generada
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   // Campo requerido (sin CreationOptional)

@@ -5,6 +5,19 @@ Todos los cambios notables de este proyecto se documentarán en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 y este proyecto adhiere a [Versionado Semántico](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-06-06
+
+### Cambios Incompatibles
+
+- **Opciones de mutación unificadas**: los métodos de mutación (`create`, `update`, `delete`, `save`, `destroy`, `increment`, `decrement`) reciben un objeto `options` de tipo `{ hook?: boolean; tx?: TransactionContext }` como último argumento. Se eliminó el parámetro posicional `tx`; ahora se usa `{ tx }` (por ejemplo, `User.create(data, { tx })` y `order.destroy({ tx })`).
+
+### Agregado
+
+- **Lifecycle hooks**: seis decoradores de método de instancia (`@BeforeCreate`, `@AfterCreate`, `@BeforeUpdate`, `@AfterUpdate`, `@BeforeDestroy`, `@AfterDestroy`). Son opt-in por operación con `{ hook: true }`. Dentro del hook, `this` es la entidad y los hooks de actualización reciben el delta de cambios como primer argumento. Varios hooks del mismo tipo corren en orden de declaración y los async se esperan con `await`. En `update`/`delete` masivos corren una vez por entidad afectada. Los `before*` se ejecutan antes de persistir y los `after*` después (tras el commit dentro de una transacción). `increment()`/`decrement()` aceptan `{ tx }` pero no disparan hooks.
+- **`TransactionContext.onCommit`** ahora acepta callbacks async.
+
+---
+
 ## [2.0.0] - 2026-04-02
 
 ### Cambios Incompatibles
@@ -239,7 +252,8 @@ Esta es una versión estable de @arcaelas/dynamite - un ORM moderno basado en de
 
 ## Resumen del Historial de Versiones
 
-- **v2.0.0** (Actual) - Reestructuración completa: decoradores primitivos, ULID, Query inteligente, sync(), transacciones mejoradas
+- **v3.0.0** (Actual) - Hooks de ciclo de vida (@Before/@After) y opciones de mutación unificadas `{ hook, tx }` (breaking: se eliminó el `tx` posicional)
+- **v2.0.0** - Reestructuración completa: decoradores primitivos, ULID, Query inteligente, sync(), transacciones mejoradas
 - **v1.0.23** - Corrección de enlaces de documentación, anclas TOC, consistencia multilingüe
 - **v1.0.20** - Reestructuración de documentación, optimización del código base, creación de API.md
 - **v1.0.17** - Agregado @Serialize, @DeleteAt, transacciones Dynamite.tx()

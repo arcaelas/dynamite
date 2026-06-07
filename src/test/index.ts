@@ -5,6 +5,7 @@ import filters from './filters';
 import bulk from './bulk';
 import query_scan from './query_scan';
 import contracts from './contracts';
+import hooks from './hooks';
 
 (async function () {
   try {
@@ -16,6 +17,7 @@ import contracts from './contracts';
     total_failures += await bulk();
     total_failures += await query_scan();
     total_failures += await contracts();
+    total_failures += await hooks();
 
     console.log(`\n${'='.repeat(40)}`);
     console.log(total_failures === 0

@@ -27,6 +27,16 @@ export { Get, Set, Validate, Default, NotNull, Name } from "./decorators/transfo
 // Decoradores - Relaciones
 export { HasMany, BelongsTo, HasOne, ManyToMany } from "./decorators/relations";
 
+// Decoradores - Hooks de ciclo de vida
+export {
+  BeforeCreate, AfterCreate,
+  BeforeUpdate, AfterUpdate,
+  BeforeDestroy, AfterDestroy,
+} from "./decorators/hooks";
+
+// Tipos de hooks y opciones de mutación
+export type { MutationOptions, HookFn } from "./core/table";
+
 // Sistema de tipos simplificado
 export type {
   // Brands

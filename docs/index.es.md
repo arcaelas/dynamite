@@ -15,6 +15,7 @@
 - **Validación y transformación** - Decoradores integrados para procesar datos
 - **Soft deletes** - Decorador @DeleteAt para registros recuperables
 - **Transacciones** - Soporte completo de transacciones con rollback
+- **Lifecycle hooks** - Decoradores @Before/@After opt-in para create, update y destroy
 
 ---
 
@@ -26,7 +27,6 @@ import { Dynamite, Table, PrimaryKey, Default, CreatedAt } from '@arcaelas/dynam
 // Define tu modelo
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: string;
 
   declare name: string;
@@ -70,7 +70,8 @@ await user.destroy();
 | `@Index()` | Índice Secundario Global |
 | `@Default(value)` | Valor por defecto (estático o función) |
 | `@Validate(fn)` | Validación al asignar |
-| `@Mutate(fn)` | Transformación al asignar |
+| `@Set(fn)` | Transformación al escribir |
+| `@Get(fn)` | Transformación al leer |
 | `@CreatedAt()` | Auto-asignar al crear |
 | `@UpdatedAt()` | Auto-asignar al actualizar |
 | `@DeleteAt()` | Timestamp de soft delete |

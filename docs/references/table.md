@@ -244,13 +244,24 @@ console.log(json);
 
 ## Static Methods
 
-### `create<M>(data: InferAttributes<M>, tx?: TransactionContext): Promise<M>`
+The mutation methods (`create`, `update`, `delete`, `increment`, `decrement`) accept an optional `options` object as their last argument:
+
+```typescript
+type MutationOptions = {
+  hook?: boolean;          // Run lifecycle hooks for the operation (default: false)
+  tx?: TransactionContext; // Execute within an atomic transaction
+};
+```
+
+When called with `{ hook: true }`, the matching lifecycle hooks (`@BeforeCreate`, `@AfterCreate`, etc.) run around the operation. `increment()` and `decrement()` also accept `options` (the `tx` field), but never trigger hooks.
+
+### `create<M>(data: InferAttributes<M>, options?: MutationOptions): Promise<M>`
 
 Creates and persists a new record in the database.
 
 **Parameters:**
 - `data` - Object with the attributes for the new record
-- `tx` - (Optional) Transaction context for atomic operations
+- `options` - (Optional) Mutation options: `{ hook?, tx? }`
 
 **Characteristics:**
 - Creates a new instance
@@ -276,14 +287,14 @@ console.log(user.created_at); // "2025-01-15T10:30:00.000Z"
 
 ---
 
-### `update<M>(updates, filters, tx?: TransactionContext): Promise<number>`
+### `update<M>(updates, filters, options?: MutationOptions): Promise<number>`
 
 Updates multiple records matching the filters.
 
 **Parameters:**
 - `updates` - Object with fields to update
 - `filters` - Object with selection criteria
-- `tx` - (Optional) Transaction context for atomic operations
+- `options` - (Optional) Mutation options: `{ hook?, tx? }`
 
 **Returns:** Number of updated records
 
@@ -300,13 +311,13 @@ console.log(`${count} users suspended`);
 
 ---
 
-### `delete<M>(filters, tx?: TransactionContext): Promise<number>`
+### `delete<M>(filters, options?: MutationOptions): Promise<number>`
 
 Deletes records matching the filters.
 
 **Parameters:**
 - `filters` - Object with selection criteria
-- `tx` - (Optional) Transaction context for atomic operations
+- `options` - (Optional) Mutation options: `{ hook?, tx? }`
 
 **Returns:** Number of deleted records
 

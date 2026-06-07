@@ -51,7 +51,6 @@ import { Table, PrimaryKey, Default, CreationOptional } from "@arcaelas/dynamite
 
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -100,7 +99,8 @@ Decorators sind spezielle Funktionen, die Klasseneigenschaften mit Metadaten ann
 | Decorator | Zweck | Beispiel |
 |-----------|-------|----------|
 | `@Default(value)` | Standardwert | `@Default(() => Date.now()) declare createdAt: number;` |
-| `@Mutate(fn)` | Vor Speichern transformieren | `@Mutate(v => v.toLowerCase()) declare email: string;` |
+| `@Get(fn)` | Beim Lesen transformieren | `@Get(v => new Date(v)) declare createdAt: Date;` |
+| `@Set(fn)` | Beim Schreiben transformieren | `@Set(v => v.toLowerCase()) declare email: string;` |
 | `@Validate(fn)` | Vor Speichern validieren | `@Validate(v => v.length > 0) declare name: string;` |
 | `@NotNull()` | Nicht-Null-Wert erfordern | `@NotNull() declare email: string;` |
 
@@ -125,7 +125,7 @@ import {
   Table,
   PrimaryKey,
   Default,
-  Mutate,
+  Set,
   Validate,
   NotNull,
   CreatedAt,
@@ -137,12 +137,11 @@ import {
 
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   @NotNull()
-  @Mutate(v => v.trim())
-  @Mutate(v => v.toLowerCase())
+  @Set(v => v.trim())
+  @Set(v => v.toLowerCase())
   @Validate(v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) || "Ungültige E-Mail")
   declare email: string;
 
@@ -217,7 +216,6 @@ const recentOrders = await Order.where({
 ```typescript
 class Product extends Table<Product> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -230,7 +228,7 @@ const product = await Product.create({
   price: 9.99
 });
 
-console.log(product.id); // "550e8400-e29b-41d4-a716-446655440000"
+console.log(product.id); // "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 ```
 
 ---
@@ -405,7 +403,6 @@ import { Table, PrimaryKey, Default, CreatedAt, UpdatedAt, CreationOptional } fr
 class User extends Table<User> {
   // Automatisch generierte ID - immer CreationOptional
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   // Erforderliche Felder

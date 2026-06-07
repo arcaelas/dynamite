@@ -216,7 +216,7 @@ export default async function basic() {
 
   let tx_user: User | undefined;
   await dynamite.tx(async (tx) => {
-    tx_user = await User.create({ name: 'TxUser', email: 'tx@test.com' }, tx);
+    tx_user = await User.create({ name: 'TxUser', email: 'tx@test.com' }, { tx });
     assert('tx: instancia tiene id antes del commit', typeof tx_user!.id === 'string');
     assert('tx: __isPersisted es false antes del commit', (tx_user as any).__isPersisted === false);
   });
@@ -228,7 +228,7 @@ export default async function basic() {
   let tx_failed_user: User | undefined;
   try {
     await dynamite.tx(async (tx) => {
-      tx_failed_user = await User.create({ name: 'TxFail' }, tx);
+      tx_failed_user = await User.create({ name: 'TxFail' }, { tx });
       throw new Error('Rollback');
     });
   } catch {}

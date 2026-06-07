@@ -59,9 +59,8 @@ Let's create a simple User model. In Dynamite, models are classes that extend `T
 import { Table, PrimaryKey, Default, CreationOptional } from "@arcaelas/dynamite";
 
 class User extends Table<User> {
-  // Primary key with auto-generated UUID
+  // Primary key with auto-generated ULID
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   // Required field during creation
@@ -92,7 +91,7 @@ const user1 = await User.create({
   // id and role are optional (auto-generated/defaulted)
 });
 
-console.log(user1.id);   // "550e8400-e29b-41d4-a716-446655440000"
+console.log(user1.id);   // "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 console.log(user1.name); // "John Doe"
 console.log(user1.role); // "customer"
 
@@ -298,7 +297,6 @@ import {
 
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -340,7 +338,7 @@ import {
   CreatedAt,
   UpdatedAt,
   Validate,
-  Mutate,
+  Set,
   NotNull,
   CreationOptional,
   NonAttribute,
@@ -351,12 +349,11 @@ import {
 class Task extends Table<Task> {
   // Auto-generated ID
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   // Required title with validation
   @NotNull()
-  @Mutate((value) => (value as string).trim())
+  @Set((value) => (value as string).trim())
   @Validate((value) => (value as string).length >= 3 || "Title must be at least 3 characters")
   declare title: string;
 
@@ -569,7 +566,6 @@ Let's break down the key parts:
 ```typescript
 class Task extends Table<Task> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
   // ...
 }
@@ -588,7 +584,7 @@ declare title: string;
 
 ### Data Transformation
 ```typescript
-@Mutate((value) => (value as string).trim())
+@Set((value) => (value as string).trim())
 declare title: string;
 ```
 - Transforms data before storage
@@ -629,7 +625,7 @@ Learn about the fundamental concepts and architecture:
 - Use `CreationOptional` for fields with `@Default`, `@CreatedAt`, `@UpdatedAt`
 - Use `NonAttribute` for computed properties
 - Validate user input with `@Validate`
-- Transform data with `@Mutate` before validation
+- Transform data with `@Set` before validation
 - Use specific attribute selection to reduce data transfer
 - Handle errors gracefully with try-catch blocks
 
@@ -648,7 +644,8 @@ Learn about the fundamental concepts and architecture:
 | `@CreatedAt()` | Auto timestamp on create | `@CreatedAt() declare created_at: string` |
 | `@UpdatedAt()` | Auto timestamp on update | `@UpdatedAt() declare updated_at: string` |
 | `@Validate(fn)` | Validation | `@Validate((v) => v.length > 0) declare name: string` |
-| `@Mutate(fn)` | Transform data | `@Mutate((v) => v.trim()) declare email: string` |
+| `@Get(fn)` | Transform on read | `@Get((v) => JSON.parse(v)) declare data: object` |
+| `@Set(fn)` | Transform on write | `@Set((v) => v.trim()) declare email: string` |
 | `@NotNull()` | Not null check | `@NotNull() declare email: string` |
 
 ### Essential Types

@@ -57,7 +57,6 @@ Define a one-to-many relationship where a parent model has multiple related chil
 import {
   Table,
   PrimaryKey,
-  Default,
   HasMany,
   CreationOptional,
   NonAttribute
@@ -66,7 +65,6 @@ import {
 // User model (parent)
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -80,7 +78,6 @@ class User extends Table<User> {
 // Post model (child)
 class Post extends Table<Post> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare user_id: string; // Foreign key
@@ -123,7 +120,6 @@ A model can have multiple one-to-many relationships:
 ```typescript
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -166,7 +162,6 @@ Define a many-to-one relationship where a child model belongs to a single parent
 // Post model (child)
 class Post extends Table<Post> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare user_id: string; // Foreign key
@@ -181,7 +176,6 @@ class Post extends Table<Post> {
 // User model (parent)
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -220,7 +214,6 @@ A child model can belong to multiple parents:
 ```typescript
 class Order extends Table<Order> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare user_id: string;
@@ -462,7 +455,6 @@ import {
 // User model
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -488,7 +480,6 @@ class User extends Table<User> {
 // Product model
 class Product extends Table<Product> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -512,7 +503,6 @@ class Product extends Table<Product> {
 // Order model
 class Order extends Table<Order> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare user_id: string;
@@ -539,7 +529,6 @@ class Order extends Table<Order> {
 // OrderItem model
 class OrderItem extends Table<OrderItem> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare order_id: string;
@@ -558,7 +547,6 @@ class OrderItem extends Table<OrderItem> {
 // Review model
 class Review extends Table<Review> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare user_id: string;
@@ -1059,8 +1047,8 @@ for (const post of posts) {
 
 ### API References
 
-- [HasMany Decorator](../references/decorators.md#hasmany-relaciones-uno-a-muchos) - Complete HasMany documentation
-- [BelongsTo Decorator](../references/decorators.md#belongsto-relaciones-muchos-a-uno) - Complete BelongsTo documentation
+- [HasMany Decorator](../references/decorators.md#hasmany-one-to-many-relationships) - Complete HasMany documentation
+- [BelongsTo Decorator](../references/decorators.md#belongsto-many-to-one-relationships) - Complete BelongsTo documentation
 - [Advanced Queries](./advanced.md) - Complex queries with relationships
 
 ### Additional Topics

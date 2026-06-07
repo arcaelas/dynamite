@@ -5,6 +5,17 @@ Alle wichtigen Änderungen an diesem Projekt werden in dieser Datei dokumentiert
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 und dieses Projekt hält sich an [Semantische Versionierung](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-06-06
+
+### Inkompatible Änderungen
+
+- **Vereinheitlichte Mutations-Optionen**: Die statischen Methoden `create`, `update`, `delete`, `increment`, `decrement` sowie die Instanzmethoden `save`, `update`, `destroy`, `forceDestroy` erhalten als letztes Argument ein `options`-Objekt vom Typ `MutationOptions = { hook?: boolean; tx?: TransactionContext }`. Das positionelle `tx`-Argument wurde entfernt. Vorher: `User.create(data, tx)` → jetzt: `User.create(data, { tx })`. Vorher: `order.destroy(tx)` → jetzt: `order.destroy({ tx })`.
+
+### Hinzugefügt
+
+- **Lifecycle-Hooks**: Sechs neue Methoden-Dekoratoren für Instanzen — `@BeforeCreate`, `@AfterCreate`, `@BeforeUpdate`, `@AfterUpdate`, `@BeforeDestroy`, `@AfterDestroy`. Pro Operation opt-in über `{ hook: true }`. Innerhalb des Hooks ist `this` die Entität; die Update-Hooks erhalten das Delta als erstes Argument. Mehrere Hooks desselben Typs laufen in Deklarationsreihenfolge, async-Hooks werden awaited. Bei Massen-`update`/`delete` laufen die Hooks einmal pro betroffener Entität. `before*` läuft vor dem Persistieren, `after*` danach (in einer Transaktion nach dem Commit). `increment()`/`decrement()` akzeptieren `{ tx }`, lösen aber keine Hooks aus.
+- **`TransactionContext.onCommit`** akzeptiert jetzt async-Callbacks.
+
 ## [2.0.0] - 2026-04-02
 
 ### Inkompatible Änderungen
@@ -239,7 +250,8 @@ Dies ist eine stabile Version von @arcaelas/dynamite - ein modernes, Decorator-f
 
 ## Versionsverlauf-Zusammenfassung
 
-- **v1.0.23** (Aktuell) - Dokumentationslink-Korrekturen, TOC-Anker-Korrekturen, mehrsprachige Konsistenz
+- **v3.0.0** (Aktuell) - Lifecycle-Hooks (@Before/@After) und vereinheitlichte `{ hook, tx }`-Mutationsoptionen (Breaking: positionales `tx` entfernt)
+- **v1.0.23** - Dokumentationslink-Korrekturen, TOC-Anker-Korrekturen, mehrsprachige Konsistenz
 - **v1.0.20** - Dokumentationsumstrukturierung, Codebasis-Optimierung, API.md-Erstellung
 - **v1.0.17** - @Serialize, @DeleteAt, Dynamite.tx()-Transaktionen hinzugefügt
 - **v1.0.13** - Stabile Version mit vollständigem Funktionsumfang
