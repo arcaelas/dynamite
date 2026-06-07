@@ -42,13 +42,11 @@ Verwenden Sie Vergleichsoperatoren für numerische und Datumsvergleiche:
 import {
   Table,
   PrimaryKey,
-  Default,
   CreationOptional
 } from "@arcaelas/dynamite";
 
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -206,7 +204,7 @@ class User extends Table<User> {
   @PrimaryKey()
   declare id: string;
 
-  @Mutate((value) => (value as string).toLowerCase())
+  @Set((value) => (value as string).toLowerCase())
   declare email: string;
 }
 
@@ -531,7 +529,7 @@ import {
   Default,
   CreatedAt,
   UpdatedAt,
-  Mutate,
+  Set,
   CreationOptional,
   Dynamite
 } from "@arcaelas/dynamite";
@@ -539,12 +537,11 @@ import {
 // User-Modell
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
 
-  @Mutate((value) => (value as string).toLowerCase())
+  @Set((value) => (value as string).toLowerCase())
   declare email: string;
 
   declare age: number;
@@ -559,7 +556,6 @@ class User extends Table<User> {
 // Product-Modell
 class Product extends Table<Product> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;

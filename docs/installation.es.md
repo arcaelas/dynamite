@@ -398,7 +398,6 @@ import {
 
 export class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   @NotNull()
@@ -518,7 +517,6 @@ import { Dynamite, Table, PrimaryKey, Default } from "@arcaelas/dynamite";
 // Define un modelo de prueba
 class TestModel extends Table<TestModel> {
   @PrimaryKey()
-  @Default(() => "test-id")
   declare id: string;
 }
 

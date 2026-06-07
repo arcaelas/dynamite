@@ -156,8 +156,8 @@ export default async function contracts() {
 
   // Successful tx: both changes persist
   await dynamite.tx(async (tx) => {
-    await CUser.increment('score', 50, { id: u4.id }, tx);
-    await CUser.increment('score', 50, { id: u5.id }, tx);
+    await CUser.increment('score', 50, { id: u4.id }, { tx });
+    await CUser.increment('score', 50, { id: u5.id }, { tx });
   });
   const d_after = await CUser.first({ id: u4.id });
   const e_after = await CUser.first({ id: u5.id });
@@ -167,8 +167,8 @@ export default async function contracts() {
   // Failed tx: neither change persists
   try {
     await dynamite.tx(async (tx) => {
-      await CUser.increment('score', 1000, { id: u4.id }, tx);
-      await CPost.create({ title: 'orphan', user_id: u4.id }, tx);
+      await CUser.increment('score', 1000, { id: u4.id }, { tx });
+      await CPost.create({ title: 'orphan', user_id: u4.id }, { tx });
       throw new Error('Forced rollback');
     });
   } catch {}
@@ -182,7 +182,7 @@ export default async function contracts() {
   try {
     await dynamite.tx(async (tx) => {
       for (let i = 0; i < 5; i++) {
-        const p = await CPost.create({ title: `tx_post_${i}`, user_id: u4.id }, tx);
+        const p = await CPost.create({ title: `tx_post_${i}`, user_id: u4.id }, { tx });
         tx_ids.push(p.id);
       }
       throw new Error('Abort after 5 creates');
@@ -215,7 +215,7 @@ export default async function contracts() {
   // In tx before commit: false
   let tx_instance: CUser | undefined;
   await dynamite.tx(async (tx) => {
-    tx_instance = await CUser.create({ name: 'ivan' }, tx);
+    tx_instance = await CUser.create({ name: 'ivan' }, { tx });
     assert('in tx before commit: false', (tx_instance as any).__isPersisted === false);
   });
   assert('after tx commit: true', (tx_instance as any).__isPersisted === true);
@@ -224,7 +224,7 @@ export default async function contracts() {
   let failed_instance: CUser | undefined;
   try {
     await dynamite.tx(async (tx) => {
-      failed_instance = await CUser.create({ name: 'judy' }, tx);
+      failed_instance = await CUser.create({ name: 'judy' }, { tx });
       throw new Error('fail');
     });
   } catch {}

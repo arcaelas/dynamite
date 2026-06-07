@@ -61,7 +61,6 @@ import { Table, PrimaryKey, Default, CreationOptional } from "@arcaelas/dynamite
 class User extends Table<User> {
   // Clave primaria con UUID autogenerado
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   // Campo requerido durante la creación
@@ -295,7 +294,6 @@ import {
 
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -337,7 +335,7 @@ import {
   CreatedAt,
   UpdatedAt,
   Validate,
-  Mutate,
+  Set,
   NotNull,
   CreationOptional,
   NonAttribute,
@@ -348,12 +346,11 @@ import {
 class Task extends Table<Task> {
   // ID autogenerado
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   // Título requerido con validación
   @NotNull()
-  @Mutate((value) => (value as string).trim())
+  @Set((value) => (value as string).trim())
   @Validate((value) => (value as string).length >= 3 || "El título debe tener al menos 3 caracteres")
   declare title: string;
 
@@ -566,7 +563,6 @@ Desglosemos las partes clave:
 ```typescript
 class Task extends Table<Task> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
   // ...
 }
@@ -585,7 +581,7 @@ declare title: string;
 
 ### Transformación de Datos
 ```typescript
-@Mutate((value) => (value as string).trim())
+@Set((value) => (value as string).trim())
 declare title: string;
 ```
 - Transforma datos antes del almacenamiento
@@ -626,7 +622,7 @@ Aprende sobre los conceptos fundamentales y la arquitectura:
 - Usa `CreationOptional` para campos con `@Default`, `@CreatedAt`, `@UpdatedAt`
 - Usa `NonAttribute` para propiedades computadas
 - Valida entrada del usuario con `@Validate`
-- Transforma datos con `@Mutate` antes de la validación
+- Transforma datos al escribir con `@Set` antes de la validación
 - Usa selección de atributos específicos para reducir transferencia de datos
 - Maneja errores con gracia usando bloques try-catch
 
@@ -645,7 +641,8 @@ Aprende sobre los conceptos fundamentales y la arquitectura:
 | `@CreatedAt()` | Auto timestamp en creación | `@CreatedAt() declare created_at: string` |
 | `@UpdatedAt()` | Auto timestamp en actualización | `@UpdatedAt() declare updated_at: string` |
 | `@Validate(fn)` | Validación | `@Validate((v) => v.length > 0) declare name: string` |
-| `@Mutate(fn)` | Transformar datos | `@Mutate((v) => v.trim()) declare email: string` |
+| `@Set(fn)` | Transformar al escribir | `@Set((v) => v.trim()) declare email: string` |
+| `@Get(fn)` | Transformar al leer | `@Get((v) => v.toUpperCase()) declare code: string` |
 | `@NotNull()` | Verificación no nulo | `@NotNull() declare email: string` |
 
 ### Tipos Esenciales

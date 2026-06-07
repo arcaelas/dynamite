@@ -73,8 +73,7 @@ import {
 
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
-  declare id: CreationOptional<string>; // Use UUID instead of auto-increment
+  declare id: CreationOptional<string>; // Auto-generated ULID instead of auto-increment
 
   @NotNull()
   declare email: string;
@@ -90,7 +89,6 @@ class User extends Table<User> {
 
 class Order extends Table<Order> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   @NotNull()
@@ -223,7 +221,6 @@ import {
 
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   @NotNull()
@@ -243,7 +240,6 @@ class User extends Table<User> {
 
 class Order extends Table<Order> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   @NotNull()
@@ -344,7 +340,6 @@ import {
 
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>; // MongoDB _id → DynamoDB id
 
   @NotNull()
@@ -419,7 +414,6 @@ const user = await User.create({ name: "John" });
 // All configuration via decorators
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   @NotNull()

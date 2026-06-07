@@ -51,7 +51,6 @@ import { Table, PrimaryKey, Default, CreationOptional } from "@arcaelas/dynamite
 
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -100,7 +99,8 @@ Los decoradores son funciones especiales que anotan propiedades de clase con met
 | Decorador | Propósito | Ejemplo |
 |-----------|---------|---------|
 | `@Default(value)` | Valor por defecto | `@Default(() => Date.now()) declare createdAt: number;` |
-| `@Mutate(fn)` | Transformar antes de guardar | `@Mutate(v => v.toLowerCase()) declare email: string;` |
+| `@Set(fn)` | Transformar al escribir | `@Set(v => v.toLowerCase()) declare email: string;` |
+| `@Get(fn)` | Transformar al leer | `@Get(v => v.toUpperCase()) declare code: string;` |
 | `@Validate(fn)` | Validar antes de guardar | `@Validate(v => v.length > 0) declare name: string;` |
 | `@NotNull()` | Requerir valor no nulo | `@NotNull() declare email: string;` |
 
@@ -125,7 +125,7 @@ import {
   Table,
   PrimaryKey,
   Default,
-  Mutate,
+  Set,
   Validate,
   NotNull,
   CreatedAt,
@@ -137,12 +137,11 @@ import {
 
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   @NotNull()
-  @Mutate(v => v.trim())
-  @Mutate(v => v.toLowerCase())
+  @Set(v => v.trim())
+  @Set(v => v.toLowerCase())
   @Validate(v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) || "Email inválido")
   declare email: string;
 
@@ -217,7 +216,6 @@ const recentOrders = await Order.where({
 ```typescript
 class Product extends Table<Product> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -400,7 +398,6 @@ import { Table, PrimaryKey, Default, CreatedAt, UpdatedAt, CreationOptional } fr
 class User extends Table<User> {
   // ID autogenerado - siempre CreationOptional
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   // Campos requeridos

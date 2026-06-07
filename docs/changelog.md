@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-06-06
+
+### Breaking Changes
+
+- **Unified mutation options**: static `create`, `update`, `delete`, `increment`, `decrement` and instance `save`, `update`, `destroy`, `forceDestroy` now take a single `options` object as their last argument: `MutationOptions = { hook?: boolean; tx?: TransactionContext }`.
+- **Removed positional `tx`**: the transaction is now passed inside the options object. Replace the old trailing `tx` argument with `{ tx }` — for example `User.create(data, { tx })` and `order.destroy({ tx })`.
+
+### Added
+
+- **Lifecycle hooks**: six instance-method decorators — `@BeforeCreate`, `@AfterCreate`, `@BeforeUpdate`, `@AfterUpdate`, `@BeforeDestroy`, `@AfterDestroy`. Opt-in per operation with `{ hook: true }`. Inside a hook `this` is the entity instance; the update hooks receive the changes delta as their first argument. Multiple hooks of the same type run in declaration order and async hooks are awaited. In mass `update`/`delete` they run once per affected entity. `before*` hooks run before persisting and `after*` hooks run after (after commit inside a transaction). `increment()`/`decrement()` accept `{ tx }` but do not trigger hooks.
+- **`TransactionContext.onCommit`** now accepts async callbacks.
+
 ## [2.0.0] - 2026-04-02
 
 ### Breaking Changes
@@ -239,7 +251,8 @@ This is a stable release of @arcaelas/dynamite - a modern, decorator-first ORM f
 
 ## Version History Summary
 
-- **v1.0.23** (Current) - Documentation link fixes, TOC anchor corrections, multilingual consistency
+- **v3.0.0** (Current) - Lifecycle hooks (@Before/@After) and unified `{ hook, tx }` mutation options (breaking: positional `tx` removed)
+- **v1.0.23** - Documentation link fixes, TOC anchor corrections, multilingual consistency
 - **v1.0.20** - Documentation restructure, codebase optimization, API.md creation
 - **v1.0.17** - Added @Serialize, @DeleteAt, Dynamite.tx() transactions
 - **v1.0.13** - Stable release with full feature set

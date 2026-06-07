@@ -82,9 +82,23 @@ await user.save();
 
 ## Instanzmethoden
 
-### `save(): Promise<boolean>`
+> **Mutations-Optionen:** Die Mutationsmethoden (`save`, `update`, `destroy` sowie die statischen `create`, `update`, `delete`) akzeptieren als letztes Argument ein optionales `options`-Objekt vom Typ `MutationOptions`:
+>
+> ```typescript
+> interface MutationOptions {
+>   hook?: boolean;          // Lifecycle-Hooks ausführen
+>   tx?: TransactionContext; // Operation innerhalb einer Transaktion ausführen
+> }
+> ```
+>
+> Mit `{ hook: true }` werden die Lifecycle-Hook-Dekoratoren (`@BeforeCreate`, `@AfterCreate`, `@BeforeUpdate`, `@AfterUpdate`, `@BeforeDestroy`, `@AfterDestroy`) der Entität ausgeführt.
+
+### `save(options?: MutationOptions): Promise<boolean>`
 
 Speichert oder aktualisiert den aktuellen Datensatz in der Datenbank.
+
+**Parameter:**
+- `options` (`MutationOptions`, optional) - `{ hook?: boolean; tx?: TransactionContext }`. Mit `{ hook: true }` werden die Lifecycle-Hooks ausgeführt; mit `{ tx }` läuft die Operation innerhalb einer Transaktion.
 
 **Verhalten:**
 - Wenn der Datensatz keine `id` hat (oder sie `null`/`undefined` ist), erstellt er einen neuen Datensatz
@@ -111,12 +125,13 @@ await user.save(); // Nur updatedAt wird aktualisiert
 
 ---
 
-### `update(patch: Partial<InferAttributes<T>>): Promise<boolean>`
+### `update(patch: Partial<InferAttributes<T>>, options?: MutationOptions): Promise<boolean>`
 
 Aktualisiert den Datensatz teilweise mit den bereitgestellten Feldern.
 
 **Parameter:**
 - `patch` - Objekt mit den zu aktualisierenden Feldern
+- `options` (`MutationOptions`, optional) - `{ hook?: boolean; tx?: TransactionContext }`. Mit `{ hook: true }` werden die Lifecycle-Hooks ausgeführt; mit `{ tx }` läuft die Operation innerhalb einer Transaktion.
 
 **Rückgabe:** `true` wenn die Operation erfolgreich war
 
@@ -135,9 +150,12 @@ console.log(user.age);  // 31
 
 ---
 
-### `destroy(): Promise<null>`
+### `destroy(options?: MutationOptions): Promise<null>`
 
 Löscht den aktuellen Datensatz aus der Datenbank.
+
+**Parameter:**
+- `options` (`MutationOptions`, optional) - `{ hook?: boolean; tx?: TransactionContext }`. Mit `{ hook: true }` werden die Lifecycle-Hooks ausgeführt; mit `{ tx }` läuft die Operation innerhalb einer Transaktion.
 
 **Anforderungen:**
 - Die Instanz muss eine gültige `id` haben
@@ -189,12 +207,13 @@ console.log(json);
 
 ## Statische Methoden
 
-### `create<M>(data: InferAttributes<M>): Promise<M>`
+### `create<M>(data: InferAttributes<M>, options?: MutationOptions): Promise<M>`
 
 Erstellt und persistiert einen neuen Datensatz in der Datenbank.
 
 **Parameter:**
 - `data` - Objekt mit den Attributen des neuen Datensatzes
+- `options` (`MutationOptions`, optional) - `{ hook?: boolean; tx?: TransactionContext }`. Mit `{ hook: true }` werden die Lifecycle-Hooks ausgeführt; mit `{ tx }` läuft die Operation innerhalb einer Transaktion.
 
 **Merkmale:**
 - Erstellt eine neue Instanz
@@ -223,7 +242,7 @@ console.log(user.createdAt); // "2025-01-15T10:30:00.000Z"
 ```typescript
 @Name("users")
 class User extends Table<User> {
-  @Mutate(v => v.toLowerCase().trim())
+  @Set(v => v.toLowerCase().trim())
   @Validate(v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? true : "Email inválido")
   declare email: string;
 }
@@ -238,13 +257,14 @@ const user = await User.create({
 
 ---
 
-### `update<M>(updates: Partial<InferAttributes<M>>, filters: Partial<InferAttributes<M>>): Promise<number>`
+### `update<M>(updates: Partial<InferAttributes<M>>, filters: Partial<InferAttributes<M>>, options?: MutationOptions): Promise<number>`
 
 Aktualisiert mehrere Datensätze, die den Filtern entsprechen.
 
 **Parameter:**
 - `updates` - Objekt mit den zu aktualisierenden Feldern (`undefined`-Felder werden ignoriert)
 - `filters` - Objekt mit den Auswahlkriterien
+- `options` (`MutationOptions`, optional) - `{ hook?: boolean; tx?: TransactionContext }`. Mit `{ hook: true }` werden die Lifecycle-Hooks einmal pro betroffener Entität ausgeführt; mit `{ tx }` läuft die Operation innerhalb einer Transaktion.
 
 **Merkmale:**
 - Aktualisiert alle Datensätze, die den Filtern entsprechen
@@ -284,12 +304,13 @@ const inactiveCount = await User.update(
 
 ---
 
-### `delete<M>(filters: Partial<InferAttributes<M>>): Promise<number>`
+### `delete<M>(filters: Partial<InferAttributes<M>>, options?: MutationOptions): Promise<number>`
 
 Löscht Datensätze, die den Filtern entsprechen.
 
 **Parameter:**
 - `filters` - Objekt mit den Auswahlkriterien
+- `options` (`MutationOptions`, optional) - `{ hook?: boolean; tx?: TransactionContext }`. Mit `{ hook: true }` werden die Lifecycle-Hooks einmal pro betroffener Entität ausgeführt; mit `{ tx }` läuft die Operation innerhalb einer Transaktion.
 
 **Merkmale:**
 - Löscht alle Datensätze, die den Filtern entsprechen

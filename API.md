@@ -12,6 +12,7 @@ Dynamite es un ORM para DynamoDB basado en decoradores TypeScript que proporcion
 6. [Schema avanzado con relaciones](#6-schema-avanzado-con-relaciones)
 7. [Metodos estaticos](#7-metodos-estaticos)
 8. [Metodos de instancia](#8-metodos-de-instancia)
+9. [Hooks de ciclo de vida](#9-hooks-de-ciclo-de-vida)
 
 ---
 
@@ -120,15 +121,15 @@ Los decoradores se ejecutan de abajo hacia arriba (el mas cercano a la propiedad
 ```typescript
 class Example extends Table<Example> {
   @Validate((v) => v <= 100 || "Max 100")  // Ejecuta tercero
-  @Mutate((v) => Math.abs(v))              // Ejecuta segundo
+  @Set((v) => Math.abs(v))                  // Ejecuta segundo
   @NotNull("Requerido")                     // Ejecuta primero
   value!: number;
 }
 
-// Flujo: NotNull -> Mutate -> Validate
+// Flujo: NotNull -> Set -> Validate
 // Input: -50
 // 1. NotNull: -50 (pasa, no es null)
-// 2. Mutate: 50 (valor absoluto)
+// 2. Set: 50 (valor absoluto)
 // 3. Validate: 50 (pasa, <= 100)
 ```
 
@@ -388,23 +389,45 @@ await user.forceDestroy();
 
 ### Decoradores de Transformacion
 
-#### @Column()
+#### @Get(transformFn)
 
-Marca explicitamente una propiedad como columna de base de datos.
+Pipeline de salida: transforma el valor al leerlo. Firma: `(value) => any`. No es necesario `@Column`: cualquier propiedad declarada ya es una columna.
 
 ```typescript
-import { Column } from "./decorators/transforms";
+import { Get } from "@arcaelas/dynamite";
 
-class Product extends Table<Product> {
+class User extends Table<User> {
   @PrimaryKey()
-  id!: string;
+  declare id: string;
 
-  @Column()
-  price!: number;
-
-  @Column()
-  category_id!: string;
+  // Almacenado en minusculas, expuesto en mayusculas al leer
+  @Get((v) => typeof v === "string" ? v.toUpperCase() : v)
+  declare name: string;
 }
+```
+
+#### @Set(transformFn)
+
+Pipeline de entrada: transforma el valor al asignarlo o guardarlo. Firma: `(next, current) => any`.
+
+```typescript
+import { Set } from "@arcaelas/dynamite";
+
+class User extends Table<User> {
+  @PrimaryKey()
+  declare id: string;
+
+  @Set((next) => typeof next === "string" ? next.toLowerCase().trim() : next)
+  declare email: string;
+
+  @Set((next) => typeof next === "string" ? parseInt(next, 10) : next)
+  declare age: number;
+}
+
+// Uso
+const user = await User.create({ email: "  JUAN@EXAMPLE.COM  ", age: "25" });
+console.log(user.email); // "juan@example.com"
+console.log(user.age);   // 25 (number)
 ```
 
 #### @Default(valor | funcion)
@@ -416,7 +439,6 @@ import { Default } from "./decorators/transforms";
 
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => `user-${Date.now()}`)
   id!: string;
 
   @Default(18)
@@ -436,33 +458,6 @@ console.log(user.age); // 18
 - Valor estatico: `@Default("activo")`
 - Funcion generadora: `@Default(() => uuid())`
 - Timestamp: `@Default(() => Date.now())`
-
-#### @Mutate(transformFn)
-
-Transforma el valor cada vez que se asigna.
-
-```typescript
-import { Mutate } from "./decorators/transforms";
-
-class User extends Table<User> {
-  @PrimaryKey()
-  id!: string;
-
-  @Mutate((v) => v.toLowerCase().trim())
-  email!: string;
-
-  @Mutate((v) => typeof v === "string" ? parseInt(v, 10) : v)
-  age!: number;
-}
-
-// Uso
-const user = await User.create({
-  email: "  JUAN@EXAMPLE.COM  ",
-  age: "25"
-});
-console.log(user.email); // "juan@example.com"
-console.log(user.age);   // 25 (number)
-```
 
 #### @Validate(validador | validadores[])
 
@@ -499,27 +494,26 @@ try {
 }
 ```
 
-#### @Serialize(fromDB, toDB)
+#### Serializacion bidireccional (@Get + @Set)
 
-Transforma valores bidirecionalmente entre la aplicacion y la base de datos.
+Para transformar en ambos sentidos (lectura desde la BD con `@Get` y escritura hacia la BD con `@Set`) se combinan ambos decoradores sobre la misma propiedad.
 
 ```typescript
-import { Serialize } from "./decorators/transforms";
+import { Get, Set } from "@arcaelas/dynamite";
 
 class User extends Table<User> {
   @PrimaryKey()
-  id!: string;
+  declare id: string;
 
-  // JSON serialization
-  @Serialize(JSON.parse, JSON.stringify)
-  metadata!: Record<string, any>;
+  // JSON: objeto en la app, string en DynamoDB
+  @Get((v) => typeof v === "string" ? JSON.parse(v) : v)
+  @Set((next) => typeof next === "string" ? next : JSON.stringify(next))
+  declare metadata: Record<string, any>;
 
-  // Date serialization
-  @Serialize(
-    (v) => new Date(v),           // fromDB: string -> Date
-    (v) => v.toISOString()        // toDB: Date -> string
-  )
-  birth_date!: Date;
+  // Date: Date en la app, ISO string en DynamoDB
+  @Get((v) => typeof v === "string" ? new Date(v) : v)
+  @Set((next) => next instanceof Date ? next.toISOString() : next)
+  declare birth_date: Date;
 }
 
 // Uso
@@ -528,11 +522,10 @@ const user = await User.create({
   birth_date: new Date("1990-05-15")
 });
 
-// En la app: objeto/Date
 console.log(user.metadata.theme); // "dark"
-console.log(user.birth_date);     // Date object
+console.log(user.birth_date);     // Date
 
-// En DynamoDB: string serializado
+// En DynamoDB se almacena el string serializado:
 // { "metadata": "{\"theme\":\"dark\",\"lang\":\"es\"}" }
 ```
 
@@ -592,6 +585,51 @@ class User extends Table<User> {
 // En TypeScript: user.email
 // En DynamoDB: item.correo_electronico
 ```
+
+---
+
+### Decoradores de Hooks de ciclo de vida
+
+Marcan metodos de instancia que se ejecutan automaticamente alrededor de las operaciones de persistencia. Son **opt-in**: solo corren cuando la operacion recibe `{ hook: true }`. Dentro del hook, `this` es la entidad.
+
+| Decorador | Cuando se ejecuta | Argumento |
+|-----------|-------------------|-----------|
+| `@BeforeCreate()` | Antes de insertar. Puede mutar `this`. | - |
+| `@AfterCreate()` | Despues de insertar (`this` ya persistido). | - |
+| `@BeforeUpdate()` | Antes de actualizar. | `changes` (delta) |
+| `@AfterUpdate()` | Despues de actualizar. | `changes` (delta) |
+| `@BeforeDestroy()` | Antes de eliminar. | - |
+| `@AfterDestroy()` | Despues de eliminar. | - |
+
+```typescript
+import { Table, PrimaryKey, BeforeCreate, AfterCreate, BeforeUpdate } from "@arcaelas/dynamite";
+
+class User extends Table<User> {
+  @PrimaryKey() declare id: string;
+  declare email: string;
+  declare slug: string;
+
+  @BeforeCreate()
+  normalize() {
+    this.email = this.email.toLowerCase();
+    this.slug = this.email.split("@")[0];
+  }
+
+  @AfterCreate()
+  async welcome() {
+    await mailer.send(this.email, "Bienvenido");
+  }
+
+  @BeforeUpdate()
+  audit(changes: Partial<User>) {
+    console.log("campos modificados:", Object.keys(changes));
+  }
+}
+```
+
+- Se pueden declarar varios hooks del mismo tipo; se ejecutan en orden de declaracion.
+- Los hooks pueden ser `async`; se esperan con `await`.
+- Ver la seccion [9. Hooks de ciclo de vida](#9-hooks-de-ciclo-de-vida) para el detalle de ejecucion.
 
 ---
 
@@ -677,8 +715,8 @@ await dynamite.connect();
 
 ```typescript
 await dynamite.tx(async (tx) => {
-  const user = await User.create({ name: "Juan" }, tx);
-  await Order.create({ user_id: user.id, total: 100 }, tx);
+  const user = await User.create({ name: "Juan" }, { tx });
+  await Order.create({ user_id: user.id, total: 100 }, { tx });
   // Si alguna operacion falla, todas se revierten
 });
 ```
@@ -701,7 +739,6 @@ class Role extends Table<Role> {
    * @description Identificador unico del rol
    */
   @PrimaryKey()
-  @Default(() => `role-${Date.now()}`)
   id!: string;
 
   /**
@@ -749,7 +786,7 @@ import Table from "./core/table";
 import { PrimaryKey } from "./decorators/indexes";
 import { HasOne, HasMany, ManyToMany } from "./decorators/relations";
 import { CreatedAt, UpdatedAt } from "./decorators/timestamps";
-import { Default, NotNull, Validate, Mutate } from "./decorators/transforms";
+import { Default, NotNull, Validate, Set } from "./decorators/transforms";
 import type { CreationOptional, NonAttribute } from "./@types/index";
 import Profile from "./Profile";
 import Order from "./Order";
@@ -761,7 +798,6 @@ class User extends Table<User> {
    * @description Identificador unico del usuario
    */
   @PrimaryKey()
-  @Default(() => `user-${Date.now()}`)
   id!: string;
 
   /**
@@ -775,7 +811,7 @@ class User extends Table<User> {
    * @description Email del usuario (normalizado a minusculas)
    */
   @Validate((v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) || "Email invalido")
-  @Mutate((v) => v.toLowerCase().trim())
+  @Set((v) => v.toLowerCase().trim())
   email!: string;
 
   /**
@@ -832,7 +868,6 @@ export default User;
 @Name("profiles")
 class Profile extends Table<Profile> {
   @PrimaryKey()
-  @Default(() => `profile-${Date.now()}`)
   id!: string;
 
   user_id!: string;
@@ -849,7 +884,6 @@ class Profile extends Table<Profile> {
 @Name("orders")
 class Order extends Table<Order> {
   @PrimaryKey()
-  @Default(() => `order-${Date.now()}`)
   id!: string;
 
   user_id!: string;
@@ -915,7 +949,7 @@ import Table from "./core/table";
 import { PrimaryKey, IndexSort } from "./decorators/indexes";
 import { HasOne, HasMany, BelongsTo, ManyToMany } from "./decorators/relations";
 import { CreatedAt, UpdatedAt, DeleteAt } from "./decorators/timestamps";
-import { Default, NotNull, Validate, Mutate, Serialize, Name, Column } from "./decorators/transforms";
+import { Default, NotNull, Validate, Get, Set, Name } from "./decorators/transforms";
 import type { CreationOptional, NonAttribute } from "./@types/index";
 
 // ============================================
@@ -924,11 +958,10 @@ import type { CreationOptional, NonAttribute } from "./@types/index";
 @Name("categories")
 class Category extends Table<Category> {
   @PrimaryKey()
-  @Default(() => `cat-${Date.now()}`)
   id!: string;
 
   @NotNull()
-  @Mutate((v) => v.toLowerCase().trim())
+  @Set((v) => v.toLowerCase().trim())
   name!: string;
 
   @HasMany(() => Product, "category_id", "id")
@@ -941,7 +974,6 @@ class Category extends Table<Category> {
 @Name("tags")
 class Tag extends Table<Tag> {
   @PrimaryKey()
-  @Default(() => `tag-${Date.now()}`)
   id!: string;
 
   @NotNull()
@@ -957,7 +989,6 @@ class Tag extends Table<Tag> {
 @Name("products")
 class Product extends Table<Product> {
   @PrimaryKey()
-  @Default(() => `prod-${Date.now()}`)
   id!: string;
 
   @NotNull("El nombre del producto es requerido")
@@ -965,7 +996,7 @@ class Product extends Table<Product> {
   name!: string;
 
   @Validate((v) => v >= 0 || "El precio no puede ser negativo")
-  @Mutate((v) => Math.round(v * 100) / 100)  // Redondear a 2 decimales
+  @Set((v) => Math.round(v * 100) / 100)  // Redondear a 2 decimales
   @NotNull("El precio es requerido")
   price!: number;
 
@@ -973,11 +1004,11 @@ class Product extends Table<Product> {
   @Validate((v) => v >= 0 || "Stock no puede ser negativo")
   stock!: number;
 
-  @Serialize(JSON.parse, JSON.stringify)
+  @Get((v) => typeof v === "string" ? JSON.parse(v) : v)
+  @Set((next) => typeof next === "string" ? next : JSON.stringify(next))
   metadata?: Record<string, any>;
 
   @Name("cat_id")
-  @Column()
   category_id!: string;
 
   owner_id!: string;
@@ -1018,7 +1049,6 @@ class Product extends Table<Product> {
 @Name("product_images")
 class ProductImage extends Table<ProductImage> {
   @PrimaryKey()
-  @Default(() => `img-${Date.now()}`)
   id!: string;
 
   product_id!: string;
@@ -1039,7 +1069,6 @@ class ProductImage extends Table<ProductImage> {
 @Name("reviews")
 class Review extends Table<Review> {
   @PrimaryKey()
-  @Default(() => `review-${Date.now()}`)
   id!: string;
 
   product_id!: string;
@@ -1225,9 +1254,9 @@ const users = await User.where({ status: "active" }, {
 });
 ```
 
-### create(data, tx?)
+### create(data, options?)
 
-Crea un nuevo registro.
+Crea un nuevo registro. `options`: `{ hook?: boolean; tx?: TransactionContext }`.
 
 ```typescript
 // Creacion simple
@@ -1236,16 +1265,19 @@ const user = await User.create({
   email: "juan@example.com"
 });
 
-// Con transaccion
+// Con hooks de ciclo de vida (opt-in)
+const hooked = await User.create({ name: "Juan" }, { hook: true });
+
+// Con transaccion (tx ahora va dentro de options)
 await dynamite.tx(async (tx) => {
-  const user = await User.create({ name: "Juan" }, tx);
-  const order = await Order.create({ user_id: user.id, total: 100 }, tx);
+  const user = await User.create({ name: "Juan" }, { tx });
+  const order = await Order.create({ user_id: user.id, total: 100 }, { tx });
 });
 ```
 
-### update(cambios, filtros, tx?)
+### update(cambios, filtros, options?)
 
-Actualiza multiples registros que coincidan con los filtros.
+Actualiza multiples registros que coincidan con los filtros. `options`: `{ hook?: boolean; tx?: TransactionContext }`.
 
 ```typescript
 // Actualizar todos los usuarios inactivos
@@ -1255,20 +1287,26 @@ const affected = await User.update(
 );
 console.log(`${affected} usuarios actualizados`);
 
+// Con hooks: beforeUpdate/afterUpdate corren una vez por entidad afectada
+await User.update({ status: "active" }, { role: "admin" }, { hook: true });
+
 // Con transaccion
 await dynamite.tx(async (tx) => {
-  await User.update({ status: "active" }, { id: "user-1" }, tx);
+  await User.update({ status: "active" }, { id: "user-1" }, { tx });
 });
 ```
 
-### delete(filtros, tx?)
+### delete(filtros, options?)
 
-Elimina registros que coincidan con los filtros.
+Elimina registros que coincidan con los filtros. `options`: `{ hook?: boolean; tx?: TransactionContext }`.
 
 ```typescript
 // Eliminar usuarios suspendidos
 const deleted = await User.delete({ status: "suspended" });
 console.log(`${deleted} usuarios eliminados`);
+
+// Con hooks: beforeDestroy/afterDestroy corren una vez por entidad
+await User.delete({ status: "suspended" }, { hook: true });
 
 // Con soft delete: marca deleted_at en lugar de eliminar
 // (si el schema tiene @DeleteAt)
@@ -1334,9 +1372,9 @@ const deletedAdmins = await User.onlyTrashed({ role: "admin" });
 
 Los metodos de instancia operan sobre un registro especifico.
 
-### save()
+### save(options?)
 
-Inserta o actualiza el registro en la base de datos.
+Inserta o actualiza el registro en la base de datos. Acepta `{ hook?, tx? }`; con `hook: true` dispara los hooks de create (registro nuevo) o de update (registro persistido).
 
 ```typescript
 // Crear nuevo registro
@@ -1350,9 +1388,9 @@ user.name = "Juan Carlos";
 await user.save(); // UPDATE
 ```
 
-### update(cambios)
+### update(cambios, options?)
 
-Actualiza propiedades especificas del registro.
+Actualiza propiedades especificas del registro. Acepta `{ hook?, tx? }`; con `hook: true` los hooks `beforeUpdate`/`afterUpdate` corren sobre esta instancia y reciben el delta de cambios.
 
 ```typescript
 const user = await User.first({ id: "user-1" });
@@ -1369,9 +1407,9 @@ await user.update({
 // await user.save();
 ```
 
-### destroy()
+### destroy(options?)
 
-Elimina el registro. Si el schema tiene `@DeleteAt`, realiza soft delete.
+Elimina el registro. Si el schema tiene `@DeleteAt`, realiza soft delete. Acepta `{ hook?, tx? }`; con `hook: true` dispara `beforeDestroy`/`afterDestroy` sobre esta instancia (tambien en soft delete).
 
 ```typescript
 const user = await User.first({ id: "user-1" });
@@ -1385,9 +1423,9 @@ await user.destroy();
 // El registro se elimina permanentemente
 ```
 
-### forceDestroy()
+### forceDestroy(options?)
 
-Elimina permanentemente el registro, ignorando soft delete.
+Elimina permanentemente el registro, ignorando soft delete. Acepta `{ hook?, tx? }`; con `hook: true` dispara `beforeDestroy`/`afterDestroy`.
 
 ```typescript
 const user = await User.first({ id: "user-1" });
@@ -1481,3 +1519,49 @@ const user = await User.first({ id: "user-1" });
 console.log(user.toString());
 // "[User user-1]"
 ```
+
+---
+
+## 9. Hooks de ciclo de vida
+
+Los hooks permiten ejecutar logica alrededor de `create`, `update` y `destroy`. Se declaran con los decoradores de metodo `@BeforeCreate`, `@AfterCreate`, `@BeforeUpdate`, `@AfterUpdate`, `@BeforeDestroy` y `@AfterDestroy` (ver [seccion 2](#decoradores-de-hooks-de-ciclo-de-vida)). Se activan por operacion con el flag `hook`; por defecto **no** se ejecutan.
+
+### Activacion (opt-in)
+
+```typescript
+await User.create(data);                  // sin hooks
+await User.create(data, { hook: true });  // ejecuta beforeCreate + afterCreate
+
+await user.update({ name: "Ana" }, { hook: true });
+await user.destroy({ hook: true });
+```
+
+### Argumentos
+
+Cada hook es un metodo de instancia; `this` es la entidad. Los hooks de update reciben ademas el delta de cambios:
+
+| Hook | `this` | Argumento |
+|------|--------|-----------|
+| beforeCreate / afterCreate | instancia | - |
+| beforeUpdate / afterUpdate | instancia | `changes` |
+| beforeDestroy / afterDestroy | instancia | - |
+
+`@BeforeCreate` puede mutar `this` antes de persistir (normalizar campos, derivar valores). Si se declaran varios hooks del mismo tipo, se ejecutan en orden de declaracion.
+
+### Operaciones masivas
+
+En `User.update(cambios, filtros, { hook: true })` y `User.delete(filtros, { hook: true })`, los hooks corren **una vez por cada entidad** afectada. Con hooks de destroy activos, `delete` por clave primaria carga primero la fila para poder ejecutarlos.
+
+### Transacciones
+
+El flag `hook` se combina con `tx` en el mismo objeto de opciones. Los hooks `before*` corren al encolar la operacion; los `after*` se ejecutan despues del commit:
+
+```typescript
+await dynamite.tx(async (tx) => {
+  await User.create(data, { hook: true, tx });
+});
+// beforeCreate corrio dentro del create; afterCreate corre tras el commit
+```
+
+> `increment()` y `decrement()` aceptan `{ tx }` pero no disparan hooks.
+> Con `@DeleteAt` (soft delete), `destroy({ hook: true })` ejecuta los hooks de destroy aunque el registro solo se marque como eliminado.

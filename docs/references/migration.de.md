@@ -67,13 +67,12 @@ const users = await User.findAll({
 ```typescript
 // Dynamite (DynamoDB)
 import {
-  Table, PrimaryKey, Default, NotNull, CreatedAt,
+  Table, PrimaryKey, NotNull, CreatedAt,
   HasMany, BelongsTo, CreationOptional, NonAttribute
 } from "@arcaelas/dynamite";
 
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>; // UUID statt Auto-Increment verwenden
 
   @NotNull()
@@ -90,7 +89,6 @@ class User extends Table<User> {
 
 class Order extends Table<Order> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   @NotNull()
@@ -217,13 +215,12 @@ const users = await userRepository.find({
 ```typescript
 // Dynamite
 import {
-  Table, PrimaryKey, Default, NotNull, CreatedAt, UpdatedAt,
+  Table, PrimaryKey, NotNull, CreatedAt, UpdatedAt,
   HasMany, BelongsTo, CreationOptional, NonAttribute
 } from "@arcaelas/dynamite";
 
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   @NotNull()
@@ -243,7 +240,6 @@ class User extends Table<User> {
 
 class Order extends Table<Order> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   @NotNull()
@@ -338,13 +334,12 @@ const users = await User.find({
 ```typescript
 // Dynamite
 import {
-  Table, PrimaryKey, Default, NotNull, CreatedAt,
+  Table, PrimaryKey, NotNull, CreatedAt,
   CreationOptional
 } from "@arcaelas/dynamite";
 
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>; // MongoDB _id → DynamoDB id
 
   @NotNull()
@@ -419,7 +414,6 @@ const user = await User.create({ name: "John" });
 // Alle Konfiguration über Decorators
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   @NotNull()

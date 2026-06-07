@@ -15,6 +15,7 @@
 - **Validierung & Transformation** - Integrierte Decorators für Datenverarbeitung
 - **Soft Deletes** - @DeleteAt Decorator für wiederherstellbare Datensätze
 - **Transaktionen** - Volle Transaktionsunterstützung mit Rollback
+- **Lifecycle-Hooks** - Opt-in @Before/@After Hooks für create, update und destroy
 
 ---
 
@@ -26,7 +27,6 @@ import { Dynamite, Table, PrimaryKey, Default, CreatedAt } from '@arcaelas/dynam
 // Definiere dein Modell
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: string;
 
   declare name: string;
@@ -70,7 +70,8 @@ await user.destroy();
 | `@Index()` | Globaler Sekundärindex |
 | `@Default(value)` | Standardwert (statisch oder Funktion) |
 | `@Validate(fn)` | Validierung beim Setzen |
-| `@Mutate(fn)` | Transformation beim Setzen |
+| `@Get(fn)` | Transformation beim Lesen |
+| `@Set(fn)` | Transformation beim Schreiben |
 | `@CreatedAt()` | Auto-Setzen beim Erstellen |
 | `@UpdatedAt()` | Auto-Setzen beim Aktualisieren |
 | `@DeleteAt()` | Soft Delete Zeitstempel |

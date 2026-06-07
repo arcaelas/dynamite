@@ -48,7 +48,6 @@ import {
 
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -206,7 +205,7 @@ class User extends Table<User> {
   @PrimaryKey()
   declare id: string;
 
-  @Mutate((value) => (value as string).toLowerCase())
+  @Set((value) => (value as string).toLowerCase())
   declare email: string;
 }
 
@@ -561,7 +560,7 @@ import {
   CreatedAt,
   UpdatedAt,
   Validate,
-  Mutate,
+  Set,
   CreationOptional,
   Dynamite
 } from "@arcaelas/dynamite";
@@ -569,12 +568,11 @@ import {
 // Modelo User
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
 
-  @Mutate((value) => (value as string).toLowerCase())
+  @Set((value) => (value as string).toLowerCase())
   declare email: string;
 
   declare age: number;
@@ -598,7 +596,6 @@ class User extends Table<User> {
 // Modelo Product
 class Product extends Table<Product> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;

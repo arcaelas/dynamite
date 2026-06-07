@@ -10,8 +10,8 @@ This guide provides comprehensive documentation for all decorators available in 
 4. [@IndexSort - LSI Configuration](#indexsort-lsi-configuration)
 5. [@Default - Default Values](#default-default-values)
 6. [@Validate - Validation Functions](#validate-validation-functions)
-7. [@Mutate - Data Transformation](#mutate-data-transformation)
-8. [@Serialize - Bidirectional Transformation](#serialize-bidirectional-transformation)
+7. [@Set - Write Transformation](#set-write-transformation)
+8. [@Get and @Set - Bidirectional Transformation](#get-and-set-bidirectional-transformation)
 9. [@NotNull - Required Fields](#notnull-required-fields)
 10. [@CreatedAt - Creation Timestamp](#createdat-creation-timestamp)
 11. [@UpdatedAt - Update Timestamp](#updatedat-update-timestamp)
@@ -21,9 +21,10 @@ This guide provides comprehensive documentation for all decorators available in 
 15. [@HasOne - One to One Relationships](#hasone-one-to-one-relationships)
 16. [@BelongsTo - Many to One Relationships](#belongsto-many-to-one-relationships)
 17. [@ManyToMany - Many to Many Relationships](#manytomany-many-to-many-relationships)
-18. [Combining Multiple Decorators](#combining-multiple-decorators)
-19. [Custom Decorator Patterns](#custom-decorator-patterns)
-20. [Best Practices](#best-practices)
+18. [Lifecycle Hook Decorators](#lifecycle-hook-decorators)
+19. [Combining Multiple Decorators](#combining-multiple-decorators)
+20. [Custom Decorator Patterns](#custom-decorator-patterns)
+21. [Best Practices](#best-practices)
 
 ---
 
@@ -39,7 +40,6 @@ import { Table, PrimaryKey, Default, CreationOptional } from "@arcaelas/dynamite
 class User extends Table<User> {
   // Primary key decorator
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   // Simple field without decorators
@@ -60,8 +60,8 @@ class User extends Table<User> {
 
 **Data Decorators:**
 - `@Default()` - Sets default values
-- `@Mutate()` - Transforms values before saving
-- `@Serialize()` - Transforms values bidirectionally (DB <-> App)
+- `@Set()` - Transforms values when writing (before saving)
+- `@Get()` - Transforms values when reading (from the database)
 - `@Validate()` - Validates values before saving
 - `@NotNull()` - Marks fields as required
 
@@ -98,7 +98,6 @@ import { Table, PrimaryKey, CreationOptional, Default } from "@arcaelas/dynamite
 
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -112,7 +111,7 @@ const user = await User.create({
   // id is optional (CreationOptional) and auto-generated
 });
 
-console.log(user.id); // "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+console.log(user.id); // "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 ```
 
 ### Primary Key with Static Value
@@ -199,7 +198,6 @@ The `@Index` decorator marks a property as **Partition Key**. It is fundamental 
 ```typescript
 class Customer extends Table<Customer> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   @Index()
@@ -218,7 +216,6 @@ const customers = await Customer.where({ email: "john@example.com" });
 ```typescript
 class Article extends Table<Article> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   @Index()
@@ -381,7 +378,6 @@ The `@Default` decorator sets static or dynamic default values for properties.
 ```typescript
 class Settings extends Table<Settings> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   @Default("dark")
@@ -410,7 +406,6 @@ console.log(settings.tags); // []
 ```typescript
 class Document extends Table<Document> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   @Default(() => new Date().toISOString())
@@ -436,7 +431,6 @@ console.log(doc1.code !== doc2.code); // true
 ```typescript
 class UserProfile extends Table<UserProfile> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   @Default(() => ({
@@ -470,7 +464,6 @@ import { CreationOptional } from "@arcaelas/dynamite";
 
 class Task extends Table<Task> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare title: string; // Required
@@ -634,15 +627,17 @@ class DateRange extends Table<DateRange> {
 
 ---
 
-## @Mutate - Data Transformation
+## @Set - Write Transformation
 
-The `@Mutate` decorator transforms values before saving them to the database.
+The `@Set` decorator transforms values when writing them, before they are saved to the database.
 
 ### Syntax
 
 ```typescript
-@Mutate(transformer: (value: any) => any): PropertyDecorator
+@Set(transformer: (next: any, current: any) => any): PropertyDecorator
 ```
+
+The transformer receives the incoming value (`next`) and the current stored value (`current`). Most transformations only need `next`.
 
 ### Basic Transformations
 
@@ -651,14 +646,14 @@ class User extends Table<User> {
   @PrimaryKey()
   declare id: string;
 
-  @Mutate((v) => (v as string).toLowerCase().trim())
+  @Set((v) => (v as string).toLowerCase().trim())
   declare email: string;
 
-  @Mutate((v) => (v as string).trim())
-  @Mutate((v) => v.charAt(0).toUpperCase() + v.slice(1).toLowerCase())
+  @Set((v) => (v as string).trim())
+  @Set((v) => v.charAt(0).toUpperCase() + v.slice(1).toLowerCase())
   declare name: string;
 
-  @Mutate((v) => (v as string).replace(/\D/g, ""))
+  @Set((v) => (v as string).replace(/\D/g, ""))
   declare phone: string;
 }
 
@@ -684,14 +679,14 @@ class Article extends Table<Article> {
   @PrimaryKey()
   declare id: string;
 
-  @Mutate((v) => (v as string).trim())
-  @Mutate((v) => (v as string).replace(/\s+/g, " "))
-  @Mutate((v) => (v as string).substring(0, 200))
+  @Set((v) => (v as string).trim())
+  @Set((v) => (v as string).replace(/\s+/g, " "))
+  @Set((v) => (v as string).substring(0, 200))
   declare title: string;
 
-  @Mutate((v) => (v as string).trim())
-  @Mutate((v) => (v as string).replace(/<[^>]*>/g, ""))
-  @Mutate((v) => (v as string).substring(0, 5000))
+  @Set((v) => (v as string).trim())
+  @Set((v) => (v as string).replace(/<[^>]*>/g, ""))
+  @Set((v) => (v as string).substring(0, 5000))
   declare content: string;
 }
 ```
@@ -703,13 +698,13 @@ class Financial extends Table<Financial> {
   @PrimaryKey()
   declare transaction_id: string;
 
-  @Mutate((v) => Math.round((v as number) * 100) / 100)
+  @Set((v) => Math.round((v as number) * 100) / 100)
   declare amount: number;
 
-  @Mutate((v) => Math.max(0, Math.min(100, v as number)))
+  @Set((v) => Math.max(0, Math.min(100, v as number)))
   declare percentage: number;
 
-  @Mutate((v) => Math.abs(v as number))
+  @Set((v) => Math.abs(v as number))
   declare quantity: number;
 }
 
@@ -733,7 +728,7 @@ class Settings extends Table<Settings> {
   @PrimaryKey()
   declare user_id: string;
 
-  @Mutate((v) => {
+  @Set((v) => {
     const config = v as Record<string, any>;
     return Object.keys(config).reduce((acc, key) => {
       acc[key.toLowerCase()] = config[key];
@@ -742,51 +737,48 @@ class Settings extends Table<Settings> {
   })
   declare preferences: Record<string, any>;
 
-  @Mutate((v) => Array.from(new Set(v as string[])))
+  @Set((v) => Array.from(new Set(v as string[])))
   declare tags: string[];
 }
 ```
 
 ---
 
-## @Serialize - Bidirectional Transformation
+## @Get and @Set - Bidirectional Transformation
 
-The `@Serialize` decorator allows transforming values in both directions: when reading from the database and when saving. Unlike `@Mutate` (write-only), `@Serialize` handles the complete data cycle conversion.
+Pairing `@Get` and `@Set` on the same property transforms values in both directions: `@Get` runs when reading from the database and `@Set` runs when saving. Unlike a lone `@Set` (write-only), combining both decorators handles the complete data cycle conversion.
 
 ### Syntax
 
 ```typescript
-@Serialize(fromDB: ((value: any) => any) | null, toDB?: ((value: any) => any) | null): PropertyDecorator
+@Get(fromDB: (value: any) => any): PropertyDecorator
+@Set(toDB: (next: any, current: any) => any): PropertyDecorator
 ```
 
 ### Parameters
 
-| Parameter | Type | Description |
+| Decorator | Type | Description |
 |-----------|------|-------------|
-| `fromDB` | `Function \| null` | Transforms the value when reading from database. Use `null` to skip. |
-| `toDB` | `Function \| null` | Transforms the value when saving to database. Use `null` to skip. |
+| `@Get` | `(value) => any` | Transforms the value when reading from the database. Omit to skip. |
+| `@Set` | `(next, current) => any` | Transforms the value when saving to the database. Omit to skip. |
 
 ### Bidirectional Transformation
 
 ```typescript
-import { Serialize } from "@arcaelas/dynamite";
+import { Get, Set } from "@arcaelas/dynamite";
 
 class User extends Table<User> {
   @PrimaryKey()
   declare id: string;
 
   // Boolean stored as number in DynamoDB
-  @Serialize(
-    (from) => from === 1,     // DB: 1 -> App: true
-    (to) => to ? 1 : 0        // App: true -> DB: 1
-  )
+  @Get((from) => from === 1)     // DB: 1 -> App: true
+  @Set((to) => to ? 1 : 0)       // App: true -> DB: 1
   declare active: boolean;
 
   // JSON stored as string
-  @Serialize(
-    (from) => JSON.parse(from),           // DB: '{"a":1}' -> App: {a:1}
-    (to) => JSON.stringify(to)            // App: {a:1} -> DB: '{"a":1}'
-  )
+  @Get((from) => JSON.parse(from))           // DB: '{"a":1}' -> App: {a:1}
+  @Set((to) => JSON.stringify(to))           // App: {a:1} -> DB: '{"a":1}'
   declare metadata: Record<string, any>;
 }
 
@@ -805,7 +797,7 @@ console.log(fetched.metadata); // { role: "admin" } (not string)
 
 ### Transform Only on Save
 
-Use `null` as the first parameter to skip transformation when reading:
+Use a lone `@Set` to skip transformation when reading:
 
 ```typescript
 class Product extends Table<Product> {
@@ -813,7 +805,7 @@ class Product extends Table<Product> {
   declare sku: string;
 
   // Only normalize when saving, no transformation when reading
-  @Serialize(null, (to) => (to as string).toUpperCase().trim())
+  @Set((to) => (to as string).toUpperCase().trim())
   declare code: string;
 }
 
@@ -824,7 +816,7 @@ await Product.create({ sku: "prod-1", code: "  abc123  " });
 
 ### Transform Only on Read
 
-Omit the second parameter or use `null` to only transform when reading:
+Use a lone `@Get` to only transform when reading:
 
 ```typescript
 class Settings extends Table<Settings> {
@@ -832,11 +824,11 @@ class Settings extends Table<Settings> {
   declare user_id: string;
 
   // Parse JSON only when reading (saved as string directly)
-  @Serialize((from) => JSON.parse(from))
+  @Get((from) => JSON.parse(from))
   declare preferences: Record<string, any>;
 
   // Convert timestamp to Date only when reading
-  @Serialize((from) => new Date(from), null)
+  @Get((from) => new Date(from))
   declare last_login: Date;
 }
 ```
@@ -870,10 +862,12 @@ class UserSecret extends Table<UserSecret> {
   @PrimaryKey()
   declare user_id: string;
 
-  @Serialize(decrypt, encrypt)
+  @Get(decrypt)
+  @Set(encrypt)
   declare api_key: string;
 
-  @Serialize(decrypt, encrypt)
+  @Get(decrypt)
+  @Set(encrypt)
   declare secret_token: string;
 }
 ```
@@ -887,10 +881,8 @@ class Document extends Table<Document> {
   @PrimaryKey()
   declare id: string;
 
-  @Serialize(
-    (from) => gunzipSync(Buffer.from(from, "base64")).toString(),
-    (to) => gzipSync(to).toString("base64")
-  )
+  @Get((from) => gunzipSync(Buffer.from(from, "base64")).toString())
+  @Set((to) => gzipSync(to).toString("base64"))
   declare content: string;
 }
 ```
@@ -903,27 +895,23 @@ class Analytics extends Table<Analytics> {
   declare event_id: string;
 
   // DynamoDB Set to JavaScript Array
-  @Serialize(
-    (from) => Array.from(from),           // Set -> Array
-    (to) => new Set(to)                   // Array -> Set
-  )
+  @Get((from) => Array.from(from))           // Set -> Array
+  @Set((to) => new Set(to))                  // Array -> Set
   declare tags: string[];
 
   // BigInt for large numbers
-  @Serialize(
-    (from) => BigInt(from),
-    (to) => to.toString()
-  )
+  @Get((from) => BigInt(from))
+  @Set((to) => to.toString())
   declare large_number: bigint;
 }
 ```
 
-### Differences from @Mutate
+### @Set only vs @Get + @Set
 
-| Feature | @Mutate | @Serialize |
-|---------|---------|------------|
+| Feature | `@Set` only | `@Get` + `@Set` |
+|---------|-------------|-----------------|
 | Direction | Save only | Bidirectional |
-| Parameters | One function | Two functions (fromDB, toDB) |
+| Decorators | One decorator | Two decorators (`@Get`, `@Set`) |
 | Use case | Normalization | Type conversion |
 
 ```typescript
@@ -931,15 +919,13 @@ class Example extends Table<Example> {
   @PrimaryKey()
   declare id: string;
 
-  // @Mutate: Only normalizes when saving
-  @Mutate((v) => (v as string).toLowerCase())
+  // @Set only: Normalizes when saving
+  @Set((v) => (v as string).toLowerCase())
   declare email: string;  // "JOHN@EXAMPLE.COM" -> "john@example.com" (write only)
 
-  // @Serialize: Transforms in both directions
-  @Serialize(
-    (from) => from === 1,
-    (to) => to ? 1 : 0
-  )
+  // @Get + @Set: Transforms in both directions
+  @Get((from) => from === 1)
+  @Set((to) => to ? 1 : 0)
   declare active: boolean;  // true <-> 1 (read and write)
 }
 ```
@@ -961,7 +947,6 @@ The `@NotNull` decorator marks fields as required, validating that they are not 
 ```typescript
 class Customer extends Table<Customer> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   @NotNull()
@@ -1003,7 +988,7 @@ class Registration extends Table<Registration> {
   declare id: string;
 
   @NotNull()
-  @Mutate((v) => (v as string).toLowerCase().trim())
+  @Set((v) => (v as string).toLowerCase().trim())
   @Validate((v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v as string) || "Invalid email")
   declare email: string;
 
@@ -1053,7 +1038,6 @@ The `@CreatedAt` decorator automatically sets the creation date and time in ISO 
 ```typescript
 class Post extends Table<Post> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare title: string;
@@ -1077,7 +1061,6 @@ console.log(post.created_at); // "2025-01-15T10:30:00.123Z"
 ```typescript
 class AuditLog extends Table<AuditLog> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare user_id: string;
@@ -1143,7 +1126,6 @@ The `@UpdatedAt` decorator automatically updates the date and time each time the
 ```typescript
 class Document extends Table<Document> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare title: string;
@@ -1178,7 +1160,6 @@ console.log(doc.updated_at); // "2025-01-15T10:15:00Z" (updated)
 ```typescript
 class Article extends Table<Article> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare title: string;
@@ -1257,7 +1238,6 @@ import { DeleteAt } from "@arcaelas/dynamite";
 
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -1349,7 +1329,6 @@ if (deleted_doc[0]) {
 ```typescript
 class File extends Table<File> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -1401,7 +1380,6 @@ async function list_trash(owner_id: string): Promise<File[]> {
 ```typescript
 class Post extends Table<Post> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare title: string;
@@ -1451,11 +1429,11 @@ await dynamite.tx(async (tx) => {
 
   // Soft delete all orders
   for (const order of orders) {
-    await order.destroy(tx);
+    await order.destroy({ tx });
   }
 
   // Soft delete user
-  await user.destroy(tx);
+  await user.destroy({ tx });
 });
 ```
 
@@ -1577,7 +1555,6 @@ class User extends Table<User> {
 
 class Order extends Table<Order> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   @NotNull()
@@ -1696,7 +1673,6 @@ class User extends Table<User> {
 
 class Profile extends Table<Profile> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   @NotNull()
@@ -1982,6 +1958,79 @@ console.log(student?.courses); // Course[]
 
 ---
 
+## Lifecycle Hook Decorators
+
+Method decorators that run automatically around persistence operations. They are opt-in: they only run when the operation receives `{ hook: true }`. Inside a hook, `this` is the entity instance.
+
+| Decorator | Runs | Argument |
+|-----------|------|----------|
+| `@BeforeCreate()` | Before insert. May mutate `this`. | — |
+| `@AfterCreate()` | After insert (`this` already persisted). | — |
+| `@BeforeUpdate()` | Before update. | `changes` (delta) |
+| `@AfterUpdate()` | After update. | `changes` (delta) |
+| `@BeforeDestroy()` | Before delete. | — |
+| `@AfterDestroy()` | After delete. | — |
+
+### Example
+
+```typescript
+import {
+  Table,
+  PrimaryKey,
+  CreationOptional,
+  BeforeCreate,
+  AfterCreate,
+  BeforeUpdate
+} from "@arcaelas/dynamite";
+
+class User extends Table<User> {
+  @PrimaryKey()
+  declare id: CreationOptional<string>;
+
+  declare name: string;
+  declare email: string;
+  declare slug: string;
+
+  @BeforeCreate()
+  normalize() {
+    // `this` is the entity; mutations are persisted
+    this.email = this.email.toLowerCase().trim();
+    this.slug = this.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  }
+
+  @AfterCreate()
+  async notify() {
+    // Runs after the record has been persisted
+    await sendWelcomeEmail(this.email);
+  }
+
+  @BeforeUpdate()
+  syncEmail(changes: Partial<User>) {
+    // `changes` holds the delta about to be written
+    if (changes.email) {
+      this.email = changes.email.toLowerCase().trim();
+    }
+  }
+}
+
+// Hooks only run when explicitly enabled
+const user = await User.create(
+  { name: "John Doe", email: "  JOHN@EXAMPLE.COM  " },
+  { hook: true }
+);
+
+console.log(user.email); // "john@example.com"
+console.log(user.slug);  // "john-doe"
+```
+
+- Multiple hooks of the same type run in declaration order; async hooks are awaited.
+- Activate per operation: `User.create(data, { hook: true })`, `user.update(data, { hook: true })`, `user.destroy({ hook: true })`.
+- In mass `update`/`delete`, hooks run once per affected entity.
+- Inside a transaction (`{ hook: true, tx }`), `before*` run when queued and `after*` after commit.
+- `increment()`/`decrement()` accept `{ tx }` but do not trigger hooks.
+
+---
+
 ## Combining Multiple Decorators
 
 ### Complete Model with All Decorators
@@ -1994,8 +2043,8 @@ import {
   IndexSort,
   Default,
   Validate,
-  Mutate,
-  Serialize,
+  Get,
+  Set,
   NotNull,
   CreatedAt,
   UpdatedAt,
@@ -2012,17 +2061,16 @@ import {
 @Name("users")
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   @NotNull()
-  @Mutate((v) => (v as string).toLowerCase().trim())
+  @Set((v) => (v as string).toLowerCase().trim())
   @Validate((v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v as string) || "Invalid email")
   @Name("email_address")
   declare email: string;
 
   @NotNull()
-  @Mutate((v) => (v as string).trim())
+  @Set((v) => (v as string).trim())
   @Validate([
     (v) => (v as string).length >= 2 || "Name too short",
     (v) => (v as string).length <= 50 || "Name too long"
@@ -2038,16 +2086,12 @@ class User extends Table<User> {
   declare role: CreationOptional<string>;
 
   @Default(() => true)
-  @Serialize(
-    (from) => from === 1,
-    (to) => to ? 1 : 0
-  )
+  @Get((from) => from === 1)
+  @Set((to) => to ? 1 : 0)
   declare active: CreationOptional<boolean>;
 
-  @Serialize(
-    (from) => JSON.parse(from),
-    (to) => JSON.stringify(to)
-  )
+  @Get((from) => JSON.parse(from))
+  @Set((to) => JSON.stringify(to))
   declare preferences: CreationOptional<Record<string, any>>;
 
   @CreatedAt()
@@ -2213,7 +2257,7 @@ class Product extends Table<Product> {
 ```typescript
 import { decorator } from "@arcaelas/dynamite";
 
-// Bidirectional transformation (similar to @Serialize but customized)
+// Bidirectional transformation (similar to @Get + @Set but customized)
 export const JsonColumn = decorator((col) => {
   // On save: object -> JSON string
   col.set((current, next) => {
@@ -2374,16 +2418,16 @@ Combine multiple existing decorators into one:
 function EmailField(): PropertyDecorator {
   return (target: any, prop: string | symbol) => {
     NotNull()(target, prop);
-    Mutate((v) => (v as string).toLowerCase().trim())(target, prop);
+    Set((v) => (v as string).toLowerCase().trim())(target, prop);
     Validate((v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v as string) || "Invalid email")(target, prop);
   };
 }
 
 function SlugField(): PropertyDecorator {
   return (target: any, prop: string | symbol) => {
-    Mutate((v) => (v as string).toLowerCase())(target, prop);
-    Mutate((v) => (v as string).replace(/[^a-z0-9]+/g, "-"))(target, prop);
-    Mutate((v) => (v as string).replace(/^-+|-+$/g, ""))(target, prop);
+    Set((v) => (v as string).toLowerCase())(target, prop);
+    Set((v) => (v as string).replace(/[^a-z0-9]+/g, "-"))(target, prop);
+    Set((v) => (v as string).replace(/^-+|-+$/g, ""))(target, prop);
     Validate((v) => (v as string).length > 0 || "Slug cannot be empty")(target, prop);
   };
 }
@@ -2477,12 +2521,11 @@ class User extends Table<User> {
 class User extends Table<User> {
   // Recommended order: Key -> Validation -> Transformation -> Defaults -> Timestamps
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   @NotNull()
   @Validate((v) => /^[^\s@]+@/.test(v as string) || "Invalid")
-  @Mutate((v) => (v as string).toLowerCase())
+  @Set((v) => (v as string).toLowerCase())
   @Name("email_address")
   declare email: string;
 }

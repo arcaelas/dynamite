@@ -33,7 +33,6 @@ import {
 class User extends Table<User> {
   // Automatisch generierter Primärschlüssel
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   // Erforderliches Feld bei Erstellung
@@ -407,7 +406,6 @@ import {
 // User-Modell definieren
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;

@@ -8,11 +8,13 @@ Dieser Leitfaden bietet umfassende Dokumentation zu allen in Dynamite ORM verfü
 2. [@PrimaryKey - Primarschlussel](#primarykey-primarschlussel)
 3. [@Default - Standardwerte](#default-standardwerte)
 4. [@Validate - Validierungsfunktionen](#validate-validierungsfunktionen)
-5. [@Mutate - Datentransformation](#mutate-datentransformation)
-6. [@NotNull - Erforderliche Felder](#notnull-erforderliche-felder)
-7. [@CreatedAt - Erstellungs-Zeitstempel](#createdat-erstellungs-zeitstempel)
-8. [@UpdatedAt - Aktualisierungs-Zeitstempel](#updatedat-aktualisierungs-zeitstempel)
-9. [Best Practices](#best-practices)
+5. [@Set - Transformation beim Schreiben](#set-transformation-beim-schreiben)
+6. [@Get - Transformation beim Lesen](#get-transformation-beim-lesen)
+7. [@NotNull - Erforderliche Felder](#notnull-erforderliche-felder)
+8. [@CreatedAt - Erstellungs-Zeitstempel](#createdat-erstellungs-zeitstempel)
+9. [@UpdatedAt - Aktualisierungs-Zeitstempel](#updatedat-aktualisierungs-zeitstempel)
+10. [Lifecycle-Hook-Dekoratoren](#lifecycle-hook-dekoratoren)
+11. [Best Practices](#best-practices)
 
 ---
 
@@ -28,7 +30,6 @@ import { Table, PrimaryKey, Default, CreationOptional } from "@arcaelas/dynamite
 class User extends Table<User> {
   // Primärschlüssel-Decorator
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   // Einfaches Feld ohne Decorators
@@ -49,7 +50,8 @@ class User extends Table<User> {
 
 **Daten-Decorators:**
 - `@Default()` - Setzt Standardwerte
-- `@Mutate()` - Transformiert Werte vor dem Speichern
+- `@Set()` - Transformiert Werte beim Schreiben
+- `@Get()` - Transformiert Werte beim Lesen
 - `@Validate()` - Validiert Werte vor dem Speichern
 - `@NotNull()` - Markiert Felder als erforderlich
 
@@ -68,7 +70,7 @@ class User extends Table<User> {
 
 ## @PrimaryKey - Primärschlüssel
 
-Der `@PrimaryKey`-Decorator definiert den Primärschlüssel der Tabelle. Intern wendet er automatisch `@Index` und `@IndexSort` an.
+Der `@PrimaryKey`-Decorator definiert den Primärschlüssel der Tabelle. Intern wendet er automatisch `@Index` und `@IndexSort` an. Er generiert und validiert außerdem automatisch eine ULID für das Feld; kombinieren Sie ihn daher nicht mit einem `@Default()`, das eine eigene ID erzeugt (z. B. ein UUID), da dies fehlschlägt.
 
 ### Syntax
 
@@ -79,11 +81,10 @@ Der `@PrimaryKey`-Decorator definiert den Primärschlüssel der Tabelle. Intern 
 ### Einfacher Primärschlüssel
 
 ```typescript
-import { Table, PrimaryKey, CreationOptional, Default } from "@arcaelas/dynamite";
+import { Table, PrimaryKey, CreationOptional } from "@arcaelas/dynamite";
 
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -97,7 +98,7 @@ const user = await User.create({
   // id ist optional (CreationOptional) und wird automatisch generiert
 });
 
-console.log(user.id); // "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+console.log(user.id); // "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 ```
 
 ---
@@ -117,7 +118,6 @@ Der `@Default`-Decorator setzt statische oder dynamische Standardwerte für Eige
 ```typescript
 class Settings extends Table<Settings> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   @Default("dark")
@@ -146,7 +146,6 @@ console.log(settings.tags); // []
 ```typescript
 class Document extends Table<Document> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   @Default(() => new Date().toISOString())
@@ -239,15 +238,17 @@ class Password extends Table<Password> {
 
 ---
 
-## @Mutate - Datentransformation
+## @Set - Transformation beim Schreiben
 
-Der `@Mutate`-Decorator transformiert Werte, bevor sie in der Datenbank gespeichert werden.
+Der `@Set`-Decorator transformiert Werte, bevor sie in die Datenbank geschrieben werden.
 
 ### Syntax
 
 ```typescript
-@Mutate(transformer: (value: any) => any): PropertyDecorator
+@Set(transformer: (next: any, current: any) => any): PropertyDecorator
 ```
+
+Die Transformerfunktion erhält den neuen Wert (`next`) und den aktuellen Wert (`current`) der Eigenschaft.
 
 ### Grundlegende Transformationen
 
@@ -256,14 +257,14 @@ class User extends Table<User> {
   @PrimaryKey()
   declare id: string;
 
-  @Mutate((v) => (v as string).toLowerCase().trim())
+  @Set((v) => (v as string).toLowerCase().trim())
   declare email: string;
 
-  @Mutate((v) => (v as string).trim())
-  @Mutate((v) => v.charAt(0).toUpperCase() + v.slice(1).toLowerCase())
+  @Set((v) => (v as string).trim())
+  @Set((v) => v.charAt(0).toUpperCase() + v.slice(1).toLowerCase())
   declare name: string;
 
-  @Mutate((v) => (v as string).replace(/\D/g, ""))
+  @Set((v) => (v as string).replace(/\D/g, ""))
   declare phone: string;
 }
 
@@ -282,6 +283,49 @@ console.log(user.phone); // "15551234567"
 
 ---
 
+## @Get - Transformation beim Lesen
+
+Der `@Get`-Decorator transformiert Werte, wenn sie aus der Datenbank gelesen werden. Er ist das Gegenstück zu `@Set` und eignet sich, um gespeicherte Rohwerte beim Zugriff in ein bequemeres Format zu überführen.
+
+### Syntax
+
+```typescript
+@Get(transformer: (value: any) => any): PropertyDecorator
+```
+
+### Grundlegende Transformationen
+
+```typescript
+class Event extends Table<Event> {
+  @PrimaryKey()
+  declare id: string;
+
+  // Beim Schreiben als ISO-String speichern, beim Lesen als Date zurückgeben
+  @Set((v) => (v as Date).toISOString())
+  @Get((v) => new Date(v as string))
+  declare starts_at: Date;
+
+  // Komma-getrennte Tags speichern, beim Lesen als Array zurückgeben
+  @Set((v) => (v as string[]).join(","))
+  @Get((v) => (v as string).split(","))
+  declare tags: string[];
+}
+
+// Verwendung
+const event = await Event.create({
+  id: "event-1",
+  starts_at: new Date("2025-01-15T10:30:00.000Z"),
+  tags: ["typescript", "dynamodb"]
+});
+
+console.log(event.starts_at instanceof Date); // true
+console.log(event.tags); // ["typescript", "dynamodb"]
+```
+
+> **Hinweis:** Ältere Schreib- und Serialisierungs-Decorators wurden durch `@Get` (Lesen) und `@Set` (Schreiben) ersetzt. Migrationsdetails finden Sie im [Migrationsleitfaden](./migration.de.md).
+
+---
+
 ## @NotNull - Erforderliche Felder
 
 Der `@NotNull`-Decorator markiert Felder als erforderlich und validiert, dass sie nicht null, undefined oder leere Strings sind.
@@ -297,7 +341,6 @@ Der `@NotNull`-Decorator markiert Felder als erforderlich und validiert, dass si
 ```typescript
 class Customer extends Table<Customer> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   @NotNull()
@@ -348,7 +391,6 @@ Der `@CreatedAt`-Decorator setzt automatisch Datum und Uhrzeit der Erstellung im
 ```typescript
 class Post extends Table<Post> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare title: string;
@@ -384,7 +426,6 @@ Der `@UpdatedAt`-Decorator aktualisiert automatisch Datum und Uhrzeit bei jedem 
 ```typescript
 class Document extends Table<Document> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare title: string;
@@ -416,6 +457,72 @@ console.log(doc.updated_at); // "2025-01-15T10:15:00Z" (aktualisiert)
 
 ---
 
+## Lifecycle-Hook-Dekoratoren
+
+Lifecycle-Hooks sind Methoden-Dekoratoren, die automatisch rund um die Persistenz-Operationen ausgeführt werden. Sie sind pro Operation opt-in und werden nur aktiviert, wenn die Operation mit `{ hook: true }` aufgerufen wird. Innerhalb eines Hooks verweist `this` auf die Entität, sodass deren Felder gelesen und mutiert werden können.
+
+### Verfügbare Hooks
+
+| Dekorator | Zeitpunkt | Argument |
+|-----------|-----------|----------|
+| `@BeforeCreate()` | vor dem Einfügen, kann `this` mutieren | kein Argument |
+| `@AfterCreate()` | nach dem Einfügen (`this` bereits persistiert) | kein Argument |
+| `@BeforeUpdate()` | vor dem Update | `changes` (Delta) |
+| `@AfterUpdate()` | nach dem Update | `changes` (Delta) |
+| `@BeforeDestroy()` | vor dem Löschen | kein Argument |
+| `@AfterDestroy()` | nach dem Löschen | kein Argument |
+
+### Grundlegende Verwendung
+
+```typescript
+import {
+  Table,
+  PrimaryKey,
+  CreationOptional,
+  BeforeCreate,
+  AfterCreate,
+  BeforeUpdate
+} from "@arcaelas/dynamite";
+
+class User extends Table<User> {
+  @PrimaryKey()
+  declare id: CreationOptional<string>;
+
+  declare email: string;
+  declare name: string;
+  declare slug: string;
+
+  @BeforeCreate()
+  normalize() {
+    // `this` ist die Entität und kann mutiert werden
+    this.email = this.email.toLowerCase().trim();
+    this.slug = this.name.toLowerCase().replace(/\s+/g, "-");
+  }
+
+  @AfterCreate()
+  async notify() {
+    // async-Hooks werden awaited
+    await sendWelcomeEmail(this.email);
+  }
+
+  @BeforeUpdate()
+  audit(changes: Partial<User>) {
+    // `changes` enthält das Delta der zu aktualisierenden Felder
+    console.log("Geänderte Felder:", Object.keys(changes));
+  }
+}
+```
+
+### Verhalten
+
+- Mehrere Hooks desselben Typs laufen in Deklarationsreihenfolge; async-Hooks werden awaited.
+- Aktivierung pro Operation: `User.create(data, { hook: true })`, `user.update(data, { hook: true })`, `user.destroy({ hook: true })`.
+- Bei Massen-`update`/`delete` laufen die Hooks einmal pro betroffener Entität.
+- Innerhalb einer Transaktion (`{ hook: true, tx }`) laufen `before*` beim Einreihen und `after*` nach dem Commit.
+- `increment()`/`decrement()` akzeptieren `{ tx }`, lösen aber keine Hooks aus.
+
+---
+
 ## Best Practices
 
 ### 1. CreationOptional richtig verwenden
@@ -442,12 +549,11 @@ class User extends Table<User> {
 class User extends Table<User> {
   // Empfohlene Reihenfolge: Schlüssel → Validierung → Transformation → Defaults → Zeitstempel
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   @NotNull()
   @Validate((v) => /^[^\s@]+@/.test(v as string) || "Ungültig")
-  @Mutate((v) => (v as string).toLowerCase())
+  @Set((v) => (v as string).toLowerCase())
   @Name("email_address")
   declare email: string;
 }

@@ -57,7 +57,6 @@ Definieren Sie eine Eins-zu-Viele-Beziehung, bei der ein Elternmodell mehrere zu
 import {
   Table,
   PrimaryKey,
-  Default,
   HasMany,
   CreationOptional,
   NonAttribute
@@ -66,7 +65,6 @@ import {
 // User-Modell (Eltern)
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -80,7 +78,6 @@ class User extends Table<User> {
 // Post-Modell (Kind)
 class Post extends Table<Post> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare user_id: string; // Fremdschlüssel
@@ -123,7 +120,6 @@ Ein Modell kann mehrere Eins-zu-Viele-Beziehungen haben:
 ```typescript
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -166,7 +162,6 @@ Definieren Sie eine Viele-zu-Eins-Beziehung, bei der ein Kindmodell zu einem ein
 // Post-Modell (Kind)
 class Post extends Table<Post> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare user_id: string; // Fremdschlüssel
@@ -181,7 +176,6 @@ class Post extends Table<Post> {
 // User-Modell (Eltern)
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -332,7 +326,6 @@ Hier ist ein vollständiges E-Commerce-System, das alle Beziehungsmuster demonst
 import {
   Table,
   PrimaryKey,
-  Default,
   HasMany,
   BelongsTo,
   CreatedAt,
@@ -345,7 +338,6 @@ import {
 // User-Modell
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -362,7 +354,6 @@ class User extends Table<User> {
 // Product-Modell
 class Product extends Table<Product> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -379,7 +370,6 @@ class Product extends Table<Product> {
 // Order-Modell
 class Order extends Table<Order> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare user_id: string;
@@ -399,7 +389,6 @@ class Order extends Table<Order> {
 // OrderItem-Modell
 class OrderItem extends Table<OrderItem> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare order_id: string;

@@ -44,7 +44,6 @@ import { Table, PrimaryKey, Default, CreatedAt, UpdatedAt, CreationOptional } fr
 class User extends Table<User> {
   // Auto-generated primary key
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   // Required field (no CreationOptional)
@@ -69,7 +68,7 @@ const user = await User.create({
 });
 
 // After creation, all fields are present
-console.log(user.id);         // "550e8400-e29b-..."
+console.log(user.id);         // "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 console.log(user.role);       // "customer"
 console.log(user.created_at); // "2025-01-15T10:30:00.000Z"
 ```

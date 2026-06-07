@@ -51,7 +51,6 @@ import { Table, PrimaryKey, Default, CreationOptional } from "@arcaelas/dynamite
 
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -100,7 +99,8 @@ Decorators are special functions that annotate class properties with metadata. D
 | Decorator | Purpose | Example |
 |-----------|---------|---------|
 | `@Default(value)` | Default value | `@Default(() => Date.now()) declare created_at: number;` |
-| `@Mutate(fn)` | Transform before save | `@Mutate(v => v.toLowerCase()) declare email: string;` |
+| `@Get(fn)` | Transform on read | `@Get(v => JSON.parse(v)) declare data: object;` |
+| `@Set(fn)` | Transform on write | `@Set(v => v.toLowerCase()) declare email: string;` |
 | `@Validate(fn)` | Validate before save | `@Validate(v => v.length > 0) declare name: string;` |
 | `@NotNull()` | Require non-null value | `@NotNull() declare email: string;` |
 
@@ -127,7 +127,7 @@ import {
   Table,
   PrimaryKey,
   Default,
-  Mutate,
+  Set,
   Validate,
   NotNull,
   CreatedAt,
@@ -139,12 +139,11 @@ import {
 
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   @NotNull()
-  @Mutate(v => v.trim())
-  @Mutate(v => v.toLowerCase())
+  @Set(v => v.trim())
+  @Set(v => v.toLowerCase())
   @Validate(v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) || "Invalid email")
   declare email: string;
 
@@ -219,7 +218,6 @@ const recentOrders = await Order.where({
 ```typescript
 class Product extends Table<Product> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -232,7 +230,7 @@ const product = await Product.create({
   price: 9.99
 });
 
-console.log(product.id); // "550e8400-e29b-41d4-a716-446655440000"
+console.log(product.id); // "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 ```
 
 ---
@@ -501,7 +499,6 @@ import { Table, PrimaryKey, Default, CreatedAt, UpdatedAt, CreationOptional } fr
 class User extends Table<User> {
   // Auto-generated ID - always CreationOptional
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   // Required fields
@@ -673,7 +670,6 @@ import {
 class User extends Table<User> {
   // Auto-generated (CreationOptional)
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   // Required
@@ -749,10 +745,10 @@ Understanding how data flows through Dynamite helps you use it effectively. Here
 1. MODEL DEFINITION
    ┌────────────────────────────────────────────────────────┐
    │ class User extends Table<User> {                       │
-   │   @PrimaryKey() @Default(() => uuid())                 │
+   │   @PrimaryKey()                                         │
    │   declare id: CreationOptional<string>;                │
    │                                                         │
-   │   @Mutate(v => v.toLowerCase())                        │
+   │   @Set(v => v.toLowerCase())                           │
    │   @Validate(v => isEmail(v))                           │
    │   declare email: string;                               │
    │ }                                                       │
@@ -766,11 +762,10 @@ Understanding how data flows through Dynamite helps you use it effectively. Here
    │ │   name: "User",                                  │   │
    │ │   columns: Map {                                 │   │
    │ │     "id" => {                                    │   │
-   │ │       primaryKey: true,                          │   │
-   │ │       default: () => uuid()                      │   │
+   │ │       primaryKey: true                           │   │
    │ │     },                                           │   │
    │ │     "email" => {                                 │   │
-   │ │       mutate: [v => v.toLowerCase()],            │   │
+   │ │       set: [v => v.toLowerCase()],               │   │
    │ │       validate: [v => isEmail(v)]                │   │
    │ │     }                                            │   │
    │ │   }                                              │   │
@@ -789,10 +784,10 @@ Understanding how data flows through Dynamite helps you use it effectively. Here
    ┌────────────────────────────────────────────────────────┐
    │ new User(data)                                         │
    │   ↓                                                    │
-   │ Apply @Default decorators                              │
-   │   id = uuid() → "550e8400-..."                         │
+   │ Apply @PrimaryKey autogeneration                       │
+   │   id = ulid() → "01ARZ3NDEK..."                        │
    │   ↓                                                    │
-   │ Apply @Mutate decorators                               │
+   │ Apply @Set decorators                                  │
    │   email = "john@example.com" (lowercased)              │
    │   ↓                                                    │
    │ Apply @Validate decorators                             │
@@ -809,7 +804,7 @@ Understanding how data flows through Dynamite helps you use it effectively. Here
    │   ↓                                                    │
    │ Extract attributes (exclude NonAttribute fields)       │
    │   {                                                    │
-   │     id: "550e8400-...",                                │
+   │     id: "01ARZ3NDEK...",                                │
    │     email: "john@example.com",                         │
    │     created_at: "2023-12-01T10:30:00.000Z",            │
    │     updated_at: "2023-12-01T10:30:00.000Z"             │
@@ -822,7 +817,7 @@ Understanding how data flows through Dynamite helps you use it effectively. Here
    │   ↓                                                    │
    │ marshall(data) → DynamoDB format                       │
    │   {                                                    │
-   │     id: { S: "550e8400-..." },                         │
+   │     id: { S: "01ARZ3NDEK..." },                         │
    │     email: { S: "john@example.com" },                  │
    │     created_at: { S: "2023-12-01T10:30:00.000Z" },     │
    │     updated_at: { S: "2023-12-01T10:30:00.000Z" }      │
@@ -880,8 +875,8 @@ RELATIONSHIP LOADING
 
 1. **Decorator Registration**: Happens once at class definition time
 2. **Default Values**: Applied in constructor before validation
-3. **Mutations**: Applied before validation, transforms data
-4. **Validation**: Runs after mutations, can throw errors
+3. **Setters**: `@Set` transforms applied before validation on write
+4. **Validation**: Runs after setters, can throw errors
 5. **Timestamps**: Auto-set on create/update operations
 6. **Serialization**: Excludes NonAttribute fields before persistence
 7. **Relationships**: Loaded lazily through separate queries

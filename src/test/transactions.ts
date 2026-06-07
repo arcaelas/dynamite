@@ -45,8 +45,8 @@ export default async function transactions() {
   console.log('-- Multi-create --');
   let a1: Account | undefined, a2: Account | undefined;
   await dynamite.tx(async (tx) => {
-    a1 = await Account.create({ name: 'Alice', balance: 1000 }, tx);
-    a2 = await Account.create({ name: 'Bob', balance: 500 }, tx);
+    a1 = await Account.create({ name: 'Alice', balance: 1000 }, { tx });
+    a2 = await Account.create({ name: 'Bob', balance: 500 }, { tx });
   });
   assert('tx multi-create: ambos persistidos', (a1 as any).__isPersisted && (a2 as any).__isPersisted);
   const alice = await Account.first({ id: a1!.id });
@@ -58,8 +58,8 @@ export default async function transactions() {
   console.log('\n-- Create + increment --');
   let log1: TxLog | undefined;
   await dynamite.tx(async (tx) => {
-    log1 = await TxLog.create({ account_id: a1!.id, action: 'deposit', amount: 200 }, tx);
-    await Account.increment('balance', 200, { id: a1!.id }, tx);
+    log1 = await TxLog.create({ account_id: a1!.id, action: 'deposit', amount: 200 }, { tx });
+    await Account.increment('balance', 200, { id: a1!.id }, { tx });
   });
   const alice_after = await Account.first({ id: a1!.id });
   assert('tx increment: balance +200', alice_after?.balance === 1200);
@@ -70,10 +70,10 @@ export default async function transactions() {
   // -- Transferencia atomica (decrement + increment + log) --
   console.log('\n-- Transferencia atomica --');
   await dynamite.tx(async (tx) => {
-    await Account.decrement('balance', 300, { id: a1!.id }, tx);
-    await Account.increment('balance', 300, { id: a2!.id }, tx);
-    await TxLog.create({ account_id: a1!.id, action: 'transfer_out', amount: 300 }, tx);
-    await TxLog.create({ account_id: a2!.id, action: 'transfer_in', amount: 300 }, tx);
+    await Account.decrement('balance', 300, { id: a1!.id }, { tx });
+    await Account.increment('balance', 300, { id: a2!.id }, { tx });
+    await TxLog.create({ account_id: a1!.id, action: 'transfer_out', amount: 300 }, { tx });
+    await TxLog.create({ account_id: a2!.id, action: 'transfer_in', amount: 300 }, { tx });
   });
   const alice_transfer = await Account.first({ id: a1!.id });
   const bob_transfer = await Account.first({ id: a2!.id });
@@ -86,8 +86,8 @@ export default async function transactions() {
   let failed_account: Account | undefined;
   try {
     await dynamite.tx(async (tx) => {
-      failed_account = await Account.create({ name: 'Ghost' }, tx);
-      await Account.increment('balance', 99999, { id: a1!.id }, tx);
+      failed_account = await Account.create({ name: 'Ghost' }, { tx });
+      await Account.increment('balance', 99999, { id: a1!.id }, { tx });
       throw new Error('Simulated failure');
     });
   } catch {}
@@ -102,7 +102,7 @@ export default async function transactions() {
   const ids: string[] = [];
   await dynamite.tx(async (tx) => {
     for (let i = 0; i < 30; i++) {
-      const acc = await Account.create({ name: `Bulk_${i}`, balance: i }, tx);
+      const acc = await Account.create({ name: `Bulk_${i}`, balance: i }, { tx });
       ids.push(acc.id);
     }
   });

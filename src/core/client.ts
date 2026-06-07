@@ -366,7 +366,7 @@ export const requireClient = (): DynamoDBClient => {
  */
 export class TransactionContext {
   private operations: TransactionItem[] = [];
-  private after_commit: (() => void)[] = [];
+  private after_commit: (() => void | Promise<void>)[] = [];
   private client: DynamoDBClient;
 
   constructor(client: DynamoDBClient) {
@@ -412,10 +412,10 @@ export class TransactionContext {
   }
 
   /**
-   * @description Register a callback to run after successful commit.
-   * @description Registra un callback que se ejecuta después de un commit exitoso.
+   * @description Register a callback (sync or async) to run after successful commit.
+   * @description Registra un callback (síncrono o asíncrono) que se ejecuta después de un commit exitoso.
    */
-  onCommit(fn: () => void): void {
+  onCommit(fn: () => void | Promise<void>): void {
     this.after_commit.push(fn);
   }
 
@@ -430,7 +430,7 @@ export class TransactionContext {
       );
     }
 
-    for (const fn of this.after_commit) fn();
+    for (const fn of this.after_commit) await fn();
   }
 
   private guard(): void {

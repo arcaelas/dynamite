@@ -6,10 +6,20 @@
 
 export const SCHEMA = Symbol('dynamite:schema');
 
+/**
+ * @description Lifecycle hook types supported by models.
+ * @description Tipos de hooks de ciclo de vida soportados por los modelos.
+ */
+export type HookType =
+  | 'beforeCreate' | 'afterCreate'
+  | 'beforeUpdate' | 'afterUpdate'
+  | 'beforeDestroy' | 'afterDestroy';
+
 export interface Schema {
   name: string;
   primary_key: string;
   gsis: Set<string>;
+  hooks: Record<HookType, string[]>;
   columns: Record<string, {
     name: string;
     get: ((value: any) => any)[];
@@ -42,13 +52,27 @@ function toSnakePlural(str: string): string {
   return snake.endsWith("s") ? snake : snake + "s";
 }
 
-function resolve(target: any, propertyKey: string | symbol): [Schema, Schema['columns'][string]] {
-  const ctor = target.constructor;
+/**
+ * @description Get (or lazily create) the Schema bound to a model class, with columns and hooks initialized.
+ * @description Obtiene (o crea perezosamente) el Schema asociado a una clase de modelo, con columns y hooks inicializados.
+ * @param ctor Model class constructor / Constructor de la clase del modelo
+ */
+export function getSchema(ctor: any): Schema {
   if (!Object.prototype.hasOwnProperty.call(ctor, SCHEMA)) {
-    ctor[SCHEMA] = { name: toSnakePlural(ctor.name), primary_key: 'id', gsis: new Set(), columns: {} };
+    ctor[SCHEMA] = {
+      name: toSnakePlural(ctor.name),
+      primary_key: 'id',
+      gsis: new Set<string>(),
+      hooks: { beforeCreate: [], afterCreate: [], beforeUpdate: [], afterUpdate: [], beforeDestroy: [], afterDestroy: [] },
+      columns: {},
+    };
   }
+  return ctor[SCHEMA];
+}
+
+function resolve(target: any, propertyKey: string | symbol): [Schema, Schema['columns'][string]] {
+  const schema = getSchema(target.constructor);
   const key = String(propertyKey);
-  const schema: Schema = ctor[SCHEMA];
   schema.columns[key] ||= { name: key, get: [], set: [], store: {} };
   return [schema, schema.columns[key]];
 }
