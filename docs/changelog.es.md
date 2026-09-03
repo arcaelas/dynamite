@@ -5,6 +5,19 @@ Todos los cambios notables de este proyecto se documentarán en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 y este proyecto adhiere a [Versionado Semántico](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-09-03
+
+### Cambios
+
+- **`@PrimaryKey`** acepta cualquier id string no vacío. Sigue generando ULID cuando no se pasa id, pero las claves UUID (u otras) ya almacenadas dejan de lanzar `Invalid ULID`.
+- **Las columnas `@Index` son GSI**: `connect()` registra cada `@Index` que no sea la PK como GSI `<campo>_index` y `sync()` lo crea, así `where`/`first` sobre esos campos usan `QueryCommand`. Antes solo contaban las claves foráneas de `@HasMany`/`@HasOne`.
+- **`$in` sobre la PK o un GSI ejecuta una `QueryCommand` por valor distinto** en vez de un `ScanCommand` completo con filtro `OR`. La carga de relaciones (`include`) se beneficia automáticamente.
+
+### Correcciones
+
+- La detección de la PK prioriza la columna `@PrimaryKey` sobre la primera `@Index`.
+- El self-healing tras un GSI inexistente elimina del registro el nombre de base de datos de la columna.
+
 ## [3.0.0] - 2026-06-06
 
 ### Cambios Incompatibles

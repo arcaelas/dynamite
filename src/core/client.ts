@@ -54,13 +54,18 @@ export class Dynamite {
     setGlobalClient(this.client);
     this.connected = true;
 
-    // Computar GSIs esperados desde los schemas (sin llamadas API)
+    // Computar GSIs esperados desde los schemas (sin llamadas API): cada @Index que no
+    // sea la PK es la partition key de un GSI `${campo}_index`, igual que las FK de HasMany
     const pk_by_table = new Map<string, string>();
     for (const tc of this.tables) {
       const s: Schema = (tc as any)[SCHEMA];
       if (!s) continue;
-      const pk_col = Object.values(s.columns).find(c => c.store.index || c.store.primaryKey);
+      const cols = Object.values(s.columns);
+      const pk_col = cols.find(c => c.store.primaryKey) ?? cols.find(c => c.store.index);
       pk_by_table.set(s.name, pk_col?.name ?? 'id');
+      for (const col of cols) {
+        if (col.store.index && !col.store.primaryKey && col.name !== pk_col?.name) s.gsis.add(col.name);
+      }
     }
 
     for (const tc of this.tables) {
@@ -96,11 +101,12 @@ export class Dynamite {
       if (!schema) throw new Error(`Class ${table_class.name} not registered. Use decorators.`);
 
       const cols = Object.values(schema.columns);
-      const pk = cols.find(c => c.store.index || c.store.primaryKey);
+      const pk = cols.find(c => c.store.primaryKey) ?? cols.find(c => c.store.index);
       if (!pk) throw new Error(`PartitionKey missing in ${table_class.name}`);
 
       const sk = cols.find(c => c.store.indexSort) ?? null;
-      tables.set(schema.name, { pk: pk.name, sk: sk?.name ?? null, gsis: new Set() });
+      const indexed = cols.filter(c => c.store.index && !c.store.primaryKey && c.name !== pk.name).map(c => c.name);
+      tables.set(schema.name, { pk: pk.name, sk: sk?.name ?? null, gsis: new Set(indexed) });
     }
 
     for (const table_class of this.tables) {

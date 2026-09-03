@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-09-03
+
+### Changed
+
+- **`@PrimaryKey`** accepts any non-empty string id. ULID is still generated when no id is given, but existing UUID (or custom) keys no longer throw `Invalid ULID`.
+- **`@Index` columns are GSIs**: `connect()` registers every non-primary `@Index` column as a `<field>_index` GSI and `sync()` creates it, so `where`/`first` on those fields use `QueryCommand`. Before, only the foreign keys of `@HasMany`/`@HasOne` were considered.
+- **`$in` on the primary key or a GSI runs one `QueryCommand` per distinct value** instead of a full `ScanCommand` with an `OR` filter. Relation loading (`include`) benefits automatically.
+
+### Fixed
+
+- Primary key detection prefers the `@PrimaryKey` column over the first `@Index` column.
+- Self-healing after a missing GSI now removes the column's database name from the GSI registry.
+
 ## [3.0.0] - 2026-06-06
 
 ### Breaking Changes

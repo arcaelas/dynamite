@@ -1,5 +1,5 @@
 import {
-  Dynamite, Table, PrimaryKey, Default, NotNull,
+  Dynamite, Table, PrimaryKey, Default, NotNull, Index,
   CreationOptional, NonAttribute, Name, HasMany, BelongsTo,
 } from "../index";
 import { requireClient } from "../core/client";
@@ -19,6 +19,7 @@ class Book extends Table<Book> {
   declare id: CreationOptional<string>;
   @NotNull() declare title: string;
   @Default('') declare author_id: string;
+  @Index() @Default('') declare genre: CreationOptional<string>;
   @Default(() => 0) declare pages: CreationOptional<number>;
   @BelongsTo(() => Author, 'id', 'author_id')
   declare author: NonAttribute<Author>;
@@ -64,7 +65,7 @@ export default async function query_scan() {
   const a1 = await Author.create({ name: 'Tolkien' });
   const a2 = await Author.create({ name: 'Asimov' });
   for (let i = 0; i < 10; i++) {
-    await Book.create({ title: `Book_${i}`, author_id: i < 6 ? a1.id : a2.id, pages: (i + 1) * 50 });
+    await Book.create({ title: `Book_${i}`, author_id: i < 6 ? a1.id : a2.id, genre: i % 2 ? 'fantasy' : 'scifi', pages: (i + 1) * 50 });
   }
 
   const tracker = trackCommands();
@@ -115,8 +116,39 @@ export default async function query_scan() {
   assert('$include usa ScanCommand', tracker.last() === 'ScanCommand');
 
   tracker.reset();
-  await Book.where({ author_id: { $in: [a1.id, a2.id] } as any });
-  assert('$in usa ScanCommand (no es $eq)', tracker.last() === 'ScanCommand');
+  await Book.where({ pages: { $in: [50, 100] } as any });
+  assert('$in sobre campo sin índice usa ScanCommand', tracker.last() === 'ScanCommand');
+
+  // -- @Index y $in sobre PK / GSI: Query --
+  console.log('\n-- @Index y $in con Query --');
+  tracker.reset();
+  const by_genre = await Book.where({ genre: 'fantasy' });
+  assert('where por @Index (genre) usa QueryCommand', tracker.log.includes('QueryCommand') && !tracker.log.includes('ScanCommand'));
+  assert('where por @Index retorna 5 books', by_genre.length === 5);
+
+  tracker.reset();
+  const by_in_gsi = await Book.where({ author_id: { $in: [a1.id, a2.id, a1.id] } as any });
+  assert('$in por GSI usa una QueryCommand por valor distinto', tracker.log.filter(c => c === 'QueryCommand').length === 2 && !tracker.log.includes('ScanCommand'));
+  assert('$in por GSI retorna los 10 books', by_in_gsi.length === 10);
+
+  tracker.reset();
+  const by_in_pk = await Book.where({ id: { $in: [by_genre[0].id, by_genre[1].id] } as any }, { order: { pages: 'DESC' } });
+  assert('$in por PK usa una QueryCommand por valor', tracker.log.filter(c => c === 'QueryCommand').length === 2 && !tracker.log.includes('ScanCommand'));
+  assert('$in por PK retorna 2 books ordenados', by_in_pk.length === 2 && by_in_pk[0].pages >= by_in_pk[1].pages);
+
+  tracker.reset();
+  const by_in_first = await Book.first({ genre: { $in: ['scifi'] } as any, pages: { $gt: 400 } } as any);
+  assert('first con $in por GSI y filtro extra usa Query', tracker.log.includes('QueryCommand') && (by_in_first?.pages ?? 0) > 400);
+
+  // -- PK con formato libre (UUID de datos existentes) --
+  console.log('\n-- PK con UUID --');
+  const uuid = '3f2b6c1e-8d4a-4f0b-9c2d-1a2b3c4d5e6f';
+  const with_uuid = await Author.create({ id: uuid, name: 'Uuid' });
+  assert('create acepta un id UUID', with_uuid.id === uuid);
+  assert('first por PK UUID lo recupera', (await Author.first({ id: uuid }))?.name === 'Uuid');
+  let empty_rejected = false;
+  try { await Author.create({ id: '', name: 'Empty' }); } catch { empty_rejected = true; }
+  assert('create rechaza un id vacío', empty_rejected);
 
   // -- Query por PK + filtros adicionales --
   console.log('\n-- Query PK + filtros extra --');

@@ -141,7 +141,7 @@ class Example extends Table<Example> {
 
 #### @PrimaryKey()
 
-Declara la clave primaria de la tabla.
+Declara la clave primaria de la tabla. Si no recibe valor genera un ULID; acepta cualquier string no vacio (por ejemplo los UUID de datos ya almacenados) y es inmutable tras la primera asignacion.
 
 ```typescript
 import { PrimaryKey } from "./decorators/indexes";
@@ -154,15 +154,20 @@ class User extends Table<User> {
 
 #### @Index()
 
-Marca una propiedad como clave de particion (alternativa a `@PrimaryKey`).
+Marca una propiedad como clave de particion de un indice secundario global llamado `<campo>_index`. `where()` y `first()` con `$eq` o `$in` sobre ese campo ejecutan `QueryCommand` (una consulta por valor) en lugar de `ScanCommand`; `sync()` crea el indice si no existe.
 
 ```typescript
 import { Index } from "./decorators/indexes";
 
-class User extends Table<User> {
-  @Index()
+class Message extends Table<Message> {
+  @PrimaryKey()
   id!: string;
+
+  @Index()
+  chat_id!: string; // GSI chat_id_index
 }
+
+await Message.where({ chat_id: "01J..." }); // QueryCommand sobre chat_id_index
 ```
 
 #### @IndexSort()
@@ -700,15 +705,11 @@ await dynamite.connect();
 
 ### Metodo connect()
 
-El metodo `connect()` realiza las siguientes operaciones:
-1. Establece el cliente global de DynamoDB
-2. Crea las tablas que no existen
-3. Crea tablas pivote para relaciones `@ManyToMany`
-4. Crea indices secundarios globales (GSI) segun los decoradores `@Index`
+El metodo `connect()` establece el cliente global de DynamoDB y registra, sin llamadas a la API, los GSI esperados de cada modelo (`@Index` y claves foraneas de `@HasMany`/`@HasOne`). No crea nada: `sync()` es quien crea las tablas que faltan, las tablas pivote de `@ManyToMany` y los GSI `<campo>_index`.
 
 ```typescript
 await dynamite.connect();
-// Tablas creadas automaticamente si no existen
+await dynamite.sync(); // solo en desarrollo o migraciones: en produccion las tablas las declara la infraestructura
 ```
 
 ### Transacciones
@@ -1196,7 +1197,7 @@ const results = await User.where({
 | `<=` | `$lte` | Menor o igual que |
 | `>` | `$gt` | Mayor que |
 | `>=` | `$gte` | Mayor o igual que |
-| `in` | `$in` | Incluido en array |
+| `in` | `$in` | Incluido en array (sobre la PK o un campo `@Index` ejecuta una Query por valor; en el resto, Scan) |
 | `contains` | `$contains`, `include`, `$include` | Contiene substring |
 
 #### Ejemplos de operadores
