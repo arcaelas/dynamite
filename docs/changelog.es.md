@@ -5,6 +5,12 @@ Todos los cambios notables de este proyecto se documentarán en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 y este proyecto adhiere a [Versionado Semántico](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.1] - 2026-09-03
+
+### Correcciones
+
+- **Tipado de `WhereFilters`**: `in`/`$in` aceptan un arreglo del tipo de la columna (`{ role: { $in: ["user", "assistant"] } }`); antes el tipo exigía un valor único y TypeScript rechazaba filtros válidos.
+
 ## [3.2.0] - 2026-09-03
 
 ### Cambios
