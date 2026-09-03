@@ -36,7 +36,7 @@ const OPERATORS = new Set(Object.keys(OP_MAP));
 type WhereFilters<M> = {
   [K in keyof InferAttributes<M>]?:
   | InferAttributes<M>[K]
-  | { [N in QueryOperator]?: InferAttributes<M>[K] };
+  | ({ [N in Exclude<QueryOperator, "in" | "$in">]?: InferAttributes<M>[K] } & { in?: InferAttributes<M>[K][]; $in?: InferAttributes<M>[K][] });
 };
 
 /**
