@@ -67,5 +67,5 @@
     "prepublishOnly": "yarn build"
   },
   "types": "./build/esm/index.d.ts",
-  "version": "3.1.0"
+  "version": "3.2.0"
 }

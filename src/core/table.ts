@@ -942,6 +942,24 @@ export default class Table<T = any> {
       }
     }
 
+    // Sin $eq sobre PK ni GSI: un $in sobre alguno de ellos se resuelve con una Query por valor
+    let query_values: any[] | null = null;
+    let in_placeholder: string | null = null;
+    let in_name: string | null = null;
+    if (!query_field) {
+      for (const [field, ops] of Object.entries(filters)) {
+        const in_key = Object.keys(ops).find(k => (OP_MAP[k] || k) === 'in');
+        const db_name = schema.columns[field]?.name || field;
+        const indexed = field === schema.primary_key || schema.gsis?.has(db_name);
+        if (in_key && indexed && Array.isArray(ops[in_key]) && ops[in_key].length > 0) {
+          query_field = field;
+          query_values = [...new Set(ops[in_key])];
+          query_index = field === schema.primary_key ? undefined : `${db_name}_index`;
+          break;
+        }
+      }
+    }
+
     // -- Construir expressions --
     // El campo elegido para Query va a KeyConditionExpression
     // TODO el resto (incluyendo soft delete, otros filtros) va a FilterExpression (server-side)
@@ -971,8 +989,14 @@ export default class Table<T = any> {
           filter_expressions.push(`attribute_exists(${nk})`);
         } else if (op === 'in' && Array.isArray(op_val)) {
           if (op_val.length === 0) throw new Error(`Operator 'in' requires a non-empty array.`);
-          const conds = op_val.map((v, i) => { const k = `${vk}_${i}`; attr_values[k] = v; return `${nk} = ${k}`; });
-          filter_expressions.push(`(${conds.join(' OR ')})`);
+          if (query_field === field && query_values) {
+            in_placeholder = vk;
+            in_name = nk;
+            key_expressions.push(`${nk} = ${vk}`);
+          } else {
+            const conds = op_val.map((v, i) => { const k = `${vk}_${i}`; attr_values[k] = v; return `${nk} = ${k}`; });
+            filter_expressions.push(`(${conds.join(' OR ')})`);
+          }
         } else if (op === 'include') {
           attr_values[vk] = op_val;
           filter_expressions.push(`contains(${nk}, ${vk})`);
@@ -1025,24 +1049,39 @@ export default class Table<T = any> {
       }
     };
 
+    const run = async (Command: typeof QueryCommand | typeof ScanCommand) => {
+      let last_key: any;
+      do {
+        if (last_key) base_params.ExclusiveStartKey = last_key;
+        else delete base_params.ExclusiveStartKey;
+        const result = await client.send(new Command(base_params));
+        if (result.Items) unmarshal_items(result.Items);
+        last_key = result.LastEvaluatedKey;
+      } while (last_key);
+    };
+    // Una Query por valor cuando la clave viene de un $in; una sola cuando viene de $eq
+    const run_query = async () => {
+      for (const value of query_values ?? [query_value]) {
+        if (in_placeholder) base_params.ExpressionAttributeValues = marshall({ ...attr_values, [in_placeholder]: value }, { removeUndefinedValues: true });
+        await run(QueryCommand);
+      }
+    };
+
     // Intentar Query. Si el GSI no existe, fall back a Scan y desregistrar GSI.
     if (use_query && query_index) {
       try {
-        let last_key: any;
-        do {
-          if (last_key) base_params.ExclusiveStartKey = last_key;
-          const result = await client.send(new QueryCommand(base_params));
-          if (result.Items) unmarshal_items(result.Items);
-          last_key = result.LastEvaluatedKey;
-        } while (last_key);
+        await run_query();
       } catch (e: any) {
         if (e.name === 'ResourceNotFoundException' || e.message?.includes('index')) {
           // GSI no existe: remover del cache, mover KeyCondition a Filter, reintentar como Scan
-          schema.gsis.delete(query_field!);
+          schema.gsis.delete(schema.columns[query_field!]?.name || query_field!);
           delete base_params.KeyConditionExpression;
           delete base_params.IndexName;
           delete base_params.ExclusiveStartKey;
-          const key_as_filter = key_expressions.join(' AND ');
+          const key_as_filter = query_values
+            ? `(${query_values.map((v, i) => { attr_values[`${in_placeholder}_${i}`] = v; return `${in_name} = ${in_placeholder}_${i}`; }).join(' OR ')})`
+            : key_expressions.join(' AND ');
+          base_params.ExpressionAttributeValues = marshall(attr_values, { removeUndefinedValues: true });
           base_params.FilterExpression = base_params.FilterExpression
             ? `${key_as_filter} AND ${base_params.FilterExpression}`
             : key_as_filter;
@@ -1055,16 +1094,8 @@ export default class Table<T = any> {
     }
 
     // Query por PK (sin GSI, no puede fallar por índice faltante) o Scan fallback
-    if (!use_query || (use_query && !query_index)) {
-      let last_key: any;
-      const cmd = use_query ? QueryCommand : ScanCommand;
-      do {
-        if (last_key) base_params.ExclusiveStartKey = last_key;
-        const result = await client.send(new cmd(base_params));
-        if (result.Items) unmarshal_items(result.Items);
-        last_key = result.LastEvaluatedKey;
-      } while (last_key);
-    }
+    if (!use_query) await run(ScanCommand);
+    else if (!query_index) await run_query();
 
     // Ordenar antes de paginar
     if (opts.order) {

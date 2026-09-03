@@ -7,8 +7,6 @@
 import { decorator, SCHEMA } from "../core/decorator";
 import { ulid } from "../utils/ulid";
 
-const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
-
 /**
  * @description Marks a property as Partition Key for a GSI
  * @description Marca una propiedad como Partition Key de un GSI
@@ -26,8 +24,8 @@ export const IndexSort = decorator((_schema, col) => {
 });
 
 /**
- * @description Primary key: Default(ulid) + NotNull + ULID validation + Index + IndexSort
- * @description Clave primaria: Default(ulid) + NotNull + validación ULID + Index + IndexSort
+ * @description Primary key: Default(ulid) + NotNull + Index + IndexSort. Any non-empty string is a valid id (ULID by default; UUID or custom keys already stored are accepted)
+ * @description Clave primaria: Default(ulid) + NotNull + Index + IndexSort. Cualquier string no vacío es un id válido (ULID por defecto; se aceptan UUID u otras claves ya almacenadas)
  */
 export const PrimaryKey = decorator((table_class, col) => {
   const schema = (table_class as any)[SCHEMA];
@@ -37,11 +35,11 @@ export const PrimaryKey = decorator((table_class, col) => {
   col.store.primaryKey = true;
   schema.primary_key = col.name;
 
-  // Set pipeline: immutable after first assignment, Default(ulid), validate ULID format
+  // Set pipeline: immutable after first assignment, Default(ulid), any non-empty string id
   col.set.push((next: any, current: any) => {
     const value = current ?? next ?? ulid();
-    if (typeof value !== 'string' || !ULID_RE.test(value)) {
-      throw new Error(`Invalid ULID for ${col.name}: '${value}'`);
+    if (typeof value !== 'string' || !value) {
+      throw new Error(`Invalid primary key for ${col.name}: '${value}'`);
     }
     return value;
   });

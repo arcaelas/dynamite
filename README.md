@@ -75,7 +75,7 @@ npm install @arcaelas/dynamite
 | Decorator | Description |
 |-----------|-------------|
 | `@PrimaryKey()` | Primary key (partition key) |
-| `@Index()` | Partition key for GSI |
+| `@Index()` | Partition key of the `<field>_index` GSI: `where`/`first` on it run a Query instead of a Scan |
 | `@IndexSort()` | Sort key |
 
 ### Data Decorators
@@ -193,7 +193,7 @@ await User.where("role", "in", ["admin", "moderator"]);
 await User.where("email", "$include", "gmail");
 ```
 
-**Available operators:** `=`, `!=`, `<>`, `<`, `<=`, `>`, `>=`, `in`, `$include` (aliases: `$eq`, `$ne`, `$lt`, `$lte`, `$gt`, `$gte`, `$in`, `include`)
+**Available operators:** `=`, `!=`, `<>`, `<`, `<=`, `>`, `>=`, `in`, `$include` (aliases: `$eq`, `$ne`, `$lt`, `$lte`, `$gt`, `$gte`, `$in`, `include`). `=` and `in` on the primary key or an `@Index` field run `QueryCommand` (one query per value); everything else falls back to `ScanCommand`.
 
 ### Query Options
 
