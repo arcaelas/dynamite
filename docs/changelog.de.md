@@ -5,7 +5,7 @@ Alle wichtigen Änderungen an diesem Projekt werden in dieser Datei dokumentiert
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 und dieses Projekt hält sich an [Semantische Versionierung](https://semver.org/spec/v2.0.0.html).
 
-## [3.3.0] - 2026-09-07
+## [3.4.0] - 2026-09-08
 
 ### Hinzugefügt
 
