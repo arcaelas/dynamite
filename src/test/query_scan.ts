@@ -70,17 +70,17 @@ export default async function query_scan() {
 
   const tracker = trackCommands();
 
-  // -- Query por PK --
-  console.log('-- Query por PK --');
+  // -- Lectura por PK --
+  console.log('-- Lectura por PK --');
   tracker.reset();
   const by_pk = await Author.where({ id: a1.id });
-  assert('where por PK usa QueryCommand', tracker.last() === 'QueryCommand');
+  assert('where por PK usa GetItemCommand', tracker.last() === 'GetItemCommand');
   assert('where por PK retorna correcto', by_pk[0]?.name === 'Tolkien');
 
-  // -- Query por PK con first --
+  // -- Lectura por PK con first --
   tracker.reset();
   const first_pk = await Author.first({ id: a1.id });
-  assert('first por PK usa QueryCommand', tracker.log.includes('QueryCommand'));
+  assert('first por PK usa GetItemCommand', tracker.log.includes('GetItemCommand'));
   assert('first por PK retorna correcto', first_pk?.name === 'Tolkien');
 
   // -- Scan por campo sin GSI --
@@ -133,7 +133,7 @@ export default async function query_scan() {
 
   tracker.reset();
   const by_in_pk = await Book.where({ id: { $in: [by_genre[0].id, by_genre[1].id] } as any }, { order: { pages: 'DESC' } });
-  assert('$in por PK usa una QueryCommand por valor', tracker.log.filter(c => c === 'QueryCommand').length === 2 && !tracker.log.includes('ScanCommand'));
+  assert('$in por PK usa un solo BatchGetItem', tracker.log.filter(c => c === 'BatchGetItemCommand').length === 1 && !tracker.log.includes('ScanCommand'));
   assert('$in por PK retorna 2 books ordenados', by_in_pk.length === 2 && by_in_pk[0].pages >= by_in_pk[1].pages);
 
   tracker.reset();
@@ -150,14 +150,16 @@ export default async function query_scan() {
   try { await Author.create({ id: '', name: 'Empty' }); } catch { empty_rejected = true; }
   assert('create rechaza un id vacío', empty_rejected);
 
-  // -- Query por PK + filtros adicionales --
-  console.log('\n-- Query PK + filtros extra --');
+  // -- Lectura por PK + filtros adicionales --
+  console.log('\n-- PK + filtros extra --');
   tracker.reset();
-  // No aplica: where con PK + otro campo. PK va a KeyCondition, el resto a Filter
-  // Pero _extractPK requiere que el filtro sea SOLO la PK para optimizar update/delete
-  // En where(), la detección busca cualquier campo con $eq que sea PK
-  const pk_plus = await Book.where({ id: by_fk[0].id });
-  assert('PK en filtro mixto usa Query', tracker.log.includes('QueryCommand'));
+  // La PK resuelve la lectura con GetItem y los demás filtros se evalúan sobre el item leído
+  const pk_plus = await Book.where({ id: by_fk[0].id, genre: by_fk[0].genre } as any);
+  assert('PK con filtro extra usa GetItem', tracker.log.length === 1 && tracker.log[0] === 'GetItemCommand');
+  assert('PK con filtro extra respeta el filtro', pk_plus.length === 1);
+  tracker.reset();
+  const pk_miss = await Book.where({ id: by_fk[0].id, genre: 'inexistente' } as any);
+  assert('PK con filtro que no casa devuelve vacio', pk_miss.length === 0);
 
   // -- Self-healing: GSI inexistente fallback a Scan --
   console.log('\n-- Self-healing --');

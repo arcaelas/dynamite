@@ -178,7 +178,7 @@ export default async function contracts() {
   assert('tx fail: orphan post not created', orphan.length === 0);
 
   // Multiple creates in tx: all or nothing
-  let tx_ids: string[] = [];
+  const tx_ids: string[] = [];
   try {
     await dynamite.tx(async (tx) => {
       for (let i = 0; i < 5; i++) {

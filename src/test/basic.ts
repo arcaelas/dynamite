@@ -1,9 +1,8 @@
 import {
-  Dynamite, Table, PrimaryKey, Default, Get, Set, Validate, NotNull,
-  Name, CreatedAt, UpdatedAt, DeleteAt, Index, IndexSort,
+  Dynamite, Table, PrimaryKey, Default, Get, Set, NotNull,
+  Name, CreatedAt, UpdatedAt, DeleteAt,
   CreationOptional, NonAttribute, HasMany, BelongsTo,
 } from "../index";
-import type { InferAttributes } from "../index";
 
 // -- Modelos con naming aislado --
 
@@ -142,7 +141,6 @@ export default async function basic() {
   assert('update estatico por PK', updated?.email === 'updated@test.com');
 
   // update de instancia
-  const prev_updated_at = updated!.updated_at;
   await new Promise(r => setTimeout(r, 50));
   await updated!.update({ email: 'instance@test.com' });
   const after_update = await User.first({ id: u1.id });
@@ -192,18 +190,21 @@ export default async function basic() {
   const soft = await User.where({ id: u5.id });
   assert('destroy excluye de where', soft.length === 0);
 
-  const with_trashed = await User.where({ id: u5.id }, { _includeTrashed: true });
-  assert('_includeTrashed lo incluye', with_trashed.length === 1);
+  const with_trashed = await User.where({ id: u5.id }, { deleted: true });
+  assert('deleted lo incluye', with_trashed.length === 1);
+
+  const legacy_trashed = await User.where({ id: u5.id }, { _includeTrashed: true });
+  assert('_includeTrashed sigue funcionando como alias', legacy_trashed.length === 1);
 
   await u5.forceDestroy();
-  const force = await User.where({ id: u5.id }, { _includeTrashed: true });
+  const force = await User.where({ id: u5.id }, { deleted: true });
   assert('forceDestroy elimina definitivamente', force.length === 0);
 
   // -- Relaciones --
   console.log('\n-- Relaciones --');
 
   const t1 = await Task.create({ title: 'Task 1', user_id: u1.id });
-  const t2 = await Task.create({ title: 'Task 2', user_id: u1.id });
+  await Task.create({ title: 'Task 2', user_id: u1.id });
 
   const with_tasks = await User.where({ id: u1.id }, { include: { tasks: true } });
   assert('HasMany carga relacion', with_tasks[0]?.tasks?.length === 2);

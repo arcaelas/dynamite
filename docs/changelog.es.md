@@ -5,6 +5,33 @@ Todos los cambios notables de este proyecto se documentarán en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 y este proyecto adhiere a [Versionado Semántico](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2026-09-07
+
+### Agregado
+
+- **Paginación por cursor**: `where()` devuelve las instancias con una propiedad `cursor` no enumerable siempre que se pida un `limit`. Pasarla de vuelta como `{ cursor }` lee solo la página siguiente, mientras que `skip` lee y descarta todo lo anterior en cada página.
+- **`createMany(filas, options?)`**: crea varios registros con `BatchWriteItem`, 25 por petición, reintentando lo que DynamoDB deje sin procesar. No puede comprobar claves primarias duplicadas, que `BatchWriteItem` no admite.
+- **`deleteMany(ids, options?)`**: elimina por clave primaria sin leer los registros antes. Siempre es borrado definitivo y no ejecuta hooks.
+- **Opción de consulta `deleted`**: sustituye a `_includeTrashed`, que sigue funcionando como alias obsoleto.
+- **Opción `where` de nivel superior**: los filtros de `WhereOptions.where` ahora se suman a los del primer argumento. Hasta ahora se ignoraban en silencio.
+- **Tipos públicos nuevos**: `QueryResult<M>`, `DynamiteConfig`.
+
+### Cambiado
+
+- **Las lecturas por clave primaria usan `GetItem` y `BatchGetItem`**: un `=` sobre la clave primaria es un solo `GetItem`, y un `in` es un `BatchGetItem` de 100 claves por petición, en lugar de una `Query` por valor. Cualquier filtro extra se evalúa sobre el item ya leído, así que la consulta sigue siendo una sola petición.
+- **`limit` corta la lectura**: la paginación se detiene en cuanto reúne los registros pedidos, y el límite viaja a DynamoDB como `Limit` cuando no queda nada que filtrar en el servidor. `first()` ya no lee la tabla entera.
+- **`Scan` paralelo**: una lectura sin `limit` que termina en `Scan` se parte en cuatro segmentos. Las mismas unidades de lectura y una fracción de la latencia. Sin `order`, el orden resultante es arbitrario, como ya lo era.
+- **Orden nativo por sort key**: una `Query` por clave primaria ordenada por la columna `@IndexSort` usa `ScanIndexForward` en vez de ordenar en memoria.
+- **`update()` por clave primaria escribe sin leer**: un solo `UpdateItem` con los campos tocados, condicionado a que el registro exista, siempre que ningún `@Set` ni `@Validate` de esos campos declare el argumento `current`. El `update()` de instancia hace lo mismo con los valores que ya tiene.
+- **Escrituras por lotes**: `delete()`, el `update()` masivo, el `sync()` de una relación, `createMany()` y `deleteMany()` escriben en lotes de 25.
+- **Las tablas pivote se consultan, nunca se escanean**: `attach()`, `detach()`, el `sync()` de instancia y la carga de un `@ManyToMany` usan el GSI `<clave_foranea>_index` del pivote, y solo caen a un `Scan` cuando ese índice no existe.
+- **Dependencias**: `pluralize`, `uuid`, `@arcaelas/utils` y `@aws-sdk/lib-dynamodb` estaban declaradas y nunca se importaban, y se eliminaron. `@aws-sdk/util-dynamodb` se importaba sin estar declarada, y ahora es dependencia. El SDK de AWS pasó de una versión fija a `^3.329.0`, para deduplicarse con la copia del consumidor.
+
+### Corregido
+
+- La clave primaria de un modelo renombrada con `@Name` ahora se usa correctamente en `delete`, `forceDestroy`, `increment` y `decrement`.
+- Documentación: `withTrashed()`, `onlyTrashed()`, `relationDecorator()`, `ColumnBuilder` y `WrapperEntry` estaban documentados y no existen. La firma de `@BelongsTo` estaba documentada con los argumentos invertidos. `connect()` figuraba como creador de tablas, que es lo que hace `sync()`. El pipeline de escritura figuraba como `(current, next)` cuando recibe `(next, current)`.
+
 ## [3.2.1] - 2026-09-03
 
 ### Correcciones

@@ -5,10 +5,67 @@
  * @fecha 2025-01-28
  */
 
-import { ScanCommand } from "@aws-sdk/client-dynamodb";
+import { QueryCommand, ScanCommand } from "@aws-sdk/client-dynamodb";
 import { marshall, unmarshall } from "@aws-sdk/util-dynamodb";
 import { requireClient } from "../core/client";
 import { SCHEMA } from "../core/decorator";
+
+/**
+ * @description Reads the rows of a pivot table by its foreign key through the `<field>_index` GSI,
+ * falling back to a Scan only when that index does not exist.
+ * @description Lee las filas de una tabla pivote por su clave foránea usando el GSI `<campo>_index`,
+ * y solo cae a un Scan cuando ese índice no existe.
+ * @param pivot_table Nombre de la tabla pivote
+ * @param key_field Campo por el que se busca
+ * @param key_value Valor buscado
+ * @param extra Segunda condición opcional, evaluada como filtro
+ * @example
+ * const rows = await pivotRows("users_roles", "user_id", "u1", { field: "role_id", value: "r1" });
+ */
+export const pivotRows = async (
+  pivot_table: string,
+  key_field: string,
+  key_value: any,
+  extra?: { field: string; value: any }
+): Promise<Record<string, any>[]> => {
+  const client = requireClient();
+  const names: Record<string, string> = { "#fk": key_field };
+  const values: Record<string, any> = { ":fk": key_value };
+  if (extra) {
+    names["#rk"] = extra.field;
+    values[":rk"] = extra.value;
+  }
+
+  const drain = async (params: any): Promise<Record<string, any>[]> => {
+    const rows: Record<string, any>[] = [];
+    let last_key: any;
+    do {
+      const command = params.IndexName
+        ? new QueryCommand({ ...params, ...(last_key && { ExclusiveStartKey: last_key }) })
+        : new ScanCommand({ ...params, ...(last_key && { ExclusiveStartKey: last_key }) });
+      const result: any = await client.send(command as any);
+      for (const item of result.Items ?? []) rows.push(unmarshall(item));
+      last_key = result.LastEvaluatedKey;
+    } while (last_key);
+    return rows;
+  };
+
+  const base = {
+    TableName: pivot_table,
+    ExpressionAttributeNames: names,
+    ExpressionAttributeValues: marshall(values),
+  };
+
+  return drain({
+    ...base,
+    IndexName: `${key_field}_index`,
+    KeyConditionExpression: "#fk = :fk",
+    ...(extra && { FilterExpression: "#rk = :rk" }),
+  }).catch((error: any) => {
+    if (error.name !== "ResourceNotFoundException" && !error.message?.includes("index")) throw error;
+    return drain({ ...base, FilterExpression: extra ? "#fk = :fk AND #rk = :rk" : "#fk = :fk" });
+  });
+};
 
 /**
  * @description Opciones para include de relaciones
@@ -32,7 +89,7 @@ const batchLoadHasMany = async (
   relation: { model: () => any; foreignKey: string; localKey: string },
   options: IncludeOptions = {}
 ): Promise<Map<string, any[]>> => {
-  const parent_ids = items.map(i => i[relation.localKey]).filter(Boolean);
+  const parent_ids = [...new Set(items.map(i => i[relation.localKey]).filter(Boolean))];
   if (!parent_ids.length) return new Map();
 
   // Obtener clase del modelo relacionado
@@ -44,11 +101,16 @@ const batchLoadHasMany = async (
     ...options.where
   };
 
-  // Query con todas las opciones aplicadas
+  // Un limit por grupo sin filtros extra ni orden se puede pedir al servidor:
+  // cada consulta lee solo lo que va a devolver en vez de la relación entera
+  const per_group = options.limit && parent_ids.length === 1 && !options.where && !options.order && !options.skip && !options.offset
+    ? options.limit
+    : undefined;
+
   const related = await RelatedModel.where(filters, {
     attributes: options.attributes as any,
     order: options.order?.toUpperCase() as 'ASC' | 'DESC',
-    limit: undefined, // Se aplica después de agrupar
+    limit: per_group,
     offset: undefined,
   });
   // Agrupar por foreignKey
@@ -79,7 +141,7 @@ const batchLoadBelongsTo = async (
   relation: { model: () => any; foreignKey: string; localKey: string },
   options: IncludeOptions = {}
 ): Promise<Map<string, any>> => {
-  const local_keys = items.map(i => i[relation.localKey]).filter(Boolean);
+  const local_keys = [...new Set(items.map(i => i[relation.localKey]).filter(Boolean))];
   if (!local_keys.length) return new Map();
 
   const RelatedModel = relation.model();
@@ -114,23 +176,14 @@ const batchLoadManyToMany = async (
   },
   options: IncludeOptions = {}
 ): Promise<Map<string, any[]>> => {
-  const parent_ids = items.map(i => i[relation.localKey]).filter(Boolean);
+  const parent_ids = [...new Set(items.map(i => i[relation.localKey]).filter(Boolean))];
   if (!parent_ids.length) return new Map();
 
-  const client = requireClient();
-
-  // [1] Query pivot table usando OR chain (DynamoDB no soporta IN nativo)
-  const or_conditions = parent_ids.map((_, i) => `#fk = :id${i}`).join(' OR ');
-  const pivot_result = await client.send(new ScanCommand({
-    TableName: relation.pivotTable,
-    FilterExpression: parent_ids.length > 0 ? `(${or_conditions})` : undefined,
-    ExpressionAttributeNames: { '#fk': relation.foreignKey },
-    ExpressionAttributeValues: marshall(
-      parent_ids.reduce((acc, id, i) => ({ ...acc, [`:id${i}`]: id }), {})
-    )
-  }));
-
-  const pivot_rows = (pivot_result.Items ?? []).map(item => unmarshall(item));
+  // [1] Una Query indexada por padre en vez de un Scan de toda la tabla pivote
+  const pivot_pages = await Promise.all(
+    parent_ids.map(id => pivotRows(relation.pivotTable, relation.foreignKey, id))
+  );
+  const pivot_rows = pivot_pages.flat();
 
   if (pivot_rows.length === 0) return new Map();
 

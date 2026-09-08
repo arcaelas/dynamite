@@ -5,6 +5,52 @@ Alle wichtigen Änderungen an diesem Projekt werden in dieser Datei dokumentiert
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 und dieses Projekt hält sich an [Semantische Versionierung](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2026-09-07
+
+### Hinzugefügt
+
+- **Cursor-Paginierung**: `where()` gibt die Instanzen mit einer nicht aufzählbaren Eigenschaft `cursor` zurück, sobald ein `limit` gesetzt ist. Wird sie als `{ cursor }` zurückgegeben, wird nur die nächste Seite gelesen, während `skip` auf jeder Seite alles Vorherige liest und verwirft.
+- **`createMany(zeilen, options?)`**: legt mehrere Datensätze mit `BatchWriteItem` an, 25 pro Anfrage, und wiederholt, was DynamoDB unverarbeitet lässt. Doppelte Primärschlüssel lassen sich nicht prüfen, `BatchWriteItem` kennt diese Bedingung nicht.
+- **`deleteMany(ids, options?)`**: löscht über den Primärschlüssel, ohne die Datensätze vorher zu lesen. Immer endgültig und ohne Hooks.
+- **Abfrageoption `deleted`**: ersetzt `_includeTrashed`, das als veralteter Alias weiterhin funktioniert.
+- **Option `where` auf oberster Ebene**: die Filter aus `WhereOptions.where` werden jetzt mit denen des ersten Arguments zusammengeführt. Bisher wurden sie stillschweigend ignoriert.
+- **Neue öffentliche Typen**: `QueryResult<M>`, `DynamiteConfig`.
+
+### Geändert
+
+- **Lesezugriffe über den Primärschlüssel nutzen `GetItem` und `BatchGetItem`**: ein `=` auf den Primärschlüssel ist ein einziges `GetItem`, ein `in` ein `BatchGetItem` mit 100 Schlüsseln pro Anfrage statt einer `Query` je Wert. Jeder zusätzliche Filter wird auf dem bereits gelesenen Item ausgewertet, die Abfrage bleibt also eine einzige Anfrage.
+- **`limit` bricht die Lesung ab**: die Paginierung stoppt, sobald genug Datensätze zusammen sind, und das Limit reist als `Limit` zu DynamoDB, wenn serverseitig nichts mehr zu filtern ist. `first()` liest nicht mehr die ganze Tabelle.
+- **Paralleler `Scan`**: eine Lesung ohne `limit`, die in einem `Scan` endet, wird in vier Segmente geteilt. Dieselben Leseeinheiten, ein Bruchteil der Latenz. Ohne `order` ist die Reihenfolge beliebig, wie schon zuvor.
+- **Native Sortierung über den Sort Key**: eine `Query` auf den Primärschlüssel, sortiert nach der `@IndexSort`-Spalte, nutzt `ScanIndexForward` statt im Speicher zu sortieren.
+- **`update()` über den Primärschlüssel schreibt ohne zu lesen**: ein einziges `UpdateItem` mit den berührten Feldern, unter der Bedingung, dass der Datensatz existiert, sofern kein `@Set` und kein `@Validate` dieser Felder das Argument `current` deklariert. Das `update()` der Instanz tut dasselbe mit den Werten, die sie bereits hält.
+- **Batch-Schreibvorgänge**: `delete()`, das Massen-`update()`, das `sync()` einer Beziehung, `createMany()` und `deleteMany()` schreiben in Blöcken von 25.
+- **Pivot-Tabellen werden abgefragt, nie gescannt**: `attach()`, `detach()`, das `sync()` der Instanz und das Laden eines `@ManyToMany` gehen über den GSI `<fremdschlüssel>_index` der Pivot-Tabelle und fallen nur dann auf einen `Scan` zurück, wenn dieser Index nicht existiert.
+- **Abhängigkeiten**: `pluralize`, `uuid`, `@arcaelas/utils` und `@aws-sdk/lib-dynamodb` waren deklariert, wurden aber nie importiert, und sind entfernt. `@aws-sdk/util-dynamodb` wurde ohne Deklaration importiert und ist jetzt eine Abhängigkeit. Das AWS SDK wechselte von einer festen Version zu `^3.329.0` und wird so mit der Kopie des Konsumenten dedupliziert.
+
+### Behoben
+
+- Der mit `@Name` umbenannte Primärschlüssel eines Modells wird jetzt in `delete`, `forceDestroy`, `increment` und `decrement` korrekt verwendet.
+- Dokumentation: `withTrashed()`, `onlyTrashed()`, `relationDecorator()`, `ColumnBuilder` und `WrapperEntry` waren dokumentiert und existieren nicht. Die Signatur von `@BelongsTo` war mit vertauschten Argumenten dokumentiert. `connect()` galt als Erzeuger der Tabellen, was `sync()` tut. Die Schreib-Pipeline galt als `(current, next)`, obwohl sie `(next, current)` erhält.
+
+## [3.2.1] - 2026-09-03
+
+### Behoben
+
+- **Typisierung von `WhereFilters`**: `in`/`$in` akzeptieren jetzt ein Array des Spaltentyps (`{ role: { $in: ["user", "assistant"] } }`); zuvor verlangte der Typ einen einzelnen Wert und TypeScript wies gültige Filter zurück.
+
+## [3.2.0] - 2026-09-03
+
+### Geändert
+
+- **`@PrimaryKey`** akzeptiert jede nicht leere Zeichenkette als id. Ohne Angabe wird weiterhin eine ULID erzeugt, aber vorhandene UUID- oder eigene Schlüssel werfen kein `Invalid ULID` mehr.
+- **`@Index`-Spalten sind GSIs**: `connect()` registriert jede `@Index`-Spalte, die nicht der Primärschlüssel ist, als GSI `<feld>_index`, und `sync()` erstellt ihn, sodass `where`/`first` auf diesen Feldern `QueryCommand` verwenden. Zuvor wurden nur die Fremdschlüssel von `@HasMany`/`@HasOne` berücksichtigt.
+- **`$in` auf dem Primärschlüssel oder einem GSI führt einen `QueryCommand` je unterschiedlichem Wert aus** statt eines vollständigen `ScanCommand` mit `OR`-Filter. Das Laden von Beziehungen (`include`) profitiert automatisch.
+
+### Behoben
+
+- Die Erkennung des Primärschlüssels bevorzugt die `@PrimaryKey`-Spalte gegenüber der ersten `@Index`-Spalte.
+- Die Selbstheilung nach einem fehlenden GSI entfernt jetzt den Datenbanknamen der Spalte aus der GSI-Registrierung.
+
 ## [3.0.0] - 2026-06-06
 
 ### Inkompatible Änderungen

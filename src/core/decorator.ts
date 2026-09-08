@@ -31,6 +31,7 @@ export interface Schema {
       softDelete?: boolean;
       createdAt?: boolean;
       updatedAt?: boolean;
+      readsCurrent?: boolean;
       relation?: {
         type: 'HasMany' | 'HasOne' | 'BelongsTo' | 'ManyToMany';
         model: () => any;

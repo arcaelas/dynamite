@@ -89,7 +89,7 @@ Decorators are special functions that annotate class properties with metadata. D
 
 | Decorator | Purpose | Example |
 |-----------|---------|---------|
-| `@PrimaryKey()` | Defines the partition key | `@PrimaryKey() declare id: string;` |
+| `@PrimaryKey()` | Defines the partition key | `@PrimaryKey() declare id: CreationOptional<string>;` |
 | `@Index()` | Alias for PrimaryKey | `@Index() declare userId: string;` |
 | `@IndexSort()` | Defines the sort key | `@IndexSort() declare timestamp: string;` |
 | `@Name("custom")` | Custom column/table name | `@Name("user_email") declare email: string;` |
@@ -108,8 +108,8 @@ Decorators are special functions that annotate class properties with metadata. D
 
 | Decorator | Purpose | Example |
 |-----------|---------|---------|
-| `@CreatedAt()` | Auto-set on creation | `@CreatedAt() declare created_at: string;` |
-| `@UpdatedAt()` | Auto-set on update | `@UpdatedAt() declare updated_at: string;` |
+| `@CreatedAt()` | Auto-set on creation | `@CreatedAt() declare created_at: CreationOptional<string>;` |
+| `@UpdatedAt()` | Auto-set on update | `@UpdatedAt() declare updated_at: CreationOptional<string>;` |
 
 ### Relationship Decorators
 
@@ -117,25 +117,13 @@ Decorators are special functions that annotate class properties with metadata. D
 |-----------|---------|---------|
 | `@HasMany(Model, fk)` | One-to-many | `@HasMany(() => Order, "user_id") declare orders: any;` |
 | `@HasOne(Model, fk)` | One-to-one | `@HasOne(() => Profile, "user_id") declare profile: any;` |
-| `@BelongsTo(Model, lk)` | Many-to-one | `@BelongsTo(() => User, "user_id") declare user: any;` |
+| `@BelongsTo(Model, lk)` | Many-to-one | `@BelongsTo(() => User, "id", "user_id") declare user: any;` |
 | `@ManyToMany(Model, pivot, fk, rk)` | Many-to-many | `@ManyToMany(() => Role, "users_roles", "user_id", "role_id") declare roles: any;` |
 
 ### Complete Example
 
 ```typescript
-import {
-  Table,
-  PrimaryKey,
-  Default,
-  Set,
-  Validate,
-  NotNull,
-  CreatedAt,
-  UpdatedAt,
-  HasMany,
-  CreationOptional,
-  NonAttribute
-} from "@arcaelas/dynamite";
+import { Table, PrimaryKey, Default, Set, Validate, NotNull, CreatedAt, UpdatedAt, HasMany, CreationOptional, NonAttribute } from "@arcaelas/dynamite";
 
 class User extends Table<User> {
   @PrimaryKey()
@@ -180,7 +168,7 @@ Primary keys in DynamoDB consist of a **partition key** (required) and optionall
 ```typescript
 class User extends Table<User> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   declare name: string;
 }
@@ -237,14 +225,16 @@ console.log(product.id); // "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 
 ## Indexes
 
-DynamoDB supports Global Secondary Indexes (GSI) and Local Secondary Indexes (LSI) for efficient querying. Dynamite provides `@Index` and `@IndexSort` decorators.
+Dynamite works with the table's own key and with Global Secondary Indexes. `@Index` declares the partition key of a `<field>_index` GSI and `@IndexSort` declares the sort key of the table. Local Secondary Indexes are not created by the library.
+
+Every key column — primary key, sort key and any `@Index` — is declared as a string. A numeric column marked with `@Index` or `@IndexSort` is rejected by DynamoDB when the item is written.
 
 ### Global Secondary Index (GSI)
 
 ```typescript
 class User extends Table<User> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   @Index()             // GSI partition key
   declare email: string;
@@ -257,48 +247,48 @@ class User extends Table<User> {
 const user = await User.first({ email: "john@example.com" });
 ```
 
-### Local Secondary Index (LSI)
+### Sort key of the table
 
 ```typescript
 class Message extends Table<Message> {
   @PrimaryKey()        // Partition key
-  declare chatId: string;
+  declare chat_id: string;
 
-  @IndexSort()         // Sort key (LSI)
-  declare timestamp: string;
+  @IndexSort()         // Sort key
+  declare created_at: string;
 
-  declare userId: string;
+  declare user_id: string;
   declare content: string;
 }
 
-// Query chat messages sorted by timestamp
+// Sorted by the sort key: DynamoDB returns the order already resolved
 const messages = await Message.where(
-  { chatId: "chat-123" },
-  { order: "DESC", limit: 50 }
+  { chat_id: "chat-123" },
+  { order: { created_at: "DESC" }, limit: 50 }
 );
 ```
+
+The field has to be named. `order: "DESC"` on its own sorts by the `@CreatedAt` column, or by the primary key when there is none, and it does that in memory.
 
 ### Multiple Indexes
 
 ```typescript
 class Product extends Table<Product> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   @Index()             // GSI on category
   declare category: string;
 
-  @IndexSort()         // Sort by price
   declare price: number;
-
   declare name: string;
   declare stock: number;
 }
 
-// Query products by category, sorted by price
+// Query by the GSI, sorted by price in memory
 const electronics = await Product.where(
   { category: "electronics" },
-  { order: "ASC", limit: 10 }
+  { order: { price: "ASC" }, limit: 10 }
 );
 ```
 
@@ -535,11 +525,11 @@ console.log(user.created_at); // "2023-12-01T10:30:00.000Z"
 Excludes fields from database operations. Used for computed properties and virtual fields.
 
 ```typescript
-import { Table, PrimaryKey, NonAttribute } from "@arcaelas/dynamite";
+import { Table, PrimaryKey, NonAttribute, CreationOptional } from "@arcaelas/dynamite";
 
 class User extends Table<User> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   declare firstName: string;
   declare lastName: string;
@@ -610,17 +600,11 @@ async function updateUser(
 ### Relationship Types
 
 ```typescript
-import {
-  Table,
-  PrimaryKey,
-  HasMany,
-  BelongsTo,
-  NonAttribute
-} from "@arcaelas/dynamite";
+import { Table, PrimaryKey, HasMany, BelongsTo, NonAttribute, CreationOptional } from "@arcaelas/dynamite";
 
 class User extends Table<User> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   declare name: string;
 
@@ -631,13 +615,13 @@ class User extends Table<User> {
 
 class Order extends Table<Order> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   declare userId: string;
   declare total: number;
 
   // Many-to-one relationship
-  @BelongsTo(() => User, "userId")
+  @BelongsTo(() => User, "id", "userId")
   declare user: NonAttribute<User | null>;
 }
 
@@ -655,17 +639,7 @@ users[0].orders.forEach(order => {
 ### Complete Type Example
 
 ```typescript
-import {
-  Table,
-  PrimaryKey,
-  Default,
-  CreatedAt,
-  UpdatedAt,
-  HasMany,
-  CreationOptional,
-  NonAttribute,
-  InferAttributes
-} from "@arcaelas/dynamite";
+import { Table, PrimaryKey, Default, CreatedAt, UpdatedAt, HasMany, CreationOptional, NonAttribute, InferAttributes } from "@arcaelas/dynamite";
 
 class User extends Table<User> {
   // Auto-generated (CreationOptional)
@@ -891,7 +865,7 @@ This guide covered the core concepts of Dynamite:
 - **Table Class**: Base class with static and instance methods
 - **Decorators**: Metadata annotations for structure and behavior
 - **Primary Keys**: Partition and sort keys using @PrimaryKey and @IndexSort
-- **Indexes**: GSI and LSI for efficient querying
+- **Indexes**: the table key and `<field>_index` GSIs for efficient querying
 - **Query Builder**: Fluent interface with where(), first(), last()
 - **Query Operators**: =, !=, <, >, <=, >=, in, contains
 - **Type System**: CreationOptional, NonAttribute, InferAttributes for type safety

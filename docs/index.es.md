@@ -3,7 +3,7 @@
 ![Banner](assets/cover.png)
 
 > **ORM moderno con decoradores para AWS DynamoDB**
-> Decoradores TypeScript | Relaciones tipadas | Sincronización automática | Mínimo boilerplate
+> Decoradores TypeScript | Relaciones tipadas | Lecturas por índice | Mínimo boilerplate
 
 ---
 
@@ -11,29 +11,31 @@
 
 - **Diseño con decoradores** - Define modelos con decoradores TypeScript
 - **Relaciones tipadas** - HasMany, BelongsTo, ManyToMany con tipado completo
-- **Sincronización automática** - Tablas e índices creados automáticamente
+- **Sincronización bajo demanda** - `sync()` crea las tablas, tablas pivote y GSI que falten
 - **Validación y transformación** - Decoradores integrados para procesar datos
 - **Soft deletes** - Decorador @DeleteAt para registros recuperables
 - **Transacciones** - Soporte completo de transacciones con rollback
 - **Lifecycle hooks** - Decoradores @Before/@After opt-in para create, update y destroy
+- **Lecturas por índice** - `GetItem`, `BatchGetItem` o `Query` siempre que el filtro lo permita; `Scan` solo como último recurso
+- **Escrituras por lotes** - `createMany()`, `deleteMany()` y los updates masivos escriben 25 items por petición
 
 ---
 
 ## Inicio Rápido
 
 ```typescript
-import { Dynamite, Table, PrimaryKey, Default, CreatedAt } from '@arcaelas/dynamite';
+import { Dynamite, Table, PrimaryKey, CreatedAt, CreationOptional } from '@arcaelas/dynamite';
 
 // Define tu modelo
 class User extends Table<User> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   declare name: string;
   declare email: string;
 
   @CreatedAt()
-  declare created_at: string;
+  declare created_at: CreationOptional<string>;
 }
 
 // Configura y conecta
@@ -42,6 +44,7 @@ const dynamite = new Dynamite({
   tables: [User]
 });
 await dynamite.connect();
+await dynamite.sync(); // solo en desarrollo
 
 // Crear
 const user = await User.create({
@@ -86,7 +89,7 @@ await user.destroy();
 ```typescript
 class User extends Table<User> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   @HasMany(() => Post, 'user_id')
   declare posts: NonAttribute<Post[]>;
@@ -94,11 +97,12 @@ class User extends Table<User> {
 
 class Post extends Table<Post> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
+  @Index()
   declare user_id: string;
 
-  @BelongsTo(() => User, 'user_id')
+  @BelongsTo(() => User, 'id', 'user_id')
   declare user: NonAttribute<User | null>;
 }
 

@@ -21,6 +21,7 @@ export const Get = decorator((_schema, col, params) => {
  * @param fn (next, current) => any
  */
 export const Set = decorator((_schema, col, params) => {
+  if (params[0]?.length >= 2) col.store.readsCurrent = true;
   col.set.push(params[0]);
 });
 
@@ -36,6 +37,8 @@ export const Validate = decorator((_schema, col, params) => {
   if (!list.length || list.some((v: any) => typeof v !== 'function')) {
     throw new TypeError('@Validate requires functions');
   }
+
+  if (list.some((v: any) => v.length >= 2)) col.store.readsCurrent = true;
 
   col.set.push((next: any, current: any) => {
     for (const fn of list) {

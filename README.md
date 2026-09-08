@@ -13,7 +13,7 @@
 # @arcaelas/dynamite
 
 > **A modern, decorator-first ORM for DynamoDB with TypeScript support**
-> Full-featured | Type-safe | Relationships | Auto table creation | Transactions
+> Type-safe models | Relationships | Lifecycle hooks | Transactions | Query-first reads
 
 ---
 
@@ -25,7 +25,6 @@ import { Dynamite, Table, PrimaryKey, Default, CreatedAt, UpdatedAt, CreationOpt
 // Define your model
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
   declare id: CreationOptional<string>;
 
   declare name: string;
@@ -50,13 +49,19 @@ const dynamite = new Dynamite({
 });
 
 await dynamite.connect();
+await dynamite.sync();       // development only: creates missing tables and GSIs
 
 // Use it!
 const user = await User.create({ name: "John Doe", email: "john@example.com" });
-console.log(user.id);         // "a1b2c3d4-..."
+console.log(user.id);         // "01JBQ8..."  (ULID by default)
 console.log(user.role);       // "customer"
 console.log(user.created_at); // "2025-01-15T10:30:00.000Z"
 ```
+
+`connect()` only configures the client and works out which GSIs the models expect; it never
+calls the AWS API. `sync()` is the one that creates tables, pivot tables and missing indexes,
+and it is meant for development. In production the infrastructure declares them with the same
+names — `<field>_index`, partition key on `<field>`, projection `ALL` — and `sync()` is not called.
 
 ---
 
@@ -66,6 +71,9 @@ console.log(user.created_at); // "2025-01-15T10:30:00.000Z"
 npm install @arcaelas/dynamite
 ```
 
+Decorators need `experimentalDecorators` in your `tsconfig.json`. Under Serverless Framework,
+esbuild does not honour decorators on its own: register the decorator plugin.
+
 ---
 
 ## Decorators
@@ -74,86 +82,111 @@ npm install @arcaelas/dynamite
 
 | Decorator | Description |
 |-----------|-------------|
-| `@PrimaryKey()` | Primary key (partition key) |
-| `@Index()` | Partition key of the `<field>_index` GSI: `where`/`first` on it run a Query instead of a Scan |
-| `@IndexSort()` | Sort key |
+| `@PrimaryKey()` | Partition key. Fills in a ULID when no id is given; any non-empty string is accepted, so existing UUID keys keep working. Immutable once assigned |
+| `@Index()` | Partition key of the `<field>_index` GSI: `=` and `in` on that field run a Query instead of a Scan |
+| `@IndexSort()` | Sort key of the table |
 
 ### Data Decorators
 
 | Decorator | Description |
 |-----------|-------------|
-| `@Default(value \| fn)` | Default value (static or dynamic) |
-| `@Mutate(fn)` | Transform value before save |
-| `@Validate(fn)` | Validate value before save |
-| `@Serialize(fromDB, toDB)` | Bidirectional transformation |
-| `@NotNull()` | Required field validation |
-| `@Name("custom")` | Custom column/table name |
-| `@Column()` | Column configuration |
+| `@Default(value \| fn)` | Value applied on write when the field is nullish |
+| `@Set(fn)` | Write pipeline: `(next, current) => value` |
+| `@Get(fn)` | Read pipeline: `(current) => value` |
+| `@Validate(fn \| fn[])` | Rejects on write. Each validator returns `true` or the error message |
+| `@NotNull(message?)` | Rejects `null`, `undefined` and the empty string. Composed from `@Validate` |
+| `@Name("custom")` | Renames the column, or the table when applied to the class |
 
 ### Timestamp Decorators
 
 | Decorator | Description |
 |-----------|-------------|
-| `@CreatedAt()` | Auto-set on creation |
-| `@UpdatedAt()` | Auto-set on every update |
-| `@DeleteAt()` | Soft delete timestamp |
+| `@CreatedAt()` | ISO timestamp written once and never overwritten |
+| `@UpdatedAt()` | ISO timestamp refreshed on every write, unless an explicit value is given |
+| `@DeleteAt()` | Marks the column as the soft delete flag used by `destroy()` and `where()` |
 
 ### Relationship Decorators
 
 | Decorator | Description |
 |-----------|-------------|
-| `@HasMany(() => Model, foreignKey, localKey?)` | One-to-many |
-| `@HasOne(() => Model, foreignKey, localKey?)` | One-to-one |
-| `@BelongsTo(() => Model, localKey, foreignKey?)` | Many-to-one |
-| `@ManyToMany(() => Model, pivotTable, foreignKey, relatedKey, localKey?, relatedPK?)` | Many-to-many |
+| `@HasMany(() => Model, foreign_key, local_key?)` | One-to-many. `foreign_key` lives in the related model, `local_key` defaults to `"id"` |
+| `@HasOne(() => Model, foreign_key, local_key?)` | One-to-one, same argument order |
+| `@BelongsTo(() => Model, related_key, local_key)` | Many-to-one. `related_key` is the key of the parent, `local_key` is the field of this model that points at it |
+| `@ManyToMany(() => Model, pivot_table, foreign_key, related_key, local_key?, related_pk?)` | Many-to-many through a pivot table |
+
+### Lifecycle Hook Decorators
+
+| Decorator | Runs |
+|-----------|------|
+| `@BeforeCreate()` / `@AfterCreate()` | Around `create()` and the first `save()` |
+| `@BeforeUpdate()` / `@AfterUpdate()` | Around `update()`. Receives the changes delta as its argument |
+| `@BeforeDestroy()` / `@AfterDestroy()` | Around `destroy()`, `forceDestroy()` and static `delete()` |
+
+Hooks are opt-in per operation with `{ hook: true }`. Inside a hook `this` is the instance and
+may be mutated; several hooks of the same type run in declaration order and async hooks are
+awaited. In a transaction the `after*` hooks run after the commit.
+
+```typescript
+class Article extends Table<Article> {
+  @PrimaryKey() declare id: CreationOptional<string>;
+  declare title: string;
+  @Default("") declare slug: string;
+
+  @BeforeCreate()
+  fill_slug() { this.slug = this.title.toLowerCase().replace(/\W+/g, "-"); }
+}
+
+await Article.create({ title: "Hello World" }, { hook: true }); // slug: "hello-world"
+await Article.create({ title: "Hello World" });                 // slug: ""
+```
 
 ---
 
 ## TypeScript Types
 
 ```typescript
-import {
-  CreationOptional,  // Optional during create(), required after
-  NonAttribute,      // Excluded from database (computed/relations)
-  InferAttributes,   // Extract DB attributes from model
-  InferRelations,    // Extract relations from model
-  CreateInput,       // Input type for create()
-  UpdateInput,       // Input type for update()
-  WhereOptions,      // Query options type
-  QueryOperator      // Available operators
+import type {
+  CreationOptional,  // Optional during create(), present afterwards
+  NonAttribute,      // Excluded from the database (relations, computed fields)
+  InferAttributes,   // Database attributes of a model
+  InferRelations,    // Relations of a model
+  CreateInput,       // Input type of create()
+  UpdateInput,       // Input type of update()
+  WhereOptions,      // Query options
+  QueryResult,       // The array returned by where(), with its cursor
+  QueryOperator,     // Available operators
+  MutationOptions,   // { hook?: boolean; tx?: TransactionContext }
+  DynamiteConfig     // Client configuration
 } from "@arcaelas/dynamite";
 ```
 
 ### CreationOptional
 
-Use for fields that are optional during creation but exist after:
+For fields that are optional on creation but always present afterwards:
 
 ```typescript
 class User extends Table<User> {
   @PrimaryKey()
-  @Default(() => crypto.randomUUID())
-  declare id: CreationOptional<string>;  // Optional in create()
+  declare id: CreationOptional<string>;  // optional in create()
 
-  declare name: string;  // Required in create()
+  declare name: string;                  // required in create()
 
   @CreatedAt()
-  declare created_at: CreationOptional<string>;  // Auto-generated
+  declare created_at: CreationOptional<string>;
 }
 ```
 
 ### NonAttribute
 
-Use for computed properties and relations (not stored in DB):
+For relations and computed fields that are never stored:
 
 ```typescript
 class User extends Table<User> {
   declare first_name: string;
   declare last_name: string;
 
-  // Computed property - not stored
   declare full_name: NonAttribute<string>;
 
-  // Relations - loaded via include
   @HasMany(() => Order, "user_id")
   declare orders: NonAttribute<Order[]>;
 }
@@ -166,50 +199,58 @@ class User extends Table<User> {
 ### Basic Queries
 
 ```typescript
-// Get all
-const users = await User.where({});
-
-// Filter by field
+const users = await User.where({});                        // every record
 const admins = await User.where({ role: "admin" });
-const user = await User.where("email", "john@example.com");
+const one = await User.where("email", "john@example.com");
 
-// First/Last
-const first = await User.first({ active: true });
+const first = await User.first({ id: "01JBQ8..." });
 const last = await User.last({});
 ```
 
 ### Query Operators
 
 ```typescript
-// Comparison
 await User.where("age", ">=", 18);
-await User.where("age", "<", 65);
 await User.where("status", "!=", "banned");
-
-// Array membership
 await User.where("role", "in", ["admin", "moderator"]);
-
-// String contains
 await User.where("email", "$include", "gmail");
+await User.where({ age: { $gte: 18, $lte: 65 } });
 ```
 
-**Available operators:** `=`, `!=`, `<>`, `<`, `<=`, `>`, `>=`, `in`, `$include` (aliases: `$eq`, `$ne`, `$lt`, `$lte`, `$gt`, `$gte`, `$in`, `include`). `=` and `in` on the primary key or an `@Index` field run `QueryCommand` (one query per value); everything else falls back to `ScanCommand`.
+**Available operators:** `=`, `!=`, `<>`, `<`, `<=`, `>`, `>=`, `in`, `include`, with the aliases
+`$eq`, `$ne`, `$lt`, `$lte`, `$gt`, `$gte`, `$in`, `$include`. `null` on `=` reads as
+"the attribute does not exist" and on `!=` as "it does exist".
 
 ### Query Options
 
 ```typescript
 const users = await User.where({}, {
   limit: 10,
-  skip: 20,
-  order: "DESC",
+  skip: 20,             // alias: offset
+  cursor: previous.cursor,
+  order: { created_at: "DESC" },
   attributes: ["id", "name", "email"],
+  deleted: false,       // true also returns the soft-deleted ones
   include: {
-    orders: {
-      where: { status: "completed" },
-      limit: 5
-    }
+    orders: { where: { status: "completed" }, limit: 5 }
   }
 });
+```
+
+`order` without a field sorts by the `@CreatedAt` column, and never by the field you meant unless
+you name it: ask for `{ created_at: "DESC" }`, not `"DESC"`.
+
+### Pagination
+
+`where()` returns the array of instances with a `cursor` property attached whenever a `limit`
+is given. Feeding that cursor back reads only the next page; `skip` instead reads and discards
+everything before it, so cursors are the cheap way to walk a large table.
+
+```typescript
+let page = await User.where({}, { limit: 50 });
+while (page.cursor) {
+  page = await User.where({}, { limit: 50, cursor: page.cursor });
+}
 ```
 
 ---
@@ -221,32 +262,36 @@ const users = await User.where({}, {
 ```typescript
 class User extends Table<User> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
-  // HasMany(model, foreignKey, localKey = 'id')
+  // HasMany(model, foreign_key, local_key = "id")
   @HasMany(() => Order, "user_id", "id")
   declare orders: NonAttribute<Order[]>;
 
-  // HasOne(model, foreignKey, localKey = 'id')
+  // HasOne(model, foreign_key, local_key = "id")
   @HasOne(() => Profile, "user_id", "id")
   declare profile: NonAttribute<Profile | null>;
 
-  // ManyToMany(model, pivotTable, foreignKey, relatedKey, localKey = 'id', relatedPK = 'id')
+  // ManyToMany(model, pivot_table, foreign_key, related_key, local_key = "id", related_pk = "id")
   @ManyToMany(() => Role, "user_roles", "user_id", "role_id")
   declare roles: NonAttribute<Role[]>;
 }
 
 class Order extends Table<Order> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
+  @Index()
   declare user_id: string;
 
-  // BelongsTo(model, localKey, foreignKey = 'id')
-  @BelongsTo(() => User, "user_id", "id")
+  // BelongsTo(model, related_key, local_key)
+  @BelongsTo(() => User, "id", "user_id")
   declare user: NonAttribute<User | null>;
 }
 ```
+
+The foreign key of every `@HasMany` and `@HasOne` is registered as a GSI, so loading a relation
+is a Query. Mark the same column with `@Index()` when you also filter by it directly.
 
 ### Loading Relations
 
@@ -254,25 +299,23 @@ class Order extends Table<Order> {
 const users = await User.where({}, {
   include: {
     orders: { where: { status: "completed" } },
-    profile: {},
-    roles: {}
+    profile: true,
+    roles: true
   }
 });
 ```
+
+Relations are batch loaded: one round of queries per relation and per depth level, never one
+query per parent record. Nesting is allowed up to five levels.
 
 ### ManyToMany Operations
 
 ```typescript
 const user = await User.first({ id: "user-1" });
 
-// Attach relation
-await user.attach(Role, "role-123");
-
-// Detach relation
-await user.detach(Role, "role-123");
-
-// Sync relations (replace all)
-await user.sync(Role, ["role-1", "role-2", "role-3"]);
+await user.attach(Role, "role-123");            // adds the pivot row if it is not there
+await user.detach(Role, "role-123");            // removes it
+await user.sync(Role, ["role-1", "role-2"]);    // leaves exactly these
 ```
 
 ---
@@ -282,11 +325,17 @@ await user.sync(Role, ["role-1", "role-2", "role-3"]);
 ### Create
 
 ```typescript
-const user = await User.create({
-  name: "John Doe",
-  email: "john@example.com"
-});
+const user = await User.create({ name: "John Doe", email: "john@example.com" });
+
+// Batch: 25 records per request, no duplicate-key check
+const users = await User.createMany([
+  { name: "Ada", email: "ada@example.com" },
+  { name: "Alan", email: "alan@example.com" }
+]);
 ```
+
+`create()` refuses to overwrite an existing primary key and throws when it already exists.
+`createMany()` cannot express that condition and overwrites instead.
 
 ### Read
 
@@ -298,27 +347,37 @@ const user = await User.first({ id: "user-123" });
 ### Update
 
 ```typescript
-// Static update (bulk)
+// Static: updates every record matching the filter
 await User.update({ role: "premium" }, { id: "user-123" });
 
-// Instance update
+// Instance
+await user.update({ name: "Jane Doe" });
+
+// Full rewrite of the item
 user.name = "Jane Doe";
 await user.save();
 
-// Or
-await user.update({ name: "Jane Doe" });
+// Atomic counters, no read involved
+await User.increment("credits", 10, { id: "user-123" });
+await user.decrement("credits", 1);
 ```
+
+`update()` writes only the fields you pass plus the `@UpdatedAt` columns. `save()` rewrites the
+whole item, which is what you want after mutating several fields by hand.
 
 ### Delete
 
 ```typescript
-// Static delete (bulk)
+// Static: hard delete of everything matching the filter
 await User.delete({ status: "inactive" });
 
-// Instance delete (soft delete if @DeleteAt present)
+// Batch by primary key, no read and no hooks
+await User.deleteMany(["user-1", "user-2"]);
+
+// Instance: soft delete when the model has @DeleteAt, hard delete otherwise
 await user.destroy();
 
-// Force hard delete
+// Always a hard delete
 await user.forceDestroy();
 ```
 
@@ -329,26 +388,23 @@ await user.forceDestroy();
 ```typescript
 class Post extends Table<Post> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   declare title: string;
 
   @DeleteAt()
-  declare deleted_at: CreationOptional<string | null>;
+  declare deleted_at: CreationOptional<string>;
 }
 
-// Soft delete
-await post.destroy(); // Sets deleted_at timestamp
+await post.destroy();                                  // writes deleted_at
 
-// Query including soft-deleted
-const all = await Post.withTrashed({});
+await Post.where({});                                  // excludes the soft-deleted ones
+await Post.where({}, { deleted: true });               // includes them
 
-// Query only soft-deleted
-const trashed = await Post.onlyTrashed({});
-
-// Force hard delete
-await post.forceDestroy();
+await post.forceDestroy();                             // removes the record
 ```
+
+Static `delete()` is always a hard delete: soft delete is a decision of the instance.
 
 ---
 
@@ -356,11 +412,44 @@ await post.forceDestroy();
 
 ```typescript
 await dynamite.tx(async (tx) => {
-  const user = await User.create({ name: "John" }, tx);
-  await Order.create({ user_id: user.id, total: 100 }, tx);
-  // If any operation fails, all are rolled back
+  const user = await User.create({ name: "John" }, { tx });
+  await Order.create({ user_id: user.id, total: 100 }, { tx });
+  await User.increment("orders_count", 1, { id: user.id }, { tx });
 });
 ```
+
+Every mutation takes the transaction inside its options object. Nothing is written until the
+callback returns: if it throws, no operation is applied. A transaction holds up to 100
+operations and is sent in batches of 25. `__isPersisted` and the `after*` hooks only fire
+once the commit succeeds.
+
+---
+
+## Cost and Performance
+
+DynamoDB charges for what it reads, so the shape of the query is the bill.
+
+| Query | Command | Note |
+|-------|---------|------|
+| `=` on the primary key | `GetItem` | One request, one item read |
+| `in` on the primary key | `BatchGetItem` | 100 keys per request |
+| `=` or `in` on an `@Index` column | `Query` | Uses `<field>_index` |
+| Anything else | `Scan` | Reads the table and filters server-side |
+
+- A `limit` stops the read as soon as it has enough items, and travels to DynamoDB as `Limit`
+  when there is nothing left to filter. `first()` on an indexed field is a single request.
+- A read with no `limit` that ends in a Scan is split into four parallel segments: same read
+  units, a fraction of the latency.
+- `createMany()`, `deleteMany()`, static `delete()` and mass `update()` write in batches of 25.
+- `attach()`, `detach()`, `sync()` and loading a `@ManyToMany` query the pivot table through
+  its `<foreign_key>_index` GSI; none of them scans it.
+- A projection with `attributes` cuts the payload, not the read units: DynamoDB charges for the
+  whole item either way.
+- `last()` with no sort key has to read everything to find the last one. Prefer
+  `first(filters, { order: { created_at: "DESC" } })` over an unbounded table.
+
+The rule of thumb: give every column you filter by an `@Index()`, and declare the matching GSI
+in your infrastructure. Without it the query still works — it just reads the entire table.
 
 ---
 
@@ -377,6 +466,11 @@ const dynamite = new Dynamite({
 });
 
 await dynamite.connect();
+await dynamite.sync();
+```
+
+```bash
+docker run -d -p 8000:8000 amazon/dynamodb-local
 ```
 
 ### AWS DynamoDB
@@ -384,21 +478,15 @@ await dynamite.connect();
 ```typescript
 const dynamite = new Dynamite({
   region: "us-east-1",
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
-  },
   tables: [User, Order, Product]
 });
 
 await dynamite.connect();
 ```
 
-### Docker Setup
-
-```bash
-docker run -d -p 8000:8000 amazon/dynamodb-local
-```
+`DynamiteConfig` extends `DynamoDBClientConfig`, so anything the AWS SDK accepts —
+credential providers, retries, custom endpoints — is accepted here too. With no explicit
+credentials the SDK resolves them from the environment.
 
 ---
 
@@ -407,40 +495,40 @@ docker run -d -p 8000:8000 amazon/dynamodb-local
 ### Static Methods
 
 ```typescript
-// CRUD
-static create(data, tx?): Promise<T>
-static update(data, filters, tx?): Promise<number>
-static delete(filters, tx?): Promise<number>
+create(data, options?): Promise<T>
+createMany(rows, options?): Promise<T[]>
+update(changes, filters, options?): Promise<number>
+delete(filters, options?): Promise<number>
+deleteMany(ids, options?): Promise<number>
+increment(field, amount, filters, options?): Promise<number>
+decrement(field, amount, filters, options?): Promise<number>
 
-// Query
-static where(filters, options?): Promise<T[]>
-static where(field, value): Promise<T[]>
-static where(field, operator, value): Promise<T[]>
-static first(filters?, options?): Promise<T | undefined>
-static last(filters?, options?): Promise<T | undefined>
-
-// Soft deletes
-static withTrashed(filters?, options?): Promise<T[]>
-static onlyTrashed(filters?, options?): Promise<T[]>
+where(filters, options?): Promise<QueryResult<T>>
+where(field, value, options?): Promise<QueryResult<T>>
+where(field, operator, value, options?): Promise<QueryResult<T>>
+first(filters, options?): Promise<T | undefined>
+last(filters?, options?): Promise<T | undefined>
 ```
 
 ### Instance Methods
 
 ```typescript
-// CRUD
-save(): Promise<boolean>
-update(data): Promise<boolean>
-destroy(): Promise<null>
-forceDestroy(): Promise<null>
+save(options?): Promise<boolean>
+update(changes, options?): Promise<boolean>
+destroy(options?): Promise<null>
+forceDestroy(options?): Promise<null>
+increment(field, amount?): Promise<void>
+decrement(field, amount?): Promise<void>
 
-// ManyToMany
-attach(Model, id, pivotData?): Promise<void>
-detach(Model, id): Promise<void>
-sync(Model, ids): Promise<void>
+attach(Model, related_id, pivot_data?): Promise<void>
+detach(Model, related_id): Promise<void>
+sync(Model, related_ids): Promise<void>
 
-// Serialization
 toJSON(): Record<string, unknown>
+toString(): string
 ```
+
+`options` is always `MutationOptions`: `{ hook?: boolean; tx?: TransactionContext }`.
 
 ---
 

@@ -97,7 +97,7 @@ class Order extends Table<Order> {
   declare total: number;
   declare status: string;
 
-  @BelongsTo(() => User, "user_id")
+  @BelongsTo(() => User, "id", "user_id")
   declare user: NonAttribute<User | null>;
 }
 
@@ -247,7 +247,7 @@ class Order extends Table<Order> {
 
   declare total: number;
 
-  @BelongsTo(() => User, "user_id")
+  @BelongsTo(() => User, "id", "user_id")
   declare user: NonAttribute<User | null>;
 }
 

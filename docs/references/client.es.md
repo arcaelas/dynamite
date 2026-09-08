@@ -1,10 +1,10 @@
-# Client API Reference
+# Referencia de la API del cliente
 
-## Overview
+## Descripción general
 
-The `Dynamite` class manages DynamoDB connections, table synchronization, and transactions.
+`Dynamite` sostiene la conexión con DynamoDB, la lista de modelos a los que sirve, la sincronización opcional de tablas y las transacciones.
 
-## Class: Dynamite
+## Clase: Dynamite
 
 ### Constructor
 
@@ -12,29 +12,22 @@ The `Dynamite` class manages DynamoDB connections, table synchronization, and tr
 constructor(config: DynamiteConfig)
 ```
 
-Creates a new Dynamite client instance.
+Construye el cliente. No abre ninguna conexión ni llama a la API de AWS.
 
-**Parameters:**
-- `config` (DynamiteConfig): Configuration object
-
-**Example:**
 ```typescript
 import { Dynamite } from "@arcaelas/dynamite";
 
 const dynamite = new Dynamite({
   region: "us-east-1",
   endpoint: "http://localhost:8000",
-  credentials: {
-    accessKeyId: "test",
-    secretAccessKey: "test"
-  },
+  credentials: { accessKeyId: "test", secretAccessKey: "test" },
   tables: [User, Order, Product]
 });
 ```
 
-## Configuration
+## Configuración
 
-### DynamiteConfig Interface
+### `DynamiteConfig`
 
 ```typescript
 interface DynamiteConfig extends DynamoDBClientConfig {
@@ -42,176 +35,192 @@ interface DynamiteConfig extends DynamoDBClientConfig {
 }
 ```
 
-| Property | Type | Required | Description |
-|----------|------|----------|-------------|
-| `tables` | `Array<Class>` | Yes | Array of Table class constructors |
-| `region` | `string` | Yes | AWS region |
-| `endpoint` | `string` | No | Custom endpoint (DynamoDB Local) |
-| `credentials` | `AwsCredentials` | No | AWS credentials |
+| Propiedad | Tipo | Obligatoria | Descripción |
+|-----------|------|-------------|-------------|
+| `tables` | `Array<Class>` | Sí | Las clases de modelo a las que sirve este cliente |
+| `region` | `string` | No | Región de AWS. Si se omite, la resuelve el entorno |
+| `endpoint` | `string` | No | Endpoint propio, para DynamoDB Local |
+| `credentials` | `AwsCredentialIdentity` | No | Credenciales explícitas. Si se omiten, las resuelve el entorno |
 
-## Instance Methods
+Todo lo demás que acepte `DynamoDBClientConfig` —proveedores de credenciales, `maxAttempts`, `requestHandler`, endpoints propios— se acepta aquí y viaja tal cual al SDK de AWS.
 
-### connect()
+## Métodos de instancia
+
+### `connect()`
 
 ```typescript
 async connect(): Promise<void>
 ```
 
-Connects to DynamoDB and synchronizes all declared tables. Creates tables and GSIs if they don't exist.
+Configura el cliente y deduce qué GSI esperan los modelos. **No llama a la API de AWS ni crea nada.**
 
-**Example:**
+**Comportamiento:**
+
+- Registra el cliente global que usa toda operación de `Table`
+- Anota, solo a partir de los schemas, los GSI que espera cada modelo: toda columna `@Index` que no sea la clave primaria y toda clave foránea de un `@HasMany` o un `@HasOne`
+- Es idempotente: llamarlo dos veces no hace nada la segunda
+
 ```typescript
-const dynamite = new Dynamite({
-  region: "us-east-1",
-  tables: [User, Order]
-});
-
+const dynamite = new Dynamite({ region: "us-east-1", tables: [User, Order] });
 await dynamite.connect();
 
-// Now Table operations are available
 const user = await User.create({ name: "John" });
 ```
 
-**Behavior:**
-- Sets the global client for all Table operations
-- Creates tables with `PAY_PER_REQUEST` billing mode
-- Creates pivot tables for ManyToMany relationships
-- Idempotent - safe to call multiple times
+---
 
-### tx()
+### `sync()`
+
+```typescript
+async sync(): Promise<void>
+```
+
+Crea en DynamoDB lo que los modelos declaran y la cuenta todavía no tiene. Es el camino de desarrollo.
+
+**Comportamiento:**
+
+- Exige `connect()` antes; si no, lanza `Call connect() before sync()`
+- Describe en paralelo todas las tablas y tablas pivote
+- Crea las tablas que faltan con facturación `PAY_PER_REQUEST`, su partition key, su sort key cuando alguna columna lleva `@IndexSort`, y sus GSI
+- Crea las tablas pivote de `@ManyToMany` con clave `id` y un GSI por cada lado
+- Agrega los GSI que faltan a las tablas existentes de a una ronda, esperando que cada ronda quede `ACTIVE`, porque DynamoDB construye un índice a la vez por tabla
+- Es idempotente: llamarlo dos veces no hace nada la segunda
+
+```typescript
+await dynamite.connect();
+await dynamite.sync();
+```
+
+En producción la infraestructura declara las tablas y sus índices con los mismos nombres
+—`<campo>_index`, partition key sobre `<campo>`, proyección `ALL`— y `sync()` no se llama.
+
+---
+
+### `tx()`
 
 ```typescript
 async tx<R>(callback: (tx: TransactionContext) => Promise<R>): Promise<R>
 ```
 
-Executes operations within an atomic transaction. If any operation fails, all changes are rolled back.
+Ejecuta un conjunto de mutaciones de forma atómica. No se escribe nada hasta que el callback retorna; si lanza, no se aplica ninguna operación.
 
-**Parameters:**
-- `callback`: Function containing transactional operations
-
-**Returns:**
-- Result returned by the callback function
-
-**Example:**
 ```typescript
 await dynamite.tx(async (tx) => {
   const user = await User.create({ name: "John" }, { tx });
   await Order.create({ user_id: user.id, total: 100 }, { tx });
-  // If any create fails, all operations are rolled back
+  await User.increment("orders_count", 1, { id: user.id }, { tx });
 });
 ```
 
-**Limitations:**
-- Maximum 25 operations per transaction (DynamoDB limit)
+**Comportamiento y límites:**
 
-## Class: TransactionContext
+- Toda mutación recibe la transacción dentro de su objeto de opciones: `{ tx }`
+- Hasta 100 operaciones, enviadas en lotes de 25
+- `__isPersisted` y los hooks `after*` se activan tras el commit, nunca antes
+- Las lecturas dentro del callback son lecturas normales: no ven lo que la transacción tiene encolado
 
-Internal class passed to `tx()` callbacks.
+## Clase: TransactionContext
 
-### addPut()
+El objeto que `tx()` entrega al callback. Rara vez se toca directamente, lo hacen los modelos.
+
+### `addPut()`
 
 ```typescript
-addPut(table_name: string, item: Record<string, any>): void
+addPut(table_name: string, item: Record<string, any>, condition?: { expression: string; names: Record<string, string> }): void
 ```
 
-Adds a Put operation to the transaction.
+Encola una escritura. `create()` usa la condición para negarse a pisar una clave primaria existente.
 
-### addDelete()
+### `addDelete()`
 
 ```typescript
 addDelete(table_name: string, key: Record<string, any>): void
 ```
 
-Adds a Delete operation to the transaction.
+Encola un borrado.
 
-### commit()
+### `addUpdate()`
+
+```typescript
+addUpdate(table_name: string, key: Record<string, any>, expression: string, names: Record<string, string>, values: Record<string, any>): void
+```
+
+Encola una actualización parcial. La usan `increment()` y `decrement()`.
+
+### `onCommit()`
+
+```typescript
+onCommit(fn: () => void | Promise<void>): void
+```
+
+Registra un callback que corre tras un commit exitoso. Ahí se marcan las instancias como persistidas y ahí corren los hooks `after*`.
+
+### `commit()`
 
 ```typescript
 async commit(): Promise<void>
 ```
 
-Commits all queued operations atomically. Called automatically by `tx()`.
+Envía todo lo encolado, en lotes de 25, y después ejecuta los callbacks de `onCommit`. Lo llama `tx()` por ti.
 
-## Utility Functions
+## Funciones de utilidad
 
-### setGlobalClient()
+### `setGlobalClient(client)`
 
-```typescript
-export const setGlobalClient = (client: DynamoDBClient): void
-```
+Fija el cliente global de DynamoDB. Lo llama `connect()`.
 
-Sets the global DynamoDB client. Called internally by `connect()`.
+### `getGlobalClient()`
 
-### getGlobalClient()
+Retorna el cliente actual. Lanza si no hay ninguno.
 
-```typescript
-export const getGlobalClient = (): DynamoDBClient
-```
+### `hasGlobalClient()`
 
-Gets the current global client. Throws if no client is set.
+`true` cuando hay un cliente configurado.
 
-### hasGlobalClient()
+### `requireClient()`
 
-```typescript
-export const hasGlobalClient = (): boolean
-```
+Retorna el cliente actual o lanza `DynamoDB client no configurado. Use Dynamite.connect() primero.` Es lo que llama toda operación de un modelo.
 
-Checks if a global client is available.
+## Ejemplos de configuración
 
-### requireClient()
-
-```typescript
-export const requireClient = (): DynamoDBClient
-```
-
-Requires a global client. Throws with error message if not set.
-
-## Configuration Examples
-
-### Local Development
+### Desarrollo local
 
 ```typescript
 const dynamite = new Dynamite({
-  region: "us-east-1",
+  region: "local",
   endpoint: "http://localhost:8000",
-  credentials: {
-    accessKeyId: "test",
-    secretAccessKey: "test"
-  },
+  credentials: { accessKeyId: "test", secretAccessKey: "test" },
   tables: [User, Order]
 });
 
 await dynamite.connect();
+await dynamite.sync();
 ```
 
-**Docker:**
 ```bash
 docker run -d -p 8000:8000 amazon/dynamodb-local
 ```
 
-### AWS Production
+### Producción en AWS
 
 ```typescript
 const dynamite = new Dynamite({
   region: process.env.AWS_REGION!,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
-  },
   tables: [User, Order]
 });
 
 await dynamite.connect();
+// sin sync(): las tablas y sus índices son de la infraestructura
 ```
 
-## Complete Example
+## Ejemplo completo
 
 ```typescript
-import { Dynamite, Table, PrimaryKey, Default, HasMany, NonAttribute } from "@arcaelas/dynamite";
+import { Dynamite, Table, PrimaryKey, Index, HasMany, BelongsTo, NonAttribute, CreationOptional } from "@arcaelas/dynamite";
 
 class User extends Table<User> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   declare name: string;
 
@@ -221,40 +230,41 @@ class User extends Table<User> {
 
 class Order extends Table<Order> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
+  @Index()
   declare user_id: string;
+
   declare total: number;
+
+  @BelongsTo(() => User, "id", "user_id")
+  declare user: NonAttribute<User | null>;
 }
 
 async function main() {
   const dynamite = new Dynamite({
-    region: "us-east-1",
+    region: "local",
     endpoint: "http://localhost:8000",
     credentials: { accessKeyId: "test", secretAccessKey: "test" },
     tables: [User, Order]
   });
 
   await dynamite.connect();
+  await dynamite.sync();
 
-  // Atomic transaction
   await dynamite.tx(async (tx) => {
     const user = await User.create({ name: "John" }, { tx });
     await Order.create({ user_id: user.id, total: 99.99 }, { tx });
   });
 
-  // Query with relations
-  const users = await User.where({}, {
-    include: { orders: {} }
-  });
-
+  const users = await User.where({}, { include: { orders: true } });
   console.log(users[0].orders);
 }
 
 main();
 ```
 
-## See Also
+## Ver también
 
-- [Table API Reference](./table.md)
-- [Decorators Reference](./decorators.md)
+- [Referencia de la API de Table](./table.md)
+- [Referencia de decoradores](./decorators.md)

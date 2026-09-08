@@ -34,8 +34,11 @@ export {
   BeforeDestroy, AfterDestroy,
 } from "./decorators/hooks";
 
-// Tipos de hooks y opciones de mutación
-export type { MutationOptions, HookFn } from "./core/table";
+// Tipos de hooks, opciones de mutación y resultado de consulta
+export type { MutationOptions, HookFn, QueryResult } from "./core/table";
+
+// Configuración del cliente
+export type { DynamiteConfig } from "./core/client";
 
 // Sistema de tipos simplificado
 export type {

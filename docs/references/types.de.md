@@ -17,6 +17,10 @@ Diese Anleitung dokumentiert alle TypeScript-Typen, die von Dynamite ORM exporti
 - [Abfrage-Typen](#abfrage-typen)
   - [QueryOperator](#queryoperator)
   - [WhereOptions\<T\>](#whereoptionst)
+  - [QueryResult\<T\>](#queryresultt)
+- [Mutations-Typen](#mutations-typen)
+  - [MutationOptions](#mutationoptions)
+  - [DynamiteConfig](#dynamiteconfig)
 
 ---
 
@@ -92,11 +96,11 @@ declare field_name: NonAttribute<Type>;
 **Beispiele:**
 
 ```typescript
-import { Table, HasMany, BelongsTo, NonAttribute } from '@arcaelas/dynamite';
+import { Table, HasMany, BelongsTo, NonAttribute, CreationOptional } from '@arcaelas/dynamite';
 
 class User extends Table<User> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   declare name: string;
 
@@ -110,11 +114,11 @@ class User extends Table<User> {
 
 class Order extends Table<Order> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   declare user_id: string;
 
-  @BelongsTo(() => User, "user_id")
+  @BelongsTo(() => User, "id", "user_id")
   declare user: NonAttribute<User | null>;
 }
 ```
@@ -194,7 +198,7 @@ import type { InferRelations } from '@arcaelas/dynamite';
 
 class User extends Table<User> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   @HasMany(() => Post, "user_id")
   declare posts: NonAttribute<Post[]>;
@@ -336,7 +340,7 @@ interface WhereOptions<T> {
       | InferAttributes<T>[K]
       | { [op in QueryOperator]?: InferAttributes<T>[K] };
   };
-  order?: "ASC" | "DESC";
+  order?: "ASC" | "DESC" | { [K in keyof InferAttributes<T>]?: "ASC" | "DESC" };
   skip?: number;              // Alias von offset
   offset?: number;            // Anzahl zu überspringender Datensätze
   limit?: number;             // Maximale Anzahl zurückzugebender Datensätze
@@ -344,7 +348,8 @@ interface WhereOptions<T> {
   include?: {                 // Einzubeziehende Beziehungen
     [relation: string]: boolean | WhereOptions<any>;
   };
-  _includeTrashed?: boolean;  // Soft-gelöschte Datensätze einbeziehen
+  cursor?: Record<string, any>;  // Cursor der nächsten Seite, von der vorherigen Abfrage geliefert
+  deleted?: boolean;          // Soft-gelöschte Datensätze einschließen
 }
 ```
 
@@ -359,7 +364,8 @@ interface WhereOptions<T> {
 | `limit` | `number` | Maximale Anzahl zurückzugebender Datensätze |
 | `attributes` | `string[]` | Spezifisch auszuwählende Felder |
 | `include` | `object` | Einzubeziehende Beziehungen |
-| `_includeTrashed` | `boolean` | Soft-gelöschte Datensätze einbeziehen |
+| `cursor` | `Record<string, any>` | Cursor der nächsten Seite |
+| `deleted` | `boolean` | Soft-gelöschte Datensätze einschließen |
 
 **Beispiel:**
 
@@ -383,6 +389,75 @@ const users = await User.where({ active: true }, {
       }
     }
   }
+});
+```
+
+---
+
+---
+
+## QueryResult\<T\>
+
+Das Array, das `where()` zurückgibt, mit dem Cursor der nächsten Seite daran.
+
+**Definition:**
+```typescript
+type QueryResult<M> = M[] & { cursor?: Record<string, any> };
+```
+
+`cursor` ist nicht aufzählbar und übersteht daher weder `JSON.stringify` noch einen Spread. Er trägt einen Wert, solange weitere Seiten zu lesen sind.
+
+**Beispiel:**
+```typescript
+let seite = await User.where({}, { limit: 50 });
+while (seite.cursor) {
+  seite = await User.where({}, { limit: 50, cursor: seite.cursor });
+}
+```
+
+---
+
+## Mutations-Typen
+
+### MutationOptions
+
+Das Optionsobjekt, das jede Mutation als letztes Argument erhält.
+
+**Definition:**
+```typescript
+interface MutationOptions {
+  hook?: boolean;
+  tx?: TransactionContext;
+}
+```
+
+| Eigenschaft | Typ | Beschreibung |
+|-------------|-----|--------------|
+| `hook` | `boolean` | Führt die Lifecycle-Hooks der Operation aus. Standardmäßig aus |
+| `tx` | `TransactionContext` | Reiht die Operation in eine atomare Transaktion ein |
+
+**Beispiel:**
+```typescript
+await User.create({ name: "Ana" }, { hook: true });
+await dynamite.tx(async (tx) => { await User.create({ name: "Ana" }, { tx }); });
+```
+
+### DynamiteConfig
+
+Die Client-Konfiguration. Erweitert `DynamoDBClientConfig` aus dem AWS SDK.
+
+**Definition:**
+```typescript
+interface DynamiteConfig extends DynamoDBClientConfig {
+  tables: Array<new (...args: any[]) => any>;
+}
+```
+
+**Beispiel:**
+```typescript
+const dynamite = new Dynamite({
+  region: "us-east-1",
+  tables: [User, Order]
 });
 ```
 
@@ -431,13 +506,13 @@ function processUser(data: any) { ... }
 class Post extends Table<Post> {
   declare user_id: string; // FK-Feld
 
-  @BelongsTo(() => User, "user_id")
+  @BelongsTo(() => User, "id", "user_id")
   declare author: NonAttribute<User | null>;
 }
 
 // Falsch - Foreign Key nicht deklariert
 class Post extends Table<Post> {
-  @BelongsTo(() => User, "user_id")
+  @BelongsTo(() => User, "id", "user_id")
   declare author: NonAttribute<User | null>;
 }
 ```

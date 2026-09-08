@@ -9,16 +9,14 @@
     "url": "https://github.com/arcaelas/dynamite/issues"
   },
   "dependencies": {
-    "@arcaelas/utils": "^2.0.8",
-    "@aws-sdk/client-dynamodb": "3.329.0",
-    "@aws-sdk/lib-dynamodb": "3.329.0",
-    "pluralize": "^8.0.0",
-    "uuid": "^11.1.0"
+    "@aws-sdk/client-dynamodb": "^3.329.0",
+    "@aws-sdk/util-dynamodb": "^3.329.0"
   },
   "description": "Modern decorator-first ORM for AWS DynamoDB with TypeScript support. Type-safe models, relationships, validations, and transactions.",
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@types/node": "^24.0.6",
+    "eslint": "^9.39.1",
     "globals": "^16.5.0",
     "tsc-alias": "^1.8.16",
     "tsx": "^4.20.3",
@@ -67,5 +65,5 @@
     "prepublishOnly": "yarn build"
   },
   "types": "./build/esm/index.d.ts",
-  "version": "3.2.1"
+  "version": "3.3.0"
 }

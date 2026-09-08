@@ -33,6 +33,7 @@ export const PrimaryKey = decorator((table_class, col) => {
   // Metadata: Index + primaryKey (IndexSort only when separate SK exists)
   col.store.index = true;
   col.store.primaryKey = true;
+  col.store.readsCurrent = true;
   schema.primary_key = col.name;
 
   // Set pipeline: immutable after first assignment, Default(ulid), any non-empty string id
