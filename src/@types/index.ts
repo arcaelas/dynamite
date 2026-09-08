@@ -193,7 +193,7 @@ export interface WhereOptions<
   A = InferAttributes<T>,
   R = InferRelations<T>
 > {
-  /** Filtros de búsqueda */
+  /** Filtros adicionales, que se suman a los del primer argumento de `where()` */
   where?: {
     [K in keyof A]?:
       | A[K]
@@ -217,7 +217,11 @@ export interface WhereOptions<
       ? true | WhereOptions<U>
       : true | Pick<WhereOptions<NonNullable<R[K]>>, "attributes" | "include">;
   };
-  /** Incluir registros soft-deleted */
+  /** Incluir los registros con soft delete; por defecto quedan fuera */
+  deleted?: boolean;
+  /** Clave devuelta como `cursor` por la consulta anterior; al usarla se ignora `skip` */
+  cursor?: Record<string, any>;
+  /** @deprecated Alias de `deleted` */
   _includeTrashed?: boolean;
 }
 

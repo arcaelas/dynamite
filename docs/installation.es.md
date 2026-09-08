@@ -249,18 +249,23 @@ Si ejecutas en infraestructura AWS, usa roles IAM en lugar de credenciales:
     {
       "Effect": "Allow",
       "Action": [
-        "dynamodb:PutItem",
         "dynamodb:GetItem",
-        "dynamodb:UpdateItem",
-        "dynamodb:DeleteItem",
+        "dynamodb:BatchGetItem",
         "dynamodb:Query",
         "dynamodb:Scan",
-        "dynamodb:BatchGetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
         "dynamodb:BatchWriteItem",
+        "dynamodb:TransactWriteItems",
         "dynamodb:DescribeTable",
-        "dynamodb:CreateTable"
+        "dynamodb:CreateTable",
+        "dynamodb:UpdateTable"
       ],
-      "Resource": "arn:aws:dynamodb:*:*:table/*"
+      "Resource": [
+        "arn:aws:dynamodb:*:*:table/*",
+        "arn:aws:dynamodb:*:*:table/*/index/*"
+      ]
     }
   ]
 }
@@ -386,15 +391,7 @@ Crea un modelo simple de Usuario para probar la instalación:
 **models/user.ts** (TypeScript)
 
 ```typescript
-import {
-  Table,
-  PrimaryKey,
-  Default,
-  CreatedAt,
-  UpdatedAt,
-  CreationOptional,
-  NotNull
-} from "@arcaelas/dynamite";
+import { Table, PrimaryKey, Default, CreatedAt, UpdatedAt, CreationOptional, NotNull } from "@arcaelas/dynamite";
 
 export class User extends Table<User> {
   @PrimaryKey()
@@ -512,12 +509,12 @@ Crea un archivo de prueba simple:
 import dotenv from "dotenv";
 dotenv.config();
 
-import { Dynamite, Table, PrimaryKey, Default } from "@arcaelas/dynamite";
+import { Dynamite, Table, PrimaryKey, Default, CreationOptional } from "@arcaelas/dynamite";
 
 // Define un modelo de prueba
 class TestModel extends Table<TestModel> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 }
 
 async function TestConnection() {
@@ -811,16 +808,23 @@ Asegúrate de que tu usuario/rol IAM tenga los permisos necesarios:
     {
       "Effect": "Allow",
       "Action": [
-        "dynamodb:CreateTable",
-        "dynamodb:DescribeTable",
-        "dynamodb:PutItem",
         "dynamodb:GetItem",
+        "dynamodb:BatchGetItem",
         "dynamodb:Query",
         "dynamodb:Scan",
+        "dynamodb:PutItem",
         "dynamodb:UpdateItem",
-        "dynamodb:DeleteItem"
+        "dynamodb:DeleteItem",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:TransactWriteItems",
+        "dynamodb:DescribeTable",
+        "dynamodb:CreateTable",
+        "dynamodb:UpdateTable"
       ],
-      "Resource": "arn:aws:dynamodb:*:*:table/*"
+      "Resource": [
+        "arn:aws:dynamodb:*:*:table/*",
+        "arn:aws:dynamodb:*:*:table/*/index/*"
+      ]
     }
   ]
 }

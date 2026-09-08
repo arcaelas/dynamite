@@ -36,6 +36,7 @@ const dynamite = new Dynamite({
   }
 });
 await dynamite.connect();
+await dynamite.sync(); // erstellt die fehlenden Tabellen und Indizes
 
 
 // Für AWS-Produktion
@@ -50,6 +51,9 @@ const dynamite = new Dynamite({
 await dynamite.connect();
 
 ```
+
+`connect()` konfiguriert den Client und ermittelt, welche Indizes die Modelle erwarten; es erstellt nichts.
+`sync()` erstellt die fehlenden Tabellen, Pivot-Tabellen und GSIs und ist der Entwicklungsweg.
 
 ## Schritt 1: Ihr erstes Modell
 
@@ -283,14 +287,7 @@ await Promise.all(inactive_users.map(user => user.destroy()));
 Zeitstempel verfolgen, wann Datensätze erstellt und aktualisiert werden. Verwenden Sie die Decorators `@CreatedAt` und `@UpdatedAt`:
 
 ```typescript
-import {
-  Table,
-  PrimaryKey,
-  Default,
-  CreatedAt,
-  UpdatedAt,
-  CreationOptional
-} from "@arcaelas/dynamite";
+import { Table, PrimaryKey, Default, CreatedAt, UpdatedAt, CreationOptional } from "@arcaelas/dynamite";
 
 class User extends Table<User> {
   @PrimaryKey()
@@ -328,19 +325,7 @@ console.log(user.updated_at); // "2024-01-15T10:35:00.000Z" (aktualisiert!)
 Hier ist ein vollständiges Beispiel, das alles zusammenbringt - ein einfaches Aufgabenverwaltungssystem:
 
 ```typescript
-import {
-  Table,
-  PrimaryKey,
-  Default,
-  CreatedAt,
-  UpdatedAt,
-  Validate,
-  Set,
-  NotNull,
-  CreationOptional,
-  NonAttribute,
-  Dynamite
-} from "@arcaelas/dynamite";
+import { Table, PrimaryKey, Default, CreatedAt, UpdatedAt, Validate, Set, NotNull, CreationOptional, NonAttribute, Dynamite } from "@arcaelas/dynamite";
 
 // Task-Modell zuerst definieren
 class Task extends Table<Task> {

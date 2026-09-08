@@ -1,19 +1,17 @@
-# Table API Referenz
+# Table-API-Referenz
 
-## Allgemeine Beschreibung
+## Überblick
 
-Die Klasse `Table` ist die Basisklasse für alle Modelle in Dynamite ORM. Sie bietet eine vollständige und typisierte API für die Durchführung von CRUD-Operationen, erweiterten Abfragen, Beziehungsverwaltung und Datenmanipulation in DynamoDB.
+`Table` ist die Basisklasse aller Modelle. Sie liefert das typisierte CRUD, das Abfragesystem, das Laden der Beziehungen und den Lebenszyklus einer Instanz.
 
-**Hauptmerkmale:**
-- Strikte Typisierung mit TypeScript
-- Vollständige CRUD-Operationen
-- Flexibles Abfragesystem mit mehreren Operatoren
-- Unterstützung für HasMany- und BelongsTo-Beziehungen
-- Automatische Verwaltung von Timestamps (createdAt/updatedAt)
-- Integrierte Validierungen und Mutationen
-- Paginierung und Sortierung
-- Auswahl spezifischer Attribute
-- Einbeziehung verschachtelter Beziehungen
+**Was sie bietet:**
+
+- Strikte Typisierung, aus der Klasse selbst abgeleitet
+- CRUD als statische Methoden und als Instanzmethoden
+- Ein Abfragesystem, das `GetItem`, `BatchGetItem`, `Query` oder `Scan` anhand der Form des Filters wählt
+- Beziehungen `HasMany`, `HasOne`, `BelongsTo` und `ManyToMany` mit Batch-Laden
+- Automatische Zeitstempel und Soft Delete
+- Cursor-Paginierung, Sortierung, Projektion und verschachtelte Includes
 
 ## Import
 
@@ -24,13 +22,17 @@ import { Table } from '@arcaelas/dynamite';
 ## Modelldefinition
 
 ```typescript
-import { Table, Name, PrimaryKey, NotNull, Default, CreatedAt, UpdatedAt } from '@arcaelas/dynamite';
+import {
+  Table, Name, PrimaryKey, NotNull, Default, Index,
+  CreatedAt, UpdatedAt, DeleteAt, CreationOptional
+} from '@arcaelas/dynamite';
 
 @Name("users")
 class User extends Table<User> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
+  @Index()
   @NotNull()
   declare email: string;
 
@@ -38,13 +40,16 @@ class User extends Table<User> {
   declare name: string;
 
   @Default(() => 25)
-  declare age: number;
+  declare age: CreationOptional<number>;
 
   @CreatedAt()
-  declare createdAt: string;
+  declare created_at: CreationOptional<string>;
 
   @UpdatedAt()
-  declare updatedAt: string;
+  declare updated_at: CreationOptional<string>;
+
+  @DeleteAt()
+  declare deleted_at: CreationOptional<string>;
 }
 ```
 
@@ -52,1047 +57,400 @@ class User extends Table<User> {
 
 ## Konstruktor
 
-### `constructor(data: InferAttributes<T>)`
+### `constructor(data: Partial<InferAttributes<T>>)`
 
-Erstellt eine neue Instanz des Modells mit den bereitgestellten Daten.
+Erzeugt eine Instanz im Speicher. Es wird nichts nach DynamoDB geschrieben.
 
-**Parameter:**
-- `data` - Objekt mit den Modellattributen (schließt Beziehungen und Methoden aus)
+**Verhalten:**
 
-**Merkmale:**
-- Wendet Standardwerte an, die mit `@Default()` definiert sind
-- Initialisiert im Modell deklarierte Eigenschaften
-- Persistiert nicht automatisch in der Datenbank (verwenden Sie `save()` zum Persistieren)
-
-**Beispiel:**
+- Führt die Schreib-Pipeline **aller** Spalten aus, nicht nur der in `data` vorhandenen. Deshalb sind `@Default`, `@PrimaryKey` und `@CreatedAt` schon beim Erzeugen gesetzt, und deshalb weist `@NotNull` ein fehlendes Feld genau dort zurück
+- Setzt einen konfigurierten Client voraus: ohne `connect()` wirft der Konstruktor
+- Die Instanz ist erst nach `save()` oder `create()` persistiert
 
 ```typescript
-const user = new User({
-  id: "user-123",
-  email: "john@example.com",
-  name: "John Doe",
-  age: 30
-});
+const user = new User({ email: "john@example.com", name: "John Doe" });
 
-// Um in der Datenbank zu persistieren
-await user.save();
+user.id;         // "01JBQ8..." — bereits erzeugt
+user.created_at; // bereits erzeugt
+
+await user.save(); // jetzt existiert der Datensatz in DynamoDB
 ```
+
+---
+
+## Mutations-Optionen
+
+Jede Mutation nimmt dasselbe Optionsobjekt als letztes Argument:
+
+```typescript
+interface MutationOptions {
+  hook?: boolean;          // führt die Lifecycle-Hooks aus; standardmäßig aus
+  tx?: TransactionContext; // führt innerhalb einer atomaren Transaktion aus
+}
+```
+
+- Hooks sind pro Aufruf opt-in: ohne `{ hook: true }` läuft keiner.
+- In einer Transaktion wird nichts geschrieben, bis der Callback zurückkehrt. Die `after*`-Hooks und `__isPersisted` greifen erst nach dem Commit.
+- `increment()` und `decrement()` akzeptieren `{ tx }`, lösen aber nie Hooks aus.
 
 ---
 
 ## Instanzmethoden
 
-> **Mutations-Optionen:** Die Mutationsmethoden (`save`, `update`, `destroy` sowie die statischen `create`, `update`, `delete`) akzeptieren als letztes Argument ein optionales `options`-Objekt vom Typ `MutationOptions`:
->
-> ```typescript
-> interface MutationOptions {
->   hook?: boolean;          // Lifecycle-Hooks ausführen
->   tx?: TransactionContext; // Operation innerhalb einer Transaktion ausführen
-> }
-> ```
->
-> Mit `{ hook: true }` werden die Lifecycle-Hook-Dekoratoren (`@BeforeCreate`, `@AfterCreate`, `@BeforeUpdate`, `@AfterUpdate`, `@BeforeDestroy`, `@AfterDestroy`) der Entität ausgeführt.
-
 ### `save(options?: MutationOptions): Promise<boolean>`
 
-Speichert oder aktualisiert den aktuellen Datensatz in der Datenbank.
-
-**Parameter:**
-- `options` (`MutationOptions`, optional) - `{ hook?: boolean; tx?: TransactionContext }`. Mit `{ hook: true }` werden die Lifecycle-Hooks ausgeführt; mit `{ tx }` läuft die Operation innerhalb einer Transaktion.
+Schreibt das komplette Item.
 
 **Verhalten:**
-- Wenn der Datensatz keine `id` hat (oder sie `null`/`undefined` ist), erstellt er einen neuen Datensatz
-- Wenn der Datensatz eine `id` hat, aktualisiert er den vorhandenen Datensatz
-- Aktualisiert automatisch das Feld `updatedAt`, wenn es definiert ist
-- Setzt `createdAt` nur bei neuen Datensätzen
 
-**Rückgabe:** `true` wenn die Operation erfolgreich war
+- Bei einer nie persistierten Instanz delegiert sie an `create()`, das einen vorhandenen Primärschlüssel nicht überschreibt
+- Bei einer persistierten Instanz sendet sie ein `PutItem` mit allen Spalten, sodass jedes von Hand geänderte Feld geschrieben wird
+- Ob eine Instanz persistiert ist, wird intern geführt und nicht aus der id abgeleitet: eine neue Instanz hat ihre id durch `@PrimaryKey` bereits gesetzt
 
-**Beispiel:**
+**Rückgabe:** `true`
 
 ```typescript
-// Neuen Datensatz erstellen
-const user = new User({
-  email: "jane@example.com",
-  name: "Jane Smith"
-});
-await user.save(); // createdAt und updatedAt werden automatisch gesetzt
+const user = new User({ email: "jane@example.com", name: "Jane Smith" });
+await user.save(); // Anlage
 
-// Vorhandenen Datensatz aktualisieren
 user.name = "Jane Doe";
-await user.save(); // Nur updatedAt wird aktualisiert
+await user.save(); // vollständiges Neuschreiben des Items
 ```
 
 ---
 
 ### `update(patch: Partial<InferAttributes<T>>, options?: MutationOptions): Promise<boolean>`
 
-Aktualisiert den Datensatz teilweise mit den bereitgestellten Feldern.
+Aktualisiert nur die übergebenen Felder.
 
-**Parameter:**
-- `patch` - Objekt mit den zu aktualisierenden Feldern
-- `options` (`MutationOptions`, optional) - `{ hook?: boolean; tx?: TransactionContext }`. Mit `{ hook: true }` werden die Lifecycle-Hooks ausgeführt; mit `{ tx }` läuft die Operation innerhalb einer Transaktion.
+**Verhalten:**
 
-**Rückgabe:** `true` wenn die Operation erfolgreich war
+- Beziehungsfelder in `patch` werden ignoriert statt zu werfen
+- Die `@UpdatedAt`-Spalten werden erneuert, auch wenn sie nicht in `patch` stehen
+- Ohne Hooks und außerhalb einer Transaktion ist es ein einziges `UpdateItem`, das nur die berührten Felder schreibt, unter der Bedingung, dass der Datensatz noch existiert. Existiert er nicht mehr, wird `false` zurückgegeben und nichts geschrieben
+- Mit `{ hook: true }` werden die Änderungen angewendet, `beforeUpdate` ausgeführt, das Item geschrieben und `afterUpdate` ausgeführt. Beide Hooks erhalten das Änderungs-Delta
 
-**Beispiel:**
+**Rückgabe:** `true`, wenn der Datensatz aktualisiert wurde
 
 ```typescript
-const user = await User.first({ id: "user-123" });
-await user.update({
-  name: "John Updated",
-  age: 31
-});
-
-console.log(user.name); // "John Updated"
-console.log(user.age);  // 31
+await user.update({ name: "Jane Doe" });
+await user.update({ name: "Jane Doe" }, { hook: true });
 ```
 
 ---
 
 ### `destroy(options?: MutationOptions): Promise<null>`
 
-Löscht den aktuellen Datensatz aus der Datenbank.
+Löscht den Datensatz, sanft wenn das Modell es zulässt.
 
-**Parameter:**
-- `options` (`MutationOptions`, optional) - `{ hook?: boolean; tx?: TransactionContext }`. Mit `{ hook: true }` werden die Lifecycle-Hooks ausgeführt; mit `{ tx }` läuft die Operation innerhalb einer Transaktion.
+**Verhalten:**
 
-**Anforderungen:**
-- Die Instanz muss eine gültige `id` haben
-
-**Rückgabe:** `null`
-
-**Fehler:**
-- Wirft Fehler, wenn die Instanz keine `id` hat
-
-**Beispiel:**
+- Mit einer `@DeleteAt`-Spalte wird dort der aktuelle Zeitstempel geschrieben und gespeichert: der Datensatz bleibt in der Tabelle und verschwindet aus `where()`
+- Ohne `@DeleteAt` wird der Datensatz entfernt
+- Wirft `Cannot destroy record without ID`, wenn die Instanz keinen Primärschlüssel hat
 
 ```typescript
-const user = await User.first({ id: "user-123" });
-await user.destroy(); // Löscht den Datensatz aus der Datenbank
+await post.destroy();               // Soft Delete
+await post.destroy({ hook: true }); // beforeDestroy + afterDestroy
 ```
 
 ---
 
-### `toJSON(): Record<string, any>`
+### `forceDestroy(options?: MutationOptions): Promise<null>`
 
-Serialisiert die Instanz zu einem einfachen JSON-Objekt.
-
-**Merkmale:**
-- Enthält alle mit Dekoratoren definierten Spalten
-- Schließt Beziehungen aus (HasMany, BelongsTo)
-- Aktiviert im Modell definierte virtuelle Getter
-- Enthält ad-hoc aufzählbare Eigenschaften
-
-**Rückgabe:** Einfaches Objekt mit den Modelldaten
-
-**Beispiel:**
+Entfernt den Datensatz mit einem `DeleteItem` und ignoriert `@DeleteAt`.
 
 ```typescript
-const user = await User.first({ id: "user-123" });
-const json = user.toJSON();
-
-console.log(json);
-// {
-//   id: "user-123",
-//   email: "john@example.com",
-//   name: "John Doe",
-//   age: 30,
-//   createdAt: "2025-01-15T10:30:00.000Z",
-//   updatedAt: "2025-01-15T10:30:00.000Z"
-// }
+await post.forceDestroy();
 ```
+
+---
+
+### `increment(feld, menge = 1): Promise<void>` / `decrement(feld, menge = 1): Promise<void>`
+
+Addiert oder subtrahiert atomar auf dem Server, ohne den vorherigen Wert zu lesen, und spiegelt die Änderung im Speicher.
+
+- Der Typ beschränkt `feld` auf die numerischen Spalten des Modells
+- Wirft `Cannot increment without primary key`, wenn die Instanz keine id hat
+
+```typescript
+await user.increment("credits", 10);
+await user.decrement("credits");
+```
+
+---
+
+### `attach<R>(Modell, related_id, pivot_data?): Promise<void>`
+
+Fügt eine Zeile in die Pivot-Tabelle einer `@ManyToMany`-Beziehung ein.
+
+- Die Instanz muss persistiert sein, sonst wirft die Methode
+- Sie ist idempotent, ein vorhandenes Paar bleibt unverändert
+- `pivot_data` ergänzt zusätzliche Spalten in der Pivot-Zeile
+- Die Suche läuft über den GSI `<fremdschlüssel>_index` der Pivot-Tabelle, nie über einen Scan
+
+```typescript
+await user.attach(Role, "role-123");
+await user.attach(Role, "role-123", { granted_by: "admin" });
+```
+
+---
+
+### `detach<R>(Modell, related_id): Promise<void>`
+
+Entfernt die Pivot-Zeile dieses Paares. Fehlt die Beziehung, die Zeile oder der lokale Schlüssel, passiert nichts.
+
+```typescript
+await user.detach(Role, "role-123");
+```
+
+---
+
+### `sync<R>(Modell, related_ids): Promise<void>`
+
+Lässt die Beziehung genau `related_ids` enthalten: entfernt, was nicht auf der Liste steht, und ergänzt, was fehlt, in Blöcken von 25.
+
+- Wirft, wenn das verwandte Modell kein Schema hat, wenn es keine `@ManyToMany`-Beziehung zwischen beiden Modellen gibt, oder wenn der lokale Schlüssel undefiniert ist
+
+```typescript
+await user.sync(Role, ["role-1", "role-2"]);
+```
+
+---
+
+### `toJSON(): Record<string, unknown>`
+
+Einfaches Objekt mit den Spalten des Modells. Lässt `null` und `undefined` aus und serialisiert geladene Beziehungen rekursiv.
+
+### `toString(): string`
+
+`JSON.stringify` der Instanz.
 
 ---
 
 ## Statische Methoden
 
-### `create<M>(data: InferAttributes<M>, options?: MutationOptions): Promise<M>`
+### `create<M>(data, options?: MutationOptions): Promise<M>`
 
-Erstellt und persistiert einen neuen Datensatz in der Datenbank.
+Legt einen Datensatz an.
 
-**Parameter:**
-- `data` - Objekt mit den Attributen des neuen Datensatzes
-- `options` (`MutationOptions`, optional) - `{ hook?: boolean; tx?: TransactionContext }`. Mit `{ hook: true }` werden die Lifecycle-Hooks ausgeführt; mit `{ tx }` läuft die Operation innerhalb einer Transaktion.
-
-**Merkmale:**
-- Erstellt eine neue Instanz
-- Setzt automatisch `createdAt` und `updatedAt`
-- Wendet Standardwerte, Validierungen und Mutationen an
-- Persistiert sofort in DynamoDB
-
-**Rückgabe:** Neue persistierte Modellinstanz
-
-**Beispiel:**
+- Schreibt mit `attribute_not_exists` auf den Primärschlüssel: überschreibt nie und wirft `Record with <schlüssel> '<wert>' already exists in <tabelle>`, wenn die id vergeben ist
+- In einer Transaktion gilt die Instanz erst nach dem Commit als persistiert
 
 ```typescript
-const user = await User.create({
-  id: "user-456",
-  email: "alice@example.com",
-  name: "Alice Wonder",
-  age: 28
-});
-
-console.log(user.id); // "user-456"
-console.log(user.createdAt); // "2025-01-15T10:30:00.000Z"
-```
-
-**Mit Validierungen und Mutationen:**
-
-```typescript
-@Name("users")
-class User extends Table<User> {
-  @Set(v => v.toLowerCase().trim())
-  @Validate(v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? true : "Email inválido")
-  declare email: string;
-}
-
-// Die E-Mail wird in Kleinbuchstaben umgewandelt und das Format validiert
-const user = await User.create({
-  id: "user-789",
-  email: "  BOB@EXAMPLE.COM  ", // Wird zu "bob@example.com" konvertiert
-  name: "Bob"
-});
+const user = await User.create({ name: "Juan", email: "juan@example.com" });
+await User.create({ name: "Juan" }, { hook: true });
+await dynamite.tx(async (tx) => { await User.create({ name: "Juan" }, { tx }); });
 ```
 
 ---
 
-### `update<M>(updates: Partial<InferAttributes<M>>, filters: Partial<InferAttributes<M>>, options?: MutationOptions): Promise<number>`
+### `createMany<M>(zeilen, options?: MutationOptions): Promise<M[]>`
 
-Aktualisiert mehrere Datensätze, die den Filtern entsprechen.
+Legt mehrere Datensätze mit `BatchWriteItem` an, 25 pro Anfrage, und wiederholt, was DynamoDB unverarbeitet zurückgibt.
 
-**Parameter:**
-- `updates` - Objekt mit den zu aktualisierenden Feldern (`undefined`-Felder werden ignoriert)
-- `filters` - Objekt mit den Auswahlkriterien
-- `options` (`MutationOptions`, optional) - `{ hook?: boolean; tx?: TransactionContext }`. Mit `{ hook: true }` werden die Lifecycle-Hooks einmal pro betroffener Entität ausgeführt; mit `{ tx }` läuft die Operation innerhalb einer Transaktion.
-
-**Merkmale:**
-- Aktualisiert alle Datensätze, die den Filtern entsprechen
-- Aktualisiert automatisch das Feld `updatedAt`
-- Felder mit dem Wert `undefined` werden ignoriert
-- Atomare Operation für jeden Datensatz
-
-**Rückgabe:** Anzahl der aktualisierten Datensätze
-
-**Beispiel:**
+- Doppelte Primärschlüssel lassen sich nicht prüfen, `BatchWriteItem` kennt diese Bedingung nicht: ein vorhandener Datensatz wird überschrieben
+- Gibt die bereits als persistiert markierten Instanzen zurück
 
 ```typescript
-// Mehrere Benutzer aktualisieren
-const count = await User.update(
-  { active: false, role: "suspended" },
-  { status: "banned" }
-);
-
-console.log(`${count} Benutzer gesperrt`);
-
-// Einen bestimmten Benutzer aktualisieren
-await User.update(
-  { balance: 100.0 },
-  { id: "user-123" }
-);
-```
-
-**Bedingte Aktualisierung:**
-
-```typescript
-// Inaktive Benutzer deaktivieren
-const inactiveCount = await User.update(
-  { active: false },
-  { lastLoginDate: "2024-01-01" } // Benutzerdefinierter Filter
-);
+const logs = await Log.createMany([
+  { level: "info", message: "Start" },
+  { level: "warn", message: "Cache leer" }
+]);
 ```
 
 ---
 
-### `delete<M>(filters: Partial<InferAttributes<M>>, options?: MutationOptions): Promise<number>`
+### `update<M>(änderungen, filter, options?: MutationOptions): Promise<number>`
 
-Löscht Datensätze, die den Filtern entsprechen.
+Aktualisiert alle passenden Datensätze und gibt deren Anzahl zurück.
 
-**Parameter:**
-- `filters` - Objekt mit den Auswahlkriterien
-- `options` (`MutationOptions`, optional) - `{ hook?: boolean; tx?: TransactionContext }`. Mit `{ hook: true }` werden die Lifecycle-Hooks einmal pro betroffener Entität ausgeführt; mit `{ tx }` läuft die Operation innerhalb einer Transaktion.
-
-**Merkmale:**
-- Löscht alle Datensätze, die den Filtern entsprechen
-- Permanente Operation (standardmäßig kein Soft Delete)
-- Gibt die Anzahl der gelöschten Datensätze zurück
-
-**Rückgabe:** Anzahl der gelöschten Datensätze
-
-**Beispiel:**
+- Bei einem einfachen Filter auf den Primärschlüssel ist es ein einziges `UpdateItem` mit den berührten Feldern und ohne vorheriges Lesen, sofern kein `@Set` und kein `@Validate` dieser Felder das Argument `current` deklariert. Tut es das, wird der Datensatz zuerst gelesen, um ihn übergeben zu können
+- Bei jedem anderen Filter wird die Abfrage aufgelöst, die Änderungen werden angewendet und in Blöcken von 25 geschrieben
+- Die `@UpdatedAt`-Spalten werden bei jedem betroffenen Datensatz erneuert
+- Mit `{ hook: true }` laufen `beforeUpdate` und `afterUpdate` einmal pro betroffenem Datensatz
 
 ```typescript
-// Einen bestimmten Benutzer löschen
-const count = await User.delete({ id: "user-123" });
-console.log(`${count} Benutzer gelöscht`);
-
-// Mehrere Benutzer löschen
-await User.delete({ status: "inactive", verified: false });
-
-// Alle Datensätze löschen (mit Vorsicht verwenden)
-await User.delete({});
+const betroffen = await User.update({ status: "suspended" }, { status: "inactive" });
+await User.update({ status: "active" }, { id: "user-1" });
 ```
 
 ---
 
-## where()-Methode - Erweiterte Abfragen
+### `delete<M>(filter, options?: MutationOptions): Promise<number>`
 
-Die `where()`-Methode ist die vielseitigste Methode zur Abfrage von Daten mit mehreren Überladungen und erweiterten Optionen.
+Löscht alle passenden Datensätze und gibt deren Anzahl zurück.
 
-### Überladung 1: `where(field, value): Promise<M[]>`
-
-Sucht nach Datensätzen, bei denen ein Feld einem Wert (oder mehreren Werten) entspricht.
-
-**Parameter:**
-- `field` - Feldname
-- `value` - Wert oder Array von Werten (Array wird in `IN`-Operator umgewandelt)
-
-**Beispiel:**
+- Immer ein endgültiges Löschen, mit oder ohne `@DeleteAt`: Soft Delete ist eine Entscheidung der Instanz und lebt in `destroy()`
+- Ein einfacher Filter auf den Primärschlüssel bei einem Modell ohne `@DeleteAt` und ohne Destroy-Hooks ist ein einziges `DeleteItem`
+- Sonst wird die Abfrage aufgelöst und in Blöcken von 25 gelöscht
 
 ```typescript
-// Einfache Gleichheit
-const admins = await User.where("role", "admin");
-
-// Implizites IN mit Array
-const users = await User.where("role", ["admin", "employee"]);
-// Entspricht: role IN ("admin", "employee")
+const gelöscht = await User.delete({ status: "suspended" });
+await User.delete({ id: "user-1" }, { hook: true });
 ```
 
 ---
 
-### Überladung 2: `where(field, operator, value): Promise<M[]>`
+### `deleteMany<M>(ids, options?: MutationOptions): Promise<number>`
 
-Sucht nach Datensätzen mit einem bestimmten Operator.
-
-**Parameter:**
-- `field` - Feldname
-- `operator` - Vergleichsoperator (siehe Operatortabelle)
-- `value` - Wert oder Array von Werten (je nach Operator)
-
-**Unterstützte Operatoren:**
-
-| Operator | Beschreibung | Beispiel |
-|----------|-------------|---------|
-| `"="` | Gleich | `where("age", "=", 25)` |
-| `"!="` | Ungleich | `where("status", "!=", "banned")` |
-| `"<"` | Kleiner als | `where("age", "<", 30)` |
-| `"<="` | Kleiner oder gleich | `where("price", "<=", 100)` |
-| `">"` | Größer als | `where("balance", ">", 1000)` |
-| `">="` | Größer oder gleich | `where("rating", ">=", 4)` |
-| `"in"` | Enthalten im Array | `where("status", "in", ["active", "pending"])` |
-| `"contains"` | Enthält Substring | `where("name", "contains", "John")` |
-
-**Beispiele:**
+Löscht über den Primärschlüssel mit `BatchWriteItem`, ohne vorher zu lesen. Immer endgültig und ohne Hooks.
 
 ```typescript
-// Numerischer Vergleich
-const youngUsers = await User.where("age", "<", 30);
-const richUsers = await User.where("balance", ">", 1000);
-
-// String-Vergleich
-const notBanned = await User.where("status", "!=", "banned");
-
-// Array-Operatoren
-const staff = await User.where("role", "in", ["admin", "employee"]);
-
-// Text-Operatoren
-const johns = await User.where("name", "contains", "John");
+const gelöscht = await Log.deleteMany(["01JBQ8...", "01JBQ9..."]);
 ```
 
 ---
 
-### Überladung 3: `where(filters): Promise<M[]>`
+### `increment<M>(feld, menge, filter, options?): Promise<number>` / `decrement<M>(...)`
 
-Sucht nach Datensätzen, die mehreren Feldern entsprechen (impliziter AND-Operator).
+Atomare Addition auf dem Server.
 
-**Parameter:**
-- `filters` - Objekt mit Feld-Wert-Paaren
-
-**Beispiel:**
+- Ein Filter auf den Primärschlüssel aktualisiert genau diesen Datensatz, ohne ihn zu lesen
+- Jeder andere Filter löst zuerst die Abfrage auf und aktualisiert dann alle Treffer parallel
+- Gibt zurück, wie viele Datensätze berührt wurden
 
 ```typescript
-// Mehrere Bedingungen (AND)
-const activeAdmins = await User.where({
-  role: "admin",
-  active: true,
-  verified: true
-});
-
-// Entspricht: WHERE role = "admin" AND active = true AND verified = true
+await User.increment("credits", 10, { id: "user-1" });
+await User.decrement("stock", 1, { sku: "ABC" });
 ```
 
 ---
 
-### Überladung 4: `where(filters, options): Promise<M[]>`
+### `first<M>(filter, options?): Promise<M | undefined>`
 
-Sucht nach Datensätzen mit erweiterten Optionen für Paginierung, Sortierung, Attributauswahl und Einbeziehung von Beziehungen.
-
-**Parameter:**
-- `filters` - Objekt mit Feld-Wert-Paaren
-- `options` - Objekt mit erweiterten Optionen
-
-**Verfügbare Optionen:**
+Der erste passende Datensatz oder `undefined`. Es ist `where()` mit `limit: 1`, auf einem indizierten Feld also eine einzige Anfrage.
 
 ```typescript
-interface WhereQueryOptions<T> {
-  order?: "ASC" | "DESC";        // Sortierung
-  skip?: number;                  // Anzahl der zu überspringenden Datensätze (Offset)
-  limit?: number;                 // Maximale Anzahl zurückzugebender Datensätze
-  attributes?: string[];          // Spezifische auszuwählende Felder
-  include?: {                     // Einzubeziehende Beziehungen
-    [relation: string]: IncludeRelationOptions | true;
-  };
-}
-
-interface IncludeRelationOptions {
-  where?: Record<string, any>;   // Filter für die Beziehung
-  attributes?: string[];          // Spezifische Felder der Beziehung
-  order?: "ASC" | "DESC";        // Sortierung der Beziehung
-  skip?: number;                  // Offset der Beziehung
-  limit?: number;                 // Limit der Beziehung
-  include?: Record<string, IncludeRelationOptions | true>; // Verschachtelte Beziehungen
-}
+const user = await User.first({ email: "juan@example.com" });
+const neueste = await User.first({ role: "admin" }, { order: { created_at: "DESC" } });
 ```
 
-**Vollständige Beispiele:**
+---
+
+### `last<M>(filter?, options?): Promise<M | undefined>`
+
+Der letzte Datensatz, absteigend sortiert nach der `@CreatedAt`-Spalte oder, falls es keine gibt, nach dem Primärschlüssel.
+
+Ohne Sort Key auf der Tabelle wird im Speicher sortiert, was bedeutet, alles zu lesen, was zum Filter passt, um einen Datensatz zu behalten. Auf einer großen Tabelle nimmt man `first(filter, { order: { created_at: "DESC" } })`, eingegrenzt durch einen `@Index`.
 
 ```typescript
-// Paginierung und Sortierung
-const users = await User.where({}, {
+const letzter = await User.last();
+```
+
+---
+
+## `where()` — Abfragen
+
+### Überladungen
+
+```typescript
+User.where(filter, optionen?)
+User.where(feld, wert, optionen?)
+User.where(feld, operator, wert, optionen?)
+```
+
+```typescript
+await User.where({ status: "active" });
+await User.where("name", "Juan");
+await User.where("age", ">=", 18);
+await User.where({ age: { $gte: 18, $lte: 65 } });
+```
+
+### Operatoren
+
+| Operator | Aliase | Bedeutung |
+|----------|--------|-----------|
+| `=` | `$eq` | Gleich. Mit `null`: "das Attribut existiert nicht" |
+| `<>`, `!=` | `$ne` | Ungleich. Mit `null`: "das Attribut existiert" |
+| `<` | `$lt` | Kleiner als |
+| `<=` | `$lte` | Kleiner oder gleich |
+| `>` | `$gt` | Größer als |
+| `>=` | `$gte` | Größer oder gleich |
+| `in` | `$in` | Im Array enthalten |
+| `include` | `$include`, `contains`, `$contains` | Enthält den Teilstring oder das Element |
+
+Eine unbekannte Spalte wirft `Unknown column '<feld>' in <tabelle>`. Ein leeres Array bei `in` wirft `Operator 'in' requires a non-empty array.`
+
+### Optionen
+
+```typescript
+const users = await User.where({ status: "active" }, {
+  order: { created_at: "DESC" },  // nach Feld; "ASC"/"DESC" allein sortiert nach @CreatedAt
   limit: 10,
-  skip: 20,        // Seite 3 (20 Datensätze übersprungen)
-  order: "DESC"
-});
-
-// Auswahl spezifischer Attribute
-const usernames = await User.where({}, {
-  attributes: ["id", "name", "email"]
-});
-
-// Nur angeforderte Felder werden zurückgegeben
-console.log(usernames[0].id);    // "user-123"
-console.log(usernames[0].name);  // "John Doe"
-console.log(usernames[0].age);   // undefined (nicht angefordert)
-
-// Einbeziehung einfacher Beziehungen
-const usersWithOrders = await User.where({}, {
+  skip: 20,                       // Alias: offset
+  cursor: vorherige.cursor,       // nächste Seite; ignoriert skip
+  attributes: ["id", "name"],     // Projektion
+  deleted: true,                  // schließt die per Soft Delete markierten ein
   include: {
-    orders: true  // Alle Bestellungen einbeziehen
-  }
-});
-
-console.log(usersWithOrders[0].orders); // Array von Bestellungen
-
-// Einbeziehung von Beziehungen mit Filtern
-const usersWithCompletedOrders = await User.where({}, {
-  include: {
-    orders: {
-      where: { status: "completed" },
-      limit: 5,
-      order: "DESC"
-    }
-  }
-});
-
-// Verschachtelte Beziehungen
-const ordersWithDetails = await Order.where({}, {
-  include: {
-    user: true,              // Benutzer einbeziehen
-    items: {                 // Bestellpositionen einbeziehen
-      include: {
-        product: {           // Produkt jeder Position einbeziehen
-          include: {
-            category: true   // Kategorie jedes Produkts einbeziehen
-          }
-        }
-      }
-    }
-  }
-});
-
-// Vollständige Kombination
-const result = await User.where(
-  { active: true },
-  {
-    attributes: ["id", "name", "email"],
-    limit: 20,
-    skip: 0,
-    order: "ASC",
-    include: {
-      orders: {
-        where: { status: "delivered" },
-        attributes: ["id", "total", "status"],
-        limit: 10,
-        include: {
-          items: {
-            include: {
-              product: true
-            }
-          }
-        }
-      },
-      reviews: {
-        where: { rating: 5 },
-        limit: 5
-      }
-    }
-  }
-);
-```
-
----
-
-### `first<M>(...args): Promise<M | undefined>`
-
-Ruft den ersten Datensatz ab, der den Kriterien entspricht.
-
-**Überladungen:**
-- `first(field, value): Promise<M | undefined>`
-- `first(field, operator, value): Promise<M | undefined>`
-- `first(filters): Promise<M | undefined>`
-
-**Merkmale:**
-- Ruft intern `where()` mit denselben Argumenten auf
-- Gibt nur das erste Ergebnis zurück
-- Gibt `undefined` zurück, wenn kein Datensatz gefunden wird
-
-**Beispiel:**
-
-```typescript
-// Nach eindeutigem Feld suchen
-const user = await User.first("id", "user-123");
-if (user) {
-  console.log(user.name);
-}
-
-// Suchen mit Operator
-const admin = await User.first("role", "=", "admin");
-
-// Suchen mit mehreren Bedingungen
-const activeAdmin = await User.first({
-  role: "admin",
-  active: true
-});
-
-// Existenzprüfung
-const exists = (await User.first({ email: "test@example.com" })) !== undefined;
-```
-
----
-
-### `last<M>(...args): Promise<M | undefined>`
-
-Ruft den letzten Datensatz ab, der den Kriterien entspricht.
-
-**Überladungen:**
-- `last(field, value): Promise<M | undefined>`
-- `last(field, operator, value): Promise<M | undefined>`
-- `last(filters): Promise<M | undefined>`
-
-**Merkmale:**
-- Ähnlich wie `first()`, gibt aber das letzte Ergebnis zurück
-- Nützlich zum Abrufen des neuesten Datensatzes
-- Verwendet intern absteigende Sortierung
-
-**Beispiel:**
-
-```typescript
-// Den zuletzt erstellten Benutzer abrufen
-const latestUser = await User.last({});
-
-// Die letzte Bestellung eines Benutzers abrufen
-const lastOrder = await Order.last({ user_id: "user-123" });
-
-// Mit Operator
-const lastHighRating = await Review.last("rating", ">=", 4);
-
-if (lastOrder) {
-  console.log(`Letzte Bestellung: ${lastOrder.id}`);
-  console.log(`Summe: $${lastOrder.total}`);
-}
-```
-
----
-
-## Beispiele für erweiterte Verwendung
-
-### Komplexe Abfragen mit mehreren Bedingungen
-
-```typescript
-// Aktive Benutzer mit hohem Guthaben suchen
-const premiumUsers = await User.where("balance", ">", 1000);
-const activePremium = premiumUsers.filter(u => u.active === true);
-
-// Alternative: verschachtelte where verwenden
-const activeUsers = await User.where({ active: true });
-const activePremiumAlt = activeUsers.filter(u => (u.balance as number) > 1000);
-```
-
-### Effiziente Paginierung
-
-```typescript
-async function getPaginatedUsers(page: number, pageSize: number) {
-  const skip = (page - 1) * pageSize;
-
-  const users = await User.where({}, {
-    limit: pageSize,
-    skip: skip,
-    order: "ASC"
-  });
-
-  return {
-    page,
-    pageSize,
-    data: users,
-    hasMore: users.length === pageSize
-  };
-}
-
-// Verwendung
-const page1 = await getPaginatedUsers(1, 10);
-const page2 = await getPaginatedUsers(2, 10);
-```
-
-### Textsuche
-
-```typescript
-// Nach Namen suchen, der einen Text enthält
-const johns = await User.where("name", "contains", "John");
-
-// Nach E-Mail suchen, die mit einem Präfix beginnt
-const adminEmails = await User.where("email", "begins-with", "admin@");
-
-// Mit anderen Filtern kombinieren
-const activeJohns = johns.filter(u => u.active === true);
-```
-
-### Arbeiten mit Beziehungen
-
-```typescript
-// HasMany: Ein Benutzer hat viele Bestellungen
-@Name("users")
-class User extends Table<User> {
-  @HasMany(() => Order, "user_id")
-  declare orders: NonAttribute<Order[]>;
-}
-
-@Name("orders")
-class Order extends Table<Order> {
-  @BelongsTo(() => User, "user_id")
-  declare user: NonAttribute<User | null>;
-}
-
-// Benutzer mit seinen Bestellungen abrufen
-const user = await User.first({ id: "user-123" });
-const userWithOrders = await User.where(
-  { id: "user-123" },
-  { include: { orders: true } }
-);
-
-console.log(userWithOrders[0].orders); // Array von Order
-
-// Bestellung mit ihrem Benutzer abrufen
-const orderWithUser = await Order.where(
-  { id: "order-456" },
-  { include: { user: true } }
-);
-
-console.log(orderWithUser[0].user.name); // Name des Benutzers
-```
-
-### Tief verschachtelte Beziehungen
-
-```typescript
-// Struktur: User -> Orders -> OrderItems -> Products -> Categories
-const completeUserData = await User.where(
-  { id: "user-123" },
-  {
-    include: {
-      orders: {
-        include: {
-          items: {
-            include: {
-              product: {
-                include: {
-                  category: true
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-);
-
-// Auf verschachtelte Daten zugreifen
-const user = completeUserData[0];
-const firstOrder = user.orders[0];
-const firstItem = firstOrder.items[0];
-const product = firstItem.product;
-const category = product.category;
-
-console.log(`Kategorie: ${category.name}`);
-```
-
-### Batch-Operationen
-
-```typescript
-// Mehrere Datensätze erstellen
-const users = await Promise.all([
-  User.create({ email: "user1@example.com", name: "User 1" }),
-  User.create({ email: "user2@example.com", name: "User 2" }),
-  User.create({ email: "user3@example.com", name: "User 3" })
-]);
-
-// Mehrere Datensätze aktualisieren
-await User.update(
-  { verified: true },
-  { registrationDate: "2025-01-01" }
-);
-
-// Mehrere Datensätze löschen
-await User.delete({ status: "inactive" });
-```
-
-### Validierung und Fehlerbehandlung
-
-```typescript
-try {
-  const user = await User.create({
-    email: "invalid-email",  // Ungültige E-Mail
-    name: "Test User"
-  });
-} catch (error) {
-  console.error(`Validierung fehlgeschlagen: ${error.message}`);
-  // "Validierung fehlgeschlagen: Email inválido"
-}
-
-// Existenz vor dem Aktualisieren überprüfen
-const user = await User.first({ id: "user-123" });
-if (user) {
-  await user.update({ name: "New Name" });
-} else {
-  console.log("Benutzer nicht gefunden");
-}
-```
-
-### Teilweise Feldauswahl
-
-```typescript
-// Nur spezifische Felder abrufen (reduziert Datenübertragung)
-const lightUsers = await User.where({}, {
-  attributes: ["id", "name", "email"]
-});
-
-// Nicht angeforderte Felder sind undefined
-console.log(lightUsers[0].id);      // "user-123"
-console.log(lightUsers[0].name);    // "John Doe"
-console.log(lightUsers[0].age);     // undefined
-console.log(lightUsers[0].balance); // undefined
-```
-
----
-
-## Typinferenz
-
-Dynamite ORM bietet vollständige Typinferenz mit TypeScript.
-
-### InferAttributes<T>
-
-Extrahiert nur die Attribute (schließt Methoden und Beziehungen aus).
-
-```typescript
-import type { InferAttributes } from '@arcaelas/dynamite';
-
-type UserAttributes = InferAttributes<User>;
-// {
-//   id: string;
-//   email: string;
-//   name: string;
-//   age: number;
-//   createdAt: string;
-//   updatedAt: string;
-// }
-
-// Verwendung in Funktionen
-function createUser(data: InferAttributes<User>) {
-  return User.create(data);
-}
-```
-
-### CreationOptional<T>
-
-Markiert Felder, die während der Erstellung optional sind (haben Standardwerte).
-
-```typescript
-import { CreationOptional } from '@arcaelas/dynamite';
-
-@Name("products")
-class Product extends Table<Product> {
-  @PrimaryKey()
-  declare id: string;
-
-  @NotNull()
-  declare name: string;
-
-  @Default(() => 0)
-  declare stock: CreationOptional<number>; // Optional in create()
-
-  @Default(() => true)
-  declare active: CreationOptional<boolean>;
-}
-
-// TypeScript erlaubt das Weglassen von CreationOptional-Feldern
-await Product.create({
-  id: "prod-123",
-  name: "Product Name"
-  // stock und active sind optional
-});
-```
-
-### Beziehungstypen
-
-```typescript
-import { HasMany, BelongsTo } from '@arcaelas/dynamite';
-
-@Name("users")
-class User extends Table<User> {
-  @HasMany(() => Order, "user_id")
-  declare orders: NonAttribute<Order[]>; // Array von Order
-
-  @HasMany(() => Review, "user_id")
-  declare reviews: NonAttribute<Review[]>;
-}
-
-@Name("orders")
-class Order extends Table<Order> {
-  @BelongsTo(() => User, "user_id")
-  declare user: NonAttribute<User | null>; // User oder null
-}
-```
-
----
-
-## Fehlerbehandlung
-
-### Häufige Fehler
-
-```typescript
-// 1. Validierung fehlgeschlagen
-try {
-  await User.create({
-    email: "invalid",
-    name: "Test"
-  });
-} catch (error) {
-  // ValidationError: Email inválido
-}
-
-// 2. Erforderliches Feld fehlt
-try {
-  await User.create({
-    name: "Test"
-    // email ist @NotNull und fehlt
-  });
-} catch (error) {
-  // ValidationError: email ist erforderlich
-}
-
-// 3. Versuch zu löschen ohne ID
-const user = new User({ email: "test@example.com", name: "Test" });
-try {
-  await user.destroy();
-} catch (error) {
-  // Error: destroy() erfordert, dass die Instanz eine ID hat
-}
-
-// 4. Ungültiger Operator
-try {
-  await User.where("age", "===", 25); // Ungültiger Operator
-} catch (error) {
-  // Error: Ungültiger Operator: ===
-}
-```
-
-### Best Practices für Fehlerbehandlung
-
-```typescript
-async function safeCreateUser(data: InferAttributes<User>) {
-  try {
-    const user = await User.create(data);
-    return { success: true, data: user };
-  } catch (error) {
-    console.error("Fehler beim Erstellen des Benutzers:", error);
-    return { success: false, error: error.message };
-  }
-}
-
-// Verwendung
-const result = await safeCreateUser({
-  email: "test@example.com",
-  name: "Test User"
-});
-
-if (result.success) {
-  console.log(`Benutzer erstellt: ${result.data.id}`);
-} else {
-  console.log(`Fehler: ${result.error}`);
-}
-```
-
----
-
-## Leistung und Optimierung
-
-### 1. Auswahl spezifischer Attribute
-
-Reduziert die Datenübertragung durch Auswahl nur der notwendigen Felder:
-
-```typescript
-// ❌ Schlecht: Ruft alle Felder ab (enthält unnötig große Felder)
-const users = await User.where({});
-
-// ✅ Gut: Nur notwendige Felder
-const users = await User.where({}, {
-  attributes: ["id", "name", "email"]
-});
-```
-
-### 2. Effektive Paginierung
-
-```typescript
-// ✅ Limit verwenden, um das Laden zu vieler Datensätze zu vermeiden
-const users = await User.where({}, {
-  limit: 20,
-  skip: (page - 1) * 20
-});
-```
-
-### 3. Selektive Einbeziehung von Beziehungen
-
-```typescript
-// ❌ Schlecht: Alle Beziehungen immer einbeziehen
-const users = await User.where({}, {
-  include: {
-    orders: true,
-    reviews: true,
-    notifications: true
-  }
-});
-
-// ✅ Gut: Nur notwendige Beziehungen mit Limits einbeziehen
-const users = await User.where({}, {
-  include: {
-    orders: {
-      limit: 5,
-      order: "DESC"
-    }
+    profile: true,
+    orders: { where: { status: "completed" }, limit: 5 }
   }
 });
 ```
 
-### 4. Batch-Operationen
+- `limit: 0` gibt ein leeres Array zurück, ohne das Netz zu berühren.
+- `order` allein sortiert nach der `@CreatedAt`-Spalte, sonst nach dem Primärschlüssel. Um nach einem Datum zu sortieren, muss man es benennen: `{ created_at: "DESC" }`.
+- `attributes` erzeugt Instanzen mit ausschließlich diesen Spalten.
+- `deleted` ersetzt das frühere `_includeTrashed`, das als Alias weiterhin funktioniert.
+
+### Ergebnis und Paginierung
+
+`where()` gibt das Array der Instanzen mit einer nicht aufzählbaren Eigenschaft `cursor` zurück. Sie trägt einen Wert, solange weitere Seiten existieren.
 
 ```typescript
-// ✅ Mehrere Datensätze parallel erstellen
-await Promise.all([
-  User.create({ email: "user1@example.com", name: "User 1" }),
-  User.create({ email: "user2@example.com", name: "User 2" }),
-  User.create({ email: "user3@example.com", name: "User 3" })
-]);
+let seite = await User.where({}, { limit: 50 });
+while (seite.cursor) {
+  seite = await User.where({}, { limit: 50, cursor: seite.cursor });
+}
 ```
+
+`skip` liest und verwirft auf jeder Seite alles Vorherige; der Cursor liest nur die angeforderte Seite.
 
 ---
 
-## Einschränkungen und Limitierungen
+## Kosten und Leistung
 
-### 1. AND- vs. OR-Abfragen
+| Filter | Kommando | Anfragen |
+|--------|----------|----------|
+| `=` auf den Primärschlüssel | `GetItem` | 1 |
+| `in` auf den Primärschlüssel | `BatchGetItem` | 1 je 100 Schlüssel |
+| `=` oder `in` auf eine `@Index`-Spalte | `Query` auf `<feld>_index` | 1 pro unterschiedlichem Wert |
+| Jeder andere Filter | `Scan` | die ganze Tabelle, serverseitig gefiltert |
 
-- `where()` mit mehreren Feldern verwendet impliziten `AND`-Operator
-- Keine native Unterstützung für `OR`-Operator in einem einzelnen `where()`
-- Lösung: Mehrere Abfragen durchführen und Ergebnisse kombinieren
-
-```typescript
-// Unterstützt nur AND
-const result = await User.where({
-  role: "admin",
-  active: true  // AND active = true
-});
-
-// Für OR mehrere Abfragen durchführen
-const admins = await User.where({ role: "admin" });
-const employees = await User.where({ role: "employee" });
-const staff = [...admins, ...employees];
-```
-
-### 2. Tiefe von Beziehungen
-
-- Verschachtelte Beziehungen können die Abfragezeit exponentiell erhöhen
-- Empfehlung: Auf 3-4 Verschachtelungsebenen beschränken
-- `limit` in verschachtelten Beziehungen verwenden
-
-### 3. Scan vs. Query
-
-- `where()` verwendet intern `ScanCommand` von DynamoDB
-- Scans sind langsamer als Queries, aber flexibler
-- Für bessere Leistung Indizes in DynamoDB in Betracht ziehen
+- Zusätzliche Filter über einer Lesung per Primärschlüssel werden auf dem bereits gelesenen Item ausgewertet: die Abfrage bleibt eine einzige Anfrage.
+- Ein `limit` bricht die Lesung ab, sobald genug Datensätze zusammen sind, und reist als `Limit` mit, wenn serverseitig nichts mehr zu filtern ist.
+- Eine Lesung ohne `limit`, die in einem `Scan` endet, wird in vier parallele Segmente geteilt: dieselben Leseeinheiten, ein Bruchteil der Latenz. Ohne `order` ist die Reihenfolge beliebig, wie schon zuvor.
+- Existiert der GSI eines `@Index` nicht, schlägt die Abfrage nicht fehl: sie fällt auf `Scan` zurück, entfernt den Index aus ihrer internen Registrierung und läuft weiter. Es funktioniert und kostet die ganze Tabelle — deklariere `<feld>_index` mit Projektion `ALL` in deiner Infrastruktur.
+- `attributes` verkleinert die Nutzlast, nicht die Leseeinheiten: DynamoDB berechnet das gesamte Item.
+- Beziehungen werden im Batch geladen: eine Runde Abfragen pro Beziehung und Ebene, bis zu fünf Ebenen. Pivot-Tabellen werden über ihren GSI `<fremdschlüssel>_index` gelesen.
 
 ---
 
-## Migration und Kompatibilität
+## Fehler
 
-### Von anderen ORMs
-
-**Sequelize:**
-
-```typescript
-// Sequelize
-const users = await User.findAll({ where: { role: "admin" } });
-
-// Dynamite
-const users = await User.where({ role: "admin" });
-```
-
-**TypeORM:**
-
-```typescript
-// TypeORM
-const users = await userRepository.find({ where: { role: "admin" } });
-
-// Dynamite
-const users = await User.where({ role: "admin" });
-```
+| Meldung | Ursache |
+|---------|---------|
+| `DynamoDB client no configurado. Use Dynamite.connect() primero.` | Eine Instanz wurde erzeugt oder eine Abfrage vor `connect()` ausgeführt |
+| `Record with <schlüssel> '<wert>' already exists in <tabelle>` | `create()` auf einen vergebenen Primärschlüssel |
+| `Unknown column '<feld>' in <tabelle>` | Ein Filter auf eine Spalte, die das Modell nicht deklariert |
+| `Operator 'in' requires a non-empty array.` | `in` mit leerem Array |
+| `Cannot destroy record without ID` | `destroy()`/`forceDestroy()` auf einer Instanz ohne Primärschlüssel |
+| `Cannot increment without primary key` | `increment()`/`decrement()` auf einer Instanz ohne Primärschlüssel |
+| `No se puede attach sin ID: la instancia debe persistirse primero con save() o create()` | `attach()` auf einer nie persistierten Instanz |
+| `Transaction exceeds 100 operations limit` | Mehr als 100 Operationen in einem `tx()` |
 
 ---
 
-## Versions-Changelog
+## Grenzen
 
-### v1.0.0
-- ✅ Vollständige Implementierung von CRUD-Methoden
-- ✅ Unterstützung für HasMany- und BelongsTo-Beziehungen
-- ✅ Validierungs- und Mutationssystem
-- ✅ Paginierung und Sortierung
-- ✅ Auswahl spezifischer Attribute
-- ✅ Einbeziehung verschachtelter Beziehungen
-- ✅ Automatische Timestamps (createdAt/updatedAt)
+- Eine Transaktion fasst höchstens 100 Operationen und wird in Blöcken von 25 gesendet.
+- `include` verschachtelt bis zu fünf Ebenen.
+- `BatchGetItem` liest 100 Schlüssel pro Anfrage, `BatchWriteItem` schreibt 25; die Bibliothek teilt und wiederholt selbst.
+- DynamoDB begrenzt ein Item auf 400 KB und eine Abfrageseite auf 1 MB.
 
 ---
 
 ## Quelldatei
 
-**Speicherort:** `/tmp/dynamite/src/core/table.ts`
-**Codezeilen:** 636 Zeilen
-**Letzte Aktualisierung:** 2025-07-30
-
----
-
-## Support und Beiträge
-
-- **Vollständige Dokumentation:** [https://github.com/arcaelas/dynamite](https://github.com/arcaelas/dynamite)
-- **Fehler melden:** [https://github.com/arcaelas/dynamite/issues](https://github.com/arcaelas/dynamite/issues)
-- **Diskussionen:** [https://github.com/arcaelas/dynamite/discussions](https://github.com/arcaelas/dynamite/discussions)
-
----
-
-**Hinweis:** Dieses Dokument wurde aus dem tatsächlichen Quellcode in `/tmp/dynamite/src/core/table.ts` generiert. Bei Unstimmigkeiten konsultieren Sie den Quellcode als Quelle der Wahrheit.
+`src/core/table.ts`

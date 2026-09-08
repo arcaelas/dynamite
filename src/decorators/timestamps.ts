@@ -12,6 +12,7 @@ import { decorator } from "../core/decorator";
  */
 export const CreatedAt = decorator((_schema, col) => {
   col.store.createdAt = true;
+  col.store.readsCurrent = true;
   // Default in set: assigns now() when nullish. Preserves existing value (immutable).
   col.set.push((next: any, current: any) => current ?? next ?? new Date().toISOString());
 });

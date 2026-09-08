@@ -1,7 +1,7 @@
 import {
   Dynamite, Table, PrimaryKey, Default, NotNull,
   CreationOptional, NonAttribute, Name,
-  HasMany, HasOne, BelongsTo, ManyToMany,
+  HasMany, BelongsTo, ManyToMany,
 } from "../index";
 
 // -- 4 niveles: Org -> Dept -> Employee -> Task --

@@ -20,15 +20,7 @@ This example demonstrates a simple CRUD (Create, Read, Update, Delete) applicati
 Let's start by defining a User model with essential fields and decorators:
 
 ```typescript
-import {
-  Table,
-  PrimaryKey,
-  Default,
-  CreatedAt,
-  UpdatedAt,
-  CreationOptional,
-  Dynamite
-} from "@arcaelas/dynamite";
+import { Table, PrimaryKey, Default, CreatedAt, UpdatedAt, CreationOptional, Dynamite } from "@arcaelas/dynamite";
 
 class User extends Table<User> {
   // Auto-generated primary key
@@ -438,15 +430,7 @@ console.log(`Deleted ${to_delete.length} old inactive users`);
 Here's a complete, runnable example that demonstrates all CRUD operations:
 
 ```typescript
-import {
-  Table,
-  PrimaryKey,
-  Default,
-  CreatedAt,
-  UpdatedAt,
-  CreationOptional,
-  Dynamite
-} from "@arcaelas/dynamite";
+import { Table, PrimaryKey, Default, CreatedAt, UpdatedAt, CreationOptional, Dynamite } from "@arcaelas/dynamite";
 
 // Define User model first
 class User extends Table<User> {

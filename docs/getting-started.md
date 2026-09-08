@@ -36,6 +36,7 @@ const dynamite = new Dynamite({
   }
 });
 await dynamite.connect();
+await dynamite.sync(); // creates the missing tables and indexes
 
 
 // For AWS production
@@ -48,8 +49,12 @@ const dynamite = new Dynamite({
   }
 });
 await dynamite.connect();
-
+// no sync() here: in production the infrastructure owns the tables and their indexes
 ```
+
+`connect()` configures the client and works out which indexes the models expect; it creates
+nothing. `sync()` is the one that creates the missing tables, pivot tables and GSIs, and it is
+the development path.
 
 ## Step 1: Your First Model
 
@@ -286,14 +291,7 @@ await Promise.all(inactive_users.map(user => user.destroy()));
 Timestamps track when records are created and updated. Use `@CreatedAt` and `@UpdatedAt` decorators:
 
 ```typescript
-import {
-  Table,
-  PrimaryKey,
-  Default,
-  CreatedAt,
-  UpdatedAt,
-  CreationOptional
-} from "@arcaelas/dynamite";
+import { Table, PrimaryKey, Default, CreatedAt, UpdatedAt, CreationOptional } from "@arcaelas/dynamite";
 
 class User extends Table<User> {
   @PrimaryKey()
@@ -331,19 +329,7 @@ console.log(user.updated_at); // "2024-01-15T10:35:00.000Z" (updated!)
 Here's a complete example tying everything together - a simple task management system:
 
 ```typescript
-import {
-  Table,
-  PrimaryKey,
-  Default,
-  CreatedAt,
-  UpdatedAt,
-  Validate,
-  Set,
-  NotNull,
-  CreationOptional,
-  NonAttribute,
-  Dynamite
-} from "@arcaelas/dynamite";
+import { Table, PrimaryKey, Default, CreatedAt, UpdatedAt, Validate, Set, NotNull, CreationOptional, NonAttribute, Dynamite } from "@arcaelas/dynamite";
 
 // Define Task model first
 class Task extends Table<Task> {

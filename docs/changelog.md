@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2026-09-07
+
+### Added
+
+- **Cursor pagination**: `where()` returns the instances with a non-enumerable `cursor` property whenever a `limit` is given. Passing it back as `{ cursor }` reads only the next page, where `skip` reads and discards everything before it on every page.
+- **`createMany(rows, options?)`**: creates several records with `BatchWriteItem`, 25 per request, retrying whatever DynamoDB leaves unprocessed. It cannot check for duplicate primary keys, which `BatchWriteItem` does not support.
+- **`deleteMany(ids, options?)`**: deletes by primary key without reading the records first. Always a hard delete and it runs no hooks.
+- **`deleted` query option**: replaces `_includeTrashed`, which keeps working as a deprecated alias.
+- **Top-level `where` option**: the filters in `WhereOptions.where` are now merged with those of the first argument. Until now they were silently ignored.
+- **New public types**: `QueryResult<M>`, `DynamiteConfig`.
+
+### Changed
+
+- **Reads by primary key use `GetItem` and `BatchGetItem`**: `=` on the primary key is a single `GetItem`, and `in` a `BatchGetItem` of 100 keys per request, instead of one `Query` per value. Any extra filter is evaluated over the item already read, so the query stays a single request.
+- **`limit` stops the read**: pagination stops as soon as it has enough items, and the limit travels to DynamoDB as `Limit` when nothing is left to filter server-side. `first()` no longer reads the whole table.
+- **Parallel `Scan`**: a read with no `limit` that ends in a `Scan` is split into four segments. Same read units, a fraction of the latency. Without `order` the resulting order is arbitrary, as it already was.
+- **Native ordering by sort key**: a `Query` on the primary key ordered by the `@IndexSort` column uses `ScanIndexForward` instead of sorting in memory.
+- **`update()` by primary key writes without reading**: a single `UpdateItem` with the touched fields, conditioned on the record existing, whenever no `@Set` or `@Validate` of those fields declares the `current` argument. Instance `update()` does the same, using the values it already holds.
+- **Batched writes**: `delete()`, mass `update()`, `sync()` on a relation, `createMany()` and `deleteMany()` write in batches of 25.
+- **Pivot tables are queried, never scanned**: `attach()`, `detach()`, instance `sync()` and loading a `@ManyToMany` go through the pivot's `<foreign_key>_index` GSI, falling back to a `Scan` only when the index does not exist.
+- **Dependencies**: `pluralize`, `uuid`, `@arcaelas/utils` and `@aws-sdk/lib-dynamodb` were declared but never imported, and are gone. `@aws-sdk/util-dynamodb` was imported without being declared, and is now a dependency. The AWS SDK moved from an exact pin to `^3.329.0`, so it dedupes against the consumer's copy.
+
+### Fixed
+
+- The primary key of a model renamed with `@Name` is now used correctly in `delete`, `forceDestroy`, `increment` and `decrement`.
+- Documentation: `withTrashed()`, `onlyTrashed()`, `relationDecorator()`, `ColumnBuilder` and `WrapperEntry` were documented and do not exist. The `@BelongsTo` signature was documented with its arguments swapped. `connect()` was documented as creating tables, which `sync()` does. The write pipeline was documented as `(current, next)` when it takes `(next, current)`.
+
 ## [3.2.1] - 2026-09-03
 
 ### Fixed

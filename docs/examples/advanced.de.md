@@ -39,11 +39,7 @@ Verwenden Sie Vergleichsoperatoren für numerische und Datumsvergleiche:
 ### Gleich (Standard)
 
 ```typescript
-import {
-  Table,
-  PrimaryKey,
-  CreationOptional
-} from "@arcaelas/dynamite";
+import { Table, PrimaryKey, CreationOptional } from "@arcaelas/dynamite";
 
 class User extends Table<User> {
   @PrimaryKey()
@@ -99,7 +95,7 @@ console.log(`Working age: ${filtered.length}`);
 ```typescript
 class Order extends Table<Order> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   declare user_id: string;
   declare total: number;
@@ -202,7 +198,7 @@ const company_users = await User.where("email", "contains", "@company.com");
 // In Kleinbuchstaben umwandeln vor Suche
 class User extends Table<User> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   @Set((value) => (value as string).toLowerCase())
   declare email: string;
@@ -364,7 +360,7 @@ const sorted = all_users.sort((a, b) => {
 ```typescript
 class Post extends Table<Post> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   declare title: string;
 
@@ -498,7 +494,7 @@ admins.forEach(admin => {
 ```typescript
 class Product extends Table<Product> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   declare name: string;
   declare price: number;
@@ -523,16 +519,7 @@ console.log(`Found ${in_stock.length} affordable electronics in stock`);
 Hier ist ein vollständiges Beispiel, das alle fortgeschrittenen Abfragemuster demonstriert:
 
 ```typescript
-import {
-  Table,
-  PrimaryKey,
-  Default,
-  CreatedAt,
-  UpdatedAt,
-  Set,
-  CreationOptional,
-  Dynamite
-} from "@arcaelas/dynamite";
+import { Table, PrimaryKey, Default, CreatedAt, UpdatedAt, Set, CreationOptional, Dynamite } from "@arcaelas/dynamite";
 
 // User-Modell
 class User extends Table<User> {
@@ -723,7 +710,7 @@ const admins = all_users.filter(u => u.role === "admin");
 ```typescript
 class User extends Table<User> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   // Häufig abgefragte Felder indizieren
   @Index()

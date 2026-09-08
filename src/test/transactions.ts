@@ -2,7 +2,6 @@ import {
   Dynamite, Table, PrimaryKey, Default, NotNull, CreatedAt,
   CreationOptional, Name,
 } from "../index";
-import { TransactionContext } from "../core/client";
 
 @Name('test_tx_accounts')
 class Account extends Table<Account> {

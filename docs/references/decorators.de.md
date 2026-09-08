@@ -46,7 +46,7 @@ class User extends Table<User> {
 **Schlüssel-Decorators:**
 - `@PrimaryKey()` - Definiert den Primärschlüssel
 - `@Index()` - Definiert Partition Key (GSI)
-- `@IndexSort()` - Definiert Sort Key (LSI)
+- `@IndexSort()` - Definiert den Sort Key der Tabelle
 
 **Daten-Decorators:**
 - `@Default()` - Setzt Standardwerte
@@ -184,7 +184,7 @@ Der `@Validate`-Decorator ermöglicht die Definition benutzerdefinierter Validie
 ```typescript
 class User extends Table<User> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   @Validate((value) => {
     const email = value as string;
@@ -223,7 +223,7 @@ try {
 ```typescript
 class Password extends Table<Password> {
   @PrimaryKey()
-  declare user_id: string;
+  declare user_id: CreationOptional<string>;
 
   @Validate([
     (v) => (v as string).length >= 8 || "Mindestens 8 Zeichen",
@@ -255,7 +255,7 @@ Die Transformerfunktion erhält den neuen Wert (`next`) und den aktuellen Wert (
 ```typescript
 class User extends Table<User> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   @Set((v) => (v as string).toLowerCase().trim())
   declare email: string;
@@ -298,7 +298,7 @@ Der `@Get`-Decorator transformiert Werte, wenn sie aus der Datenbank gelesen wer
 ```typescript
 class Event extends Table<Event> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   // Beim Schreiben als ISO-String speichern, beim Lesen als Date zurückgeben
   @Set((v) => (v as Date).toISOString())
@@ -475,14 +475,7 @@ Lifecycle-Hooks sind Methoden-Dekoratoren, die automatisch rund um die Persisten
 ### Grundlegende Verwendung
 
 ```typescript
-import {
-  Table,
-  PrimaryKey,
-  CreationOptional,
-  BeforeCreate,
-  AfterCreate,
-  BeforeUpdate
-} from "@arcaelas/dynamite";
+import { Table, PrimaryKey, CreationOptional, BeforeCreate, AfterCreate, BeforeUpdate } from "@arcaelas/dynamite";
 
 class User extends Table<User> {
   @PrimaryKey()

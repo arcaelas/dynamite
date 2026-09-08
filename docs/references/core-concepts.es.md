@@ -89,7 +89,7 @@ Los decoradores son funciones especiales que anotan propiedades de clase con met
 
 | Decorador | Propósito | Ejemplo |
 |-----------|---------|---------|
-| `@PrimaryKey()` | Define la partition key | `@PrimaryKey() declare id: string;` |
+| `@PrimaryKey()` | Define la partition key | `@PrimaryKey() declare id: CreationOptional<string>;` |
 | `@Index()` | Alias para PrimaryKey | `@Index() declare userId: string;` |
 | `@IndexSort()` | Define la sort key | `@IndexSort() declare timestamp: string;` |
 | `@Name("custom")` | Nombre de columna/tabla personalizado | `@Name("user_email") declare email: string;` |
@@ -108,32 +108,20 @@ Los decoradores son funciones especiales que anotan propiedades de clase con met
 
 | Decorador | Propósito | Ejemplo |
 |-----------|---------|---------|
-| `@CreatedAt()` | Auto-establecer en creación | `@CreatedAt() declare createdAt: string;` |
-| `@UpdatedAt()` | Auto-establecer en actualización | `@UpdatedAt() declare updatedAt: string;` |
+| `@CreatedAt()` | Auto-establecer en creación | `@CreatedAt() declare createdAt: CreationOptional<string>;` |
+| `@UpdatedAt()` | Auto-establecer en actualización | `@UpdatedAt() declare updatedAt: CreationOptional<string>;` |
 
 ### Decoradores de Relación
 
 | Decorador | Propósito | Ejemplo |
 |-----------|---------|---------|
 | `@HasMany(Model, fk)` | Uno a muchos | `@HasMany(() => Order, "userId") declare orders: any;` |
-| `@BelongsTo(Model, lk)` | Muchos a uno | `@BelongsTo(() => User, "userId") declare user: any;` |
+| `@BelongsTo(Model, lk)` | Muchos a uno | `@BelongsTo(() => User, "id", "userId") declare user: any;` |
 
 ### Ejemplo Completo
 
 ```typescript
-import {
-  Table,
-  PrimaryKey,
-  Default,
-  Set,
-  Validate,
-  NotNull,
-  CreatedAt,
-  UpdatedAt,
-  HasMany,
-  CreationOptional,
-  NonAttribute
-} from "@arcaelas/dynamite";
+import { Table, PrimaryKey, Default, Set, Validate, NotNull, CreatedAt, UpdatedAt, HasMany, CreationOptional, NonAttribute } from "@arcaelas/dynamite";
 
 class User extends Table<User> {
   @PrimaryKey()
@@ -178,7 +166,7 @@ Las claves primarias en DynamoDB consisten en una **partition key** (requerida) 
 ```typescript
 class User extends Table<User> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   declare name: string;
 }
@@ -235,14 +223,16 @@ console.log(product.id); // "550e8400-e29b-41d4-a716-446655440000"
 
 ## Índices
 
-DynamoDB soporta Global Secondary Indexes (GSI) y Local Secondary Indexes (LSI) para consultas eficientes. Dynamite proporciona los decoradores `@Index` y `@IndexSort`.
+Dynamite trabaja con la clave propia de la tabla y con Global Secondary Indexes. `@Index` declara la partition key de un GSI `<campo>_index` y `@IndexSort` declara la sort key de la tabla. La librería no crea Local Secondary Indexes.
+
+Toda columna de clave —clave primaria, sort key y cualquier `@Index`— se declara como string. Una columna numérica marcada con `@Index` o `@IndexSort` es rechazada por DynamoDB al escribir el item.
 
 ### Global Secondary Index (GSI)
 
 ```typescript
 class User extends Table<User> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   @Index()             // GSI partition key
   declare email: string;
@@ -255,26 +245,28 @@ class User extends Table<User> {
 const user = await User.first({ email: "john@example.com" });
 ```
 
-### Local Secondary Index (LSI)
+### Sort key de la tabla
 
 ```typescript
 class Message extends Table<Message> {
   @PrimaryKey()        // Partition key
-  declare chatId: string;
+  declare chat_id: string;
 
-  @IndexSort()         // Sort key (LSI)
-  declare timestamp: string;
+  @IndexSort()         // Sort key
+  declare created_at: string;
 
-  declare userId: string;
+  declare user_id: string;
   declare content: string;
 }
 
-// Consultar mensajes de chat ordenados por timestamp
+// Ordenado por la sort key: DynamoDB devuelve el orden ya resuelto
 const messages = await Message.where(
-  { chatId: "chat-123" },
-  { order: "DESC", limit: 50 }
+  { chat_id: "chat-123" },
+  { order: { created_at: "DESC" }, limit: 50 }
 );
 ```
+
+El campo hay que nombrarlo. `order: "DESC"` a secas ordena por la columna `@CreatedAt`, o por la clave primaria si no la hay, y lo hace en memoria.
 
 ---
 
@@ -434,11 +426,11 @@ console.log(user.createdAt); // "2023-12-01T10:30:00.000Z"
 Excluye campos de operaciones de base de datos. Usado para propiedades computadas y campos virtuales.
 
 ```typescript
-import { Table, PrimaryKey, NonAttribute } from "@arcaelas/dynamite";
+import { Table, PrimaryKey, NonAttribute, CreationOptional } from "@arcaelas/dynamite";
 
 class User extends Table<User> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   declare firstName: string;
   declare lastName: string;
@@ -505,7 +497,7 @@ Esta guía cubrió los conceptos básicos de Dynamite:
 - **Clase Table**: Clase base con métodos estáticos y de instancia
 - **Decoradores**: Anotaciones de metadatos para estructura y comportamiento
 - **Claves Primarias**: Claves de partición y ordenación usando @PrimaryKey y @IndexSort
-- **Índices**: GSI y LSI para consultas eficientes
+- **Índices**: la clave de la tabla y los GSI `<campo>_index` para consultas eficientes
 - **Constructor de Consultas**: Interfaz fluida con where(), first(), last()
 - **Operadores de Consulta**: =, !=, <, >, <=, >=, in, not-in, contains, begins-with
 - **Sistema de Tipos**: CreationOptional, NonAttribute, InferAttributes para seguridad de tipos

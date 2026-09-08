@@ -89,7 +89,7 @@ Decorators sind spezielle Funktionen, die Klasseneigenschaften mit Metadaten ann
 
 | Decorator | Zweck | Beispiel |
 |-----------|-------|----------|
-| `@PrimaryKey()` | Definiert den Partition Key | `@PrimaryKey() declare id: string;` |
+| `@PrimaryKey()` | Definiert den Partition Key | `@PrimaryKey() declare id: CreationOptional<string>;` |
 | `@Index()` | Alias für PrimaryKey | `@Index() declare userId: string;` |
 | `@IndexSort()` | Definiert den Sort Key | `@IndexSort() declare timestamp: string;` |
 | `@Name("custom")` | Benutzerdefinierter Spalten-/Tabellenname | `@Name("user_email") declare email: string;` |
@@ -108,32 +108,20 @@ Decorators sind spezielle Funktionen, die Klasseneigenschaften mit Metadaten ann
 
 | Decorator | Zweck | Beispiel |
 |-----------|-------|----------|
-| `@CreatedAt()` | Auto-Setzen bei Erstellung | `@CreatedAt() declare createdAt: string;` |
-| `@UpdatedAt()` | Auto-Setzen bei Aktualisierung | `@UpdatedAt() declare updatedAt: string;` |
+| `@CreatedAt()` | Auto-Setzen bei Erstellung | `@CreatedAt() declare createdAt: CreationOptional<string>;` |
+| `@UpdatedAt()` | Auto-Setzen bei Aktualisierung | `@UpdatedAt() declare updatedAt: CreationOptional<string>;` |
 
 ### Beziehungs-Decorators
 
 | Decorator | Zweck | Beispiel |
 |-----------|-------|----------|
 | `@HasMany(Model, fk)` | Eins-zu-Viele | `@HasMany(() => Order, "userId") declare orders: any;` |
-| `@BelongsTo(Model, lk)` | Viele-zu-Eins | `@BelongsTo(() => User, "userId") declare user: any;` |
+| `@BelongsTo(Model, lk)` | Viele-zu-Eins | `@BelongsTo(() => User, "id", "userId") declare user: any;` |
 
 ### Vollständiges Beispiel
 
 ```typescript
-import {
-  Table,
-  PrimaryKey,
-  Default,
-  Set,
-  Validate,
-  NotNull,
-  CreatedAt,
-  UpdatedAt,
-  HasMany,
-  CreationOptional,
-  NonAttribute
-} from "@arcaelas/dynamite";
+import { Table, PrimaryKey, Default, Set, Validate, NotNull, CreatedAt, UpdatedAt, HasMany, CreationOptional, NonAttribute } from "@arcaelas/dynamite";
 
 class User extends Table<User> {
   @PrimaryKey()
@@ -178,7 +166,7 @@ Primärschlüssel in DynamoDB bestehen aus einem **Partition Key** (erforderlich
 ```typescript
 class User extends Table<User> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   declare name: string;
 }
@@ -235,14 +223,16 @@ console.log(product.id); // "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 
 ## Indizes
 
-DynamoDB unterstützt Global Secondary Indexes (GSI) und Local Secondary Indexes (LSI) für effiziente Abfragen. Dynamite bietet die Decorators `@Index` und `@IndexSort`.
+Dynamite arbeitet mit dem eigenen Schlüssel der Tabelle und mit Global Secondary Indexes. `@Index` deklariert den Partition Key eines GSI `<feld>_index`, `@IndexSort` den Sort Key der Tabelle. Local Secondary Indexes erstellt die Bibliothek nicht.
+
+Jede Schlüsselspalte — Primärschlüssel, Sort Key und jedes `@Index` — wird als String deklariert. Eine numerische Spalte mit `@Index` oder `@IndexSort` weist DynamoDB beim Schreiben des Items zurück.
 
 ### Global Secondary Index (GSI)
 
 ```typescript
 class User extends Table<User> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   @Index()             // GSI Partition Key
   declare email: string;
@@ -255,14 +245,14 @@ class User extends Table<User> {
 const user = await User.first({ email: "john@example.com" });
 ```
 
-### Local Secondary Index (LSI)
+### Sort Key der Tabelle
 
 ```typescript
 class Message extends Table<Message> {
   @PrimaryKey()        // Partition Key
   declare chatId: string;
 
-  @IndexSort()         // Sort Key (LSI)
+  @IndexSort()         // Sort Key
   declare timestamp: string;
 
   declare userId: string;
@@ -439,11 +429,11 @@ console.log(user.createdAt); // "2023-12-01T10:30:00.000Z"
 Schließt Felder von Datenbankoperationen aus. Verwendet für berechnete Eigenschaften und virtuelle Felder.
 
 ```typescript
-import { Table, PrimaryKey, NonAttribute } from "@arcaelas/dynamite";
+import { Table, PrimaryKey, NonAttribute, CreationOptional } from "@arcaelas/dynamite";
 
 class User extends Table<User> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   declare firstName: string;
   declare lastName: string;
@@ -510,7 +500,7 @@ Dieser Leitfaden behandelte die Kernkonzepte von Dynamite:
 - **Table-Klasse**: Basisklasse mit statischen und Instanzmethoden
 - **Decorators**: Metadaten-Annotationen für Struktur und Verhalten
 - **Primärschlüssel**: Partition und Sort Keys mit @PrimaryKey und @IndexSort
-- **Indizes**: GSI und LSI für effiziente Abfragen
+- **Indizes**: der Tabellenschlüssel und die GSIs `<feld>_index` für effiziente Abfragen
 - **Query Builder**: Fließende Schnittstelle mit where(), first(), last()
 - **Query-Operatoren**: =, !=, <, >, <=, >=, in, not-in, contains, begins-with
 - **Typsystem**: CreationOptional, NonAttribute, InferAttributes für Typsicherheit

@@ -36,7 +36,7 @@ class User extends Table<User> {
 class Order extends Table<Order> {
   declare user_id: string; // Fremdschlüssel
 
-  @BelongsTo(() => User, "user_id")
+  @BelongsTo(() => User, "id", "user_id")
   declare user: NonAttribute<User | null>;
 }
 ```
@@ -54,13 +54,7 @@ Definieren Sie eine Eins-zu-Viele-Beziehung, bei der ein Elternmodell mehrere zu
 ### Grundlegendes HasMany-Beispiel
 
 ```typescript
-import {
-  Table,
-  PrimaryKey,
-  HasMany,
-  CreationOptional,
-  NonAttribute
-} from "@arcaelas/dynamite";
+import { Table, PrimaryKey, HasMany, CreationOptional, NonAttribute } from "@arcaelas/dynamite";
 
 // User-Modell (Eltern)
 class User extends Table<User> {
@@ -169,7 +163,7 @@ class Post extends Table<Post> {
   declare content: string;
 
   // Viele-zu-Eins: Post gehört zu User
-  @BelongsTo(() => User, "user_id")
+  @BelongsTo(() => User, "id", "user_id")
   declare user: NonAttribute<User | null>;
 }
 
@@ -217,7 +211,7 @@ Laden Sie Beziehungen, die ihre eigenen Beziehungen haben (verschachtelte Includ
 // User hat viele Posts, Post hat viele Comments
 class User extends Table<User> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
   declare name: string;
 
   @HasMany(() => Post, "user_id")
@@ -226,11 +220,11 @@ class User extends Table<User> {
 
 class Post extends Table<Post> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
   declare user_id: string;
   declare title: string;
 
-  @BelongsTo(() => User, "user_id")
+  @BelongsTo(() => User, "id", "user_id")
   declare user: NonAttribute<User | null>;
 
   @HasMany(() => Comment, "post_id")
@@ -239,7 +233,7 @@ class Post extends Table<Post> {
 
 class Comment extends Table<Comment> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
   declare post_id: string;
   declare content: string;
 }
@@ -323,17 +317,7 @@ posts.forEach(post => {
 Hier ist ein vollständiges E-Commerce-System, das alle Beziehungsmuster demonstriert:
 
 ```typescript
-import {
-  Table,
-  PrimaryKey,
-  HasMany,
-  BelongsTo,
-  CreatedAt,
-  UpdatedAt,
-  CreationOptional,
-  NonAttribute,
-  Dynamite
-} from "@arcaelas/dynamite";
+import { Table, PrimaryKey, HasMany, BelongsTo, CreatedAt, UpdatedAt, CreationOptional, NonAttribute, Dynamite } from "@arcaelas/dynamite";
 
 // User-Modell
 class User extends Table<User> {
@@ -379,7 +363,7 @@ class Order extends Table<Order> {
   declare created_at: CreationOptional<string>;
 
   // Beziehungen
-  @BelongsTo(() => User, "user_id")
+  @BelongsTo(() => User, "id", "user_id")
   declare user: NonAttribute<User | null>;
 
   @HasMany(() => OrderItem, "order_id")
@@ -397,10 +381,10 @@ class OrderItem extends Table<OrderItem> {
   declare price: number;
 
   // Beziehungen
-  @BelongsTo(() => Order, "order_id")
+  @BelongsTo(() => Order, "id", "order_id")
   declare order: NonAttribute<Order | null>;
 
-  @BelongsTo(() => Product, "product_id")
+  @BelongsTo(() => Product, "id", "product_id")
   declare product: NonAttribute<Product | null>;
 }
 
@@ -496,7 +480,7 @@ Modelle können Beziehungen zu sich selbst haben:
 ```typescript
 class Category extends Table<Category> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   declare name: string;
   declare parent_id: string | null;
@@ -506,7 +490,7 @@ class Category extends Table<Category> {
   declare children: NonAttribute<Category[]>;
 
   // Category gehört zu Elternkategorie
-  @BelongsTo(() => Category, "parent_id")
+  @BelongsTo(() => Category, "id", "parent_id")
   declare parent: NonAttribute<Category | null>;
 }
 ```
@@ -519,7 +503,7 @@ Viele-zu-Viele mit Verbindungstabelle implementieren:
 // Student-Modell
 class Student extends Table<Student> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
   declare name: string;
 
   @HasMany(() => Enrollment, "student_id")
@@ -529,7 +513,7 @@ class Student extends Table<Student> {
 // Course-Modell
 class Course extends Table<Course> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
   declare name: string;
 
   @HasMany(() => Enrollment, "course_id")
@@ -539,16 +523,16 @@ class Course extends Table<Course> {
 // Verbindungstabelle
 class Enrollment extends Table<Enrollment> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   declare student_id: string;
   declare course_id: string;
   declare grade: string;
 
-  @BelongsTo(() => Student, "student_id")
+  @BelongsTo(() => Student, "id", "student_id")
   declare student: NonAttribute<Student | null>;
 
-  @BelongsTo(() => Course, "course_id")
+  @BelongsTo(() => Course, "id", "course_id")
   declare course: NonAttribute<Course | null>;
 }
 ```
@@ -574,7 +558,7 @@ declare orders: Order[];
 class Order extends Table<Order> {
   declare user_id: string; // Fremdschlüsselfeld
 
-  @BelongsTo(() => User, "user_id")
+  @BelongsTo(() => User, "id", "user_id")
   declare user: NonAttribute<User | null>;
 }
 ```

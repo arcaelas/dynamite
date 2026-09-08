@@ -39,7 +39,7 @@ function encode_random(): string {
 }
 
 export function ulid(): string {
-  let now = Date.now();
+  const now = Date.now();
 
   if (now === last_time) {
     last_random_lo++;

@@ -13,6 +13,7 @@ Dynamite es un ORM para DynamoDB basado en decoradores TypeScript que proporcion
 7. [Metodos estaticos](#7-metodos-estaticos)
 8. [Metodos de instancia](#8-metodos-de-instancia)
 9. [Hooks de ciclo de vida](#9-hooks-de-ciclo-de-vida)
+10. [Costo y rendimiento](#10-costo-y-rendimiento)
 
 ---
 
@@ -23,14 +24,16 @@ Dynamite utiliza un sistema de decoradores basado en la funcion `decorator()` qu
 ### Arquitectura del sistema
 
 Cada columna tiene tres componentes:
-- **`col.get[]`**: Pipeline de funciones ejecutadas al leer el valor
-- **`col.set[]`**: Pipeline de funciones ejecutadas al asignar un valor
+- **`col.get[]`**: Pipeline de funciones `(current) => valor`, ejecutadas al leer
+- **`col.set[]`**: Pipeline de funciones `(next, current) => valor`, ejecutadas al asignar. `next` es el valor entrante y `current` el que ya tenia la instancia
 - **`col.store{}`**: Metadata de configuracion (flags, relaciones, etc.)
+
+Una funcion de `col.set` que declare el segundo argumento obliga a la libreria a leer el registro antes de actualizarlo. Si no lo necesita, no lo declares: el `update` por clave primaria se resuelve entonces con una sola escritura.
 
 ### Ejemplo basico: Decorador sin parametros
 
 ```typescript
-import { decorator } from "./core/decorator";
+import { decorator } from "@arcaelas/dynamite";
 
 /**
  * @description Marca una columna como requerida (no permite valores vacios)
@@ -42,7 +45,7 @@ import { decorator } from "./core/decorator";
  */
 export const Required = decorator((_schema, col) => {
   col.store.required = true;
-  col.set.push((current: any, next: any) => {
+  col.set.push((next: any) => {
     if (next === null || next === undefined || next === "") {
       throw new Error(`El campo ${col.name} es requerido`);
     }
@@ -54,7 +57,7 @@ export const Required = decorator((_schema, col) => {
 ### Ejemplo avanzado: Decorador con parametros y pipelines
 
 ```typescript
-import { decorator } from "./core/decorator";
+import { decorator } from "@arcaelas/dynamite";
 
 /**
  * @description Valida que un string tenga una longitud minima y maxima
@@ -74,7 +77,7 @@ export const Length = decorator((_schema, col, params) => {
   col.store.maxLength = max_length;
 
   // Pipeline de setter: validacion antes de guardar
-  col.set.push((current: any, next: any) => {
+  col.set.push((next: any) => {
     if (typeof next !== "string") {
       throw new TypeError(`${col.name} debe ser un string`);
     }
@@ -107,7 +110,7 @@ export const Encrypted = decorator((_schema, col, params) => {
   });
 
   // Pipeline de setter: encriptar al guardar
-  col.set.push((current: any, next: any) => {
+  col.set.push((next: any) => {
     if (!next) return next;
     return encrypt(next, secret);
   });
@@ -253,7 +256,7 @@ class Order extends Table<Order> {
 
   user_id!: string;
 
-  @BelongsTo(() => User, "user_id", "id")
+  @BelongsTo(() => User, "id", "user_id")
   user?: NonAttribute<User>;
 }
 
@@ -381,10 +384,10 @@ await user.destroy(); // No elimina, solo marca deleted_at
 const users = await User.where({}); // No incluye user-1
 
 // Incluir eliminados
-const all = await User.withTrashed({});
+const all = await User.where({}, { deleted: true });
 
 // Solo eliminados
-const deleted = await User.onlyTrashed({});
+const deleted = await User.where({ deleted_at: { $ne: null } }, { deleted: true });
 
 // Eliminacion permanente
 await user.forceDestroy();
@@ -877,7 +880,7 @@ class Profile extends Table<Profile> {
 
   avatar_url?: string;
 
-  @BelongsTo(() => User, "user_id", "id")
+  @BelongsTo(() => User, "id", "user_id")
   user?: NonAttribute<User>;
 }
 
@@ -895,7 +898,7 @@ class Order extends Table<Order> {
   @Default("pending")
   status?: "pending" | "completed" | "cancelled";
 
-  @BelongsTo(() => User, "user_id", "id")
+  @BelongsTo(() => User, "id", "user_id")
   user?: NonAttribute<User>;
 }
 ```
@@ -1015,11 +1018,11 @@ class Product extends Table<Product> {
   owner_id!: string;
 
   // Relacion N:1 - Producto pertenece a una categoria
-  @BelongsTo(() => Category, "category_id", "id")
+  @BelongsTo(() => Category, "id", "category_id")
   category?: NonAttribute<Category>;
 
   // Relacion N:1 - Producto pertenece a un usuario (owner)
-  @BelongsTo(() => User, "owner_id", "id")
+  @BelongsTo(() => User, "id", "owner_id")
   owner?: NonAttribute<User>;
 
   // Relacion N:M - Producto tiene muchos tags
@@ -1060,7 +1063,7 @@ class ProductImage extends Table<ProductImage> {
   @Default("main")
   type?: "main" | "gallery" | "thumbnail";
 
-  @BelongsTo(() => Product, "product_id", "id")
+  @BelongsTo(() => Product, "id", "product_id")
   product?: NonAttribute<Product>;
 }
 
@@ -1081,10 +1084,10 @@ class Review extends Table<Review> {
   @Validate((v) => v.length >= 10 || "Comentario minimo 10 caracteres")
   comment!: string;
 
-  @BelongsTo(() => Product, "product_id", "id")
+  @BelongsTo(() => Product, "id", "product_id")
   product?: NonAttribute<Product>;
 
-  @BelongsTo(() => User, "user_id", "id")
+  @BelongsTo(() => User, "id", "user_id")
   user?: NonAttribute<User>;
 
   @CreatedAt()
@@ -1157,7 +1160,7 @@ await product.sync(Tag, [tagSale.id]); // Solo queda "Oferta"
 await product.destroy();
 
 // Consultar solo eliminados
-const deleted = await Product.onlyTrashed({});
+const deleted = await Product.where({ deleted_at: { $ne: null } }, { deleted: true });
 
 // Restaurar (eliminando deleted_at)
 await product.update({ deleted_at: null } as any);
@@ -1230,7 +1233,7 @@ await User.where({ email: { $contains: "@gmail.com" } });
 ```typescript
 const users = await User.where({ status: "active" }, {
   // Ordenamiento
-  order: "ASC",                      // Por primary key
+  order: "ASC",                      // Por la columna @CreatedAt, o la primary key si no hay
   order: "DESC",
   order: { created_at: "DESC" },     // Por campo especifico
 
@@ -1241,6 +1244,12 @@ const users = await User.where({ status: "active" }, {
 
   // Proyeccion
   attributes: ["id", "name", "email"], // Solo estos campos
+
+  // Cursor de la pagina siguiente, devuelto por la consulta anterior
+  cursor: pagina_anterior.cursor,
+
+  // Incluir los registros con soft delete; por defecto quedan fuera
+  deleted: true,
 
   // Eager loading
   include: {
@@ -1308,9 +1317,36 @@ console.log(`${deleted} usuarios eliminados`);
 
 // Con hooks: beforeDestroy/afterDestroy corren una vez por entidad
 await User.delete({ status: "suspended" }, { hook: true });
+```
 
-// Con soft delete: marca deleted_at en lugar de eliminar
-// (si el schema tiene @DeleteAt)
+`delete()` siempre borra el registro, tenga o no `@DeleteAt`: el soft delete es una decision de la instancia y vive en `destroy()`. Las bajas viajan en lotes de 25.
+
+### createMany(filas, options?)
+
+Crea varios registros con BatchWriteItem, 25 por peticion. No comprueba claves primarias duplicadas, que BatchWriteItem no admite: un registro existente se sobreescribe.
+
+```typescript
+const logs = await Log.createMany([
+  { level: "info", message: "arranque" },
+  { level: "warn", message: "cache vacia" }
+]);
+```
+
+### deleteMany(ids, options?)
+
+Elimina por clave primaria sin leer los registros antes. Siempre es borrado definitivo: ignora `@DeleteAt` y no ejecuta hooks.
+
+```typescript
+const removed = await Log.deleteMany(["01JBQ8...", "01JBQ9..."]);
+```
+
+### increment(campo, cantidad, filtros, options?) / decrement(...)
+
+Suma o resta de forma atomica sobre el servidor, sin leer el valor previo.
+
+```typescript
+await User.increment("credits", 10, { id: "user-1" });
+await User.decrement("credits", 1, { id: "user-1" });
 ```
 
 ### first(filtros, opciones?)
@@ -1318,10 +1354,8 @@ await User.delete({ status: "suspended" }, { hook: true });
 Obtiene el primer registro que coincida.
 
 ```typescript
-// Por campo y valor
-const user = await User.first("email", "juan@example.com");
-
 // Por filtros
+const user = await User.first({ email: "juan@example.com" });
 const admin = await User.first({ role: "admin", status: "active" });
 
 // Con include
@@ -1336,35 +1370,20 @@ console.log(notFound); // undefined
 
 ### last(filtros?, opciones?)
 
-Obtiene el ultimo registro (ordenado por primary key DESC).
+Obtiene el ultimo registro, ordenado en descendente por la columna `@CreatedAt` o, si no la hay, por la clave primaria. Sin sort key en la tabla obliga a leer todo lo que casa con el filtro para quedarse con uno solo: sobre tablas grandes conviene `first(filtros, { order: { created_at: "DESC" } })` con un `@Index` que acote la lectura.
 
 ```typescript
 const lastUser = await User.last();
 const lastActive = await User.last({ status: "active" });
 ```
 
-### withTrashed(filtros?, opciones?)
+### Registros con soft delete
 
-Incluye registros soft-deleted en la consulta.
-
-```typescript
-// Todos los usuarios (incluyendo eliminados)
-const all = await User.withTrashed({});
-
-// Con filtros
-const allAdmins = await User.withTrashed({ role: "admin" });
-```
-
-### onlyTrashed(filtros?, opciones?)
-
-Obtiene solo registros soft-deleted.
+`where()` y `first()` excluyen los registros marcados por `@DeleteAt`. Para incluirlos se pasa `deleted: true` en las opciones.
 
 ```typescript
-// Solo usuarios eliminados
-const deleted = await User.onlyTrashed({});
-
-// Filtrados
-const deletedAdmins = await User.onlyTrashed({ role: "admin" });
+const vivos = await User.where({});
+const todos = await User.where({}, { deleted: true });
 ```
 
 ---
@@ -1566,3 +1585,57 @@ await dynamite.tx(async (tx) => {
 
 > `increment()` y `decrement()` aceptan `{ tx }` pero no disparan hooks.
 > Con `@DeleteAt` (soft delete), `destroy({ hook: true })` ejecuta los hooks de destroy aunque el registro solo se marque como eliminado.
+
+---
+
+## 10. Costo y rendimiento
+
+DynamoDB cobra por lo que lee, y la forma del filtro decide cuanto lee. Estas son las rutas que elige la libreria y lo que cuesta cada una.
+
+### Que comando emite cada consulta
+
+| Filtro | Comando | Peticiones |
+|--------|---------|-----------|
+| `=` sobre la clave primaria | `GetItem` | 1 |
+| `in` sobre la clave primaria | `BatchGetItem` | 1 por cada 100 claves |
+| `=` o `in` sobre una columna `@Index` | `Query` sobre `<campo>_index` | 1 por valor distinto |
+| Cualquier otro filtro | `Scan` | la tabla completa, filtrada en el servidor |
+
+Cuando la tabla declara un sort key con `@IndexSort`, una Query por clave primaria ordenada por esa columna usa `ScanIndexForward` y devuelve el orden ya resuelto, sin traer nada de mas.
+
+Si el GSI declarado por `@Index` no existe en la infraestructura, la consulta no falla: cae a `Scan`, quita el indice del registro interno y sigue. Funciona igual y cuesta la tabla entera, asi que el `<campo>_index` con proyeccion `ALL` es obligatorio en produccion.
+
+### Lecturas acotadas
+
+- `limit` corta la lectura en cuanto reune los registros pedidos, y viaja a DynamoDB como `Limit` cuando no queda nada que filtrar en el servidor. `first()` sobre un campo indexado es una sola peticion.
+- `where()` devuelve el arreglo de instancias con la propiedad `cursor` cuando se pidio un `limit`. Pasar ese cursor a la consulta siguiente lee solo la pagina que falta; `skip` en cambio lee y descarta todo lo anterior en cada pagina.
+- Una consulta sin `limit` que termina en `Scan` se parte en cuatro segmentos paralelos: las mismas unidades de lectura y una fraccion de la latencia. El orden natural de los resultados sin `order` es arbitrario, como ya lo era.
+- `attributes` recorta la carga util pero no las unidades de lectura: DynamoDB cobra el item completo.
+
+```typescript
+let pagina = await User.where({}, { limit: 50 });
+while (pagina.cursor) {
+  pagina = await User.where({}, { limit: 50, cursor: pagina.cursor });
+}
+```
+
+### Escrituras
+
+- `create()` escribe con `attribute_not_exists` sobre la clave primaria: no pisa un registro existente y falla si ya existe.
+- `createMany()`, `deleteMany()`, el `delete()` masivo y el `update()` masivo escriben con `BatchWriteItem` en lotes de 25, reintentando lo que DynamoDB deje sin procesar.
+- `update()` por clave primaria se resuelve con un solo `UpdateItem` que escribe unicamente los campos tocados, sin leer el registro antes, siempre que ningun `@Set` ni `@Validate` de esos campos declare el argumento `current`. Si alguno lo declara, la libreria lee primero para poder pasarselo.
+- `save()` reescribe el item completo con `PutItem`: es lo que corresponde despues de mutar varios campos a mano.
+- `increment()` y `decrement()` son un `UpdateItem` atomico y nunca leen el valor previo.
+
+### Relaciones
+
+Las relaciones se cargan por lotes: una tanda de consultas por relacion y por nivel, nunca una consulta por registro padre. La profundidad maxima es de cinco niveles.
+
+La clave foranea de cada `@HasMany` y `@HasOne` se registra como GSI, de modo que cargar la relacion es una Query. Las tablas pivote de `@ManyToMany` se leen por su GSI `<clave_foranea>_index`: ni `attach()`, ni `detach()`, ni `sync()`, ni el `include` de la relacion escanean el pivote.
+
+### Reglas practicas
+
+1. Toda columna por la que se filtra lleva `@Index()`, y su GSI `<campo>_index` con proyeccion `ALL` se declara en la infraestructura.
+2. El orden cronologico se pide por el campo de fecha, `{ created_at: "desc" }`, no con `order: "ASC"`.
+3. Paginar con `cursor`, no con `skip`, en cuanto la tabla deja de ser pequena.
+4. `last()` sobre una tabla sin sort key lee todo lo que casa con el filtro; se sustituye por `first(filtros, { order: { created_at: "DESC" } })` acotado por un `@Index`.

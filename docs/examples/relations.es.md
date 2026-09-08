@@ -36,7 +36,7 @@ class User extends Table<User> {
 class Order extends Table<Order> {
   declare user_id: string; // Clave foránea
 
-  @BelongsTo(() => User, "user_id")
+  @BelongsTo(() => User, "id", "user_id")
   declare user: NonAttribute<User | null>;
 }
 ```
@@ -54,14 +54,7 @@ Define una relación uno-a-muchos donde un modelo padre tiene múltiples hijos r
 ### Ejemplo Básico de HasMany
 
 ```typescript
-import {
-  Table,
-  PrimaryKey,
-  Default,
-  HasMany,
-  CreationOptional,
-  NonAttribute
-} from "@arcaelas/dynamite";
+import { Table, PrimaryKey, Default, HasMany, CreationOptional, NonAttribute } from "@arcaelas/dynamite";
 
 // Modelo User (padre)
 class User extends Table<User> {
@@ -170,7 +163,7 @@ class Post extends Table<Post> {
   declare content: string;
 
   // Muchos-a-uno: Post pertenece a User
-  @BelongsTo(() => User, "user_id")
+  @BelongsTo(() => User, "id", "user_id")
   declare user: NonAttribute<User | null>;
 }
 
@@ -222,11 +215,11 @@ class Order extends Table<Order> {
   declare quantity: number;
 
   // Order pertenece a User
-  @BelongsTo(() => User, "user_id")
+  @BelongsTo(() => User, "id", "user_id")
   declare user: NonAttribute<User | null>;
 
   // Order pertenece a Product
-  @BelongsTo(() => Product, "product_id")
+  @BelongsTo(() => Product, "id", "product_id")
   declare product: NonAttribute<Product | null>;
 }
 
@@ -254,7 +247,7 @@ Cargar relaciones que tienen sus propias relaciones (includes anidados).
 // User tiene muchos Posts, Post tiene muchos Comments
 class User extends Table<User> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
   declare name: string;
 
   @HasMany(() => Post, "user_id")
@@ -263,11 +256,11 @@ class User extends Table<User> {
 
 class Post extends Table<Post> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
   declare user_id: string;
   declare title: string;
 
-  @BelongsTo(() => User, "user_id")
+  @BelongsTo(() => User, "id", "user_id")
   declare user: NonAttribute<User | null>;
 
   @HasMany(() => Comment, "post_id")
@@ -276,7 +269,7 @@ class Post extends Table<Post> {
 
 class Comment extends Table<Comment> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
   declare post_id: string;
   declare content: string;
 }
@@ -309,10 +302,10 @@ users.forEach(user => {
 // Order -> OrderItem -> Product
 class Order extends Table<Order> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
   declare user_id: string;
 
-  @BelongsTo(() => User, "user_id")
+  @BelongsTo(() => User, "id", "user_id")
   declare user: NonAttribute<User | null>;
 
   @HasMany(() => OrderItem, "order_id")
@@ -321,18 +314,18 @@ class Order extends Table<Order> {
 
 class OrderItem extends Table<OrderItem> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
   declare order_id: string;
   declare product_id: string;
   declare quantity: number;
 
-  @BelongsTo(() => Product, "product_id")
+  @BelongsTo(() => Product, "id", "product_id")
   declare product: NonAttribute<Product | null>;
 }
 
 class Product extends Table<Product> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
   declare name: string;
   declare price: number;
 }
@@ -440,18 +433,7 @@ users.forEach(user => {
 Aquí hay un sistema completo de e-commerce que demuestra todos los patrones de relaciones:
 
 ```typescript
-import {
-  Table,
-  PrimaryKey,
-  Default,
-  HasMany,
-  BelongsTo,
-  CreatedAt,
-  UpdatedAt,
-  CreationOptional,
-  NonAttribute,
-  Dynamite
-} from "@arcaelas/dynamite";
+import { Table, PrimaryKey, Default, HasMany, BelongsTo, CreatedAt, UpdatedAt, CreationOptional, NonAttribute, Dynamite } from "@arcaelas/dynamite";
 
 // Modelo User
 class User extends Table<User> {
@@ -520,7 +502,7 @@ class Order extends Table<Order> {
   declare updated_at: CreationOptional<string>;
 
   // Relaciones
-  @BelongsTo(() => User, "user_id")
+  @BelongsTo(() => User, "id", "user_id")
   declare user: NonAttribute<User | null>;
 
   @HasMany(() => OrderItem, "order_id")
@@ -538,10 +520,10 @@ class OrderItem extends Table<OrderItem> {
   declare price: number;
 
   // Relaciones
-  @BelongsTo(() => Order, "order_id")
+  @BelongsTo(() => Order, "id", "order_id")
   declare order: NonAttribute<Order | null>;
 
-  @BelongsTo(() => Product, "product_id")
+  @BelongsTo(() => Product, "id", "product_id")
   declare product: NonAttribute<Product | null>;
 }
 
@@ -559,10 +541,10 @@ class Review extends Table<Review> {
   declare created_at: CreationOptional<string>;
 
   // Relaciones
-  @BelongsTo(() => User, "user_id")
+  @BelongsTo(() => User, "id", "user_id")
   declare user: NonAttribute<User | null>;
 
-  @BelongsTo(() => Product, "product_id")
+  @BelongsTo(() => Product, "id", "product_id")
   declare product: NonAttribute<Product | null>;
 }
 
@@ -844,7 +826,7 @@ Los modelos pueden tener relaciones consigo mismos:
 ```typescript
 class Category extends Table<Category> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   declare name: string;
   declare parent_id: string | null;
@@ -854,7 +836,7 @@ class Category extends Table<Category> {
   declare children: NonAttribute<Category[]>;
 
   // Category pertenece a categoría padre
-  @BelongsTo(() => Category, "parent_id")
+  @BelongsTo(() => Category, "id", "parent_id")
   declare parent: NonAttribute<Category | null>;
 }
 
@@ -878,7 +860,7 @@ Implementar muchos-a-muchos usando tabla de unión:
 // Modelo Student
 class Student extends Table<Student> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
   declare name: string;
 
   @HasMany(() => Enrollment, "student_id")
@@ -888,7 +870,7 @@ class Student extends Table<Student> {
 // Modelo Course
 class Course extends Table<Course> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
   declare name: string;
 
   @HasMany(() => Enrollment, "course_id")
@@ -898,16 +880,16 @@ class Course extends Table<Course> {
 // Tabla de unión
 class Enrollment extends Table<Enrollment> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   declare student_id: string;
   declare course_id: string;
   declare grade: string;
 
-  @BelongsTo(() => Student, "student_id")
+  @BelongsTo(() => Student, "id", "student_id")
   declare student: NonAttribute<Student | null>;
 
-  @BelongsTo(() => Course, "course_id")
+  @BelongsTo(() => Course, "id", "course_id")
   declare course: NonAttribute<Course | null>;
 }
 
@@ -936,7 +918,7 @@ Implementar relaciones polimórficas usando campos de tipo:
 ```typescript
 class Comment extends Table<Comment> {
   @PrimaryKey()
-  declare id: string;
+  declare id: CreationOptional<string>;
 
   declare commentable_type: string; // "Post" o "Video"
   declare commentable_id: string;
@@ -975,13 +957,13 @@ declare orders: Order[];
 class Order extends Table<Order> {
   declare user_id: string; // Campo de clave foránea
 
-  @BelongsTo(() => User, "user_id")
+  @BelongsTo(() => User, "id", "user_id")
   declare user: NonAttribute<User | null>;
 }
 
 // Malo - falta campo de clave foránea
 class Order extends Table<Order> {
-  @BelongsTo(() => User, "user_id")
+  @BelongsTo(() => User, "id", "user_id")
   declare user: NonAttribute<User | null>;
 }
 ```

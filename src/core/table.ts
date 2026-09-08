@@ -5,6 +5,8 @@
  * @fecha 2025-01-28
  */
 import {
+  BatchGetItemCommand,
+  BatchWriteItemCommand,
   DeleteItemCommand,
   GetItemCommand,
   PutItemCommand,
@@ -19,7 +21,7 @@ import type {
   QueryOperator,
   WhereOptions,
 } from "../@types/index";
-import { processIncludes } from "../utils/relations";
+import { pivotRows, processIncludes } from "../utils/relations";
 import { requireClient, TransactionContext } from "./client";
 import type { HookType, Schema } from "./decorator";
 import { SCHEMA } from "./decorator";
@@ -32,6 +34,50 @@ const OP_MAP: Record<string, string> = {
   $exists: 'attribute_exists', $notExists: 'attribute_not_exists',
 };
 const OPERATORS = new Set(Object.keys(OP_MAP));
+
+/** Segmentos de un Scan que va a leer la tabla completa */
+const SCAN_SEGMENTS = 4;
+
+/** Máximo de items por BatchWriteItem que acepta DynamoDB */
+const BATCH_WRITE_SIZE = 25;
+
+/** Máximo de claves por BatchGetItem que acepta DynamoDB */
+const BATCH_GET_SIZE = 100;
+
+/**
+ * @description Evaluates the same filters as FilterExpression over an already-read item.
+ * @description Evalúa los mismos filtros que FilterExpression sobre un item ya leído.
+ */
+const matches = (item: Record<string, any>, filters: Record<string, Record<string, any>>): boolean =>
+  Object.entries(filters).every(([field, ops]) =>
+    Object.entries(ops).every(([op_key, expected]) => {
+      if (expected === undefined) return true;
+      const op = OP_MAP[op_key] || op_key;
+      const value = item[field];
+      if ((op === '=' && expected === null) || op === 'attribute_not_exists') return value === undefined || value === null;
+      if ((op === '<>' && expected === null) || op === 'attribute_exists') return value !== undefined && value !== null;
+      if (op === 'in') return Array.isArray(expected) && expected.includes(value);
+      if (op === 'include') {
+        return typeof value === 'string' ? value.includes(String(expected))
+          : Array.isArray(value) ? value.includes(expected)
+          : false;
+      }
+      if (value === undefined || value === null) return false;
+      return op === '=' ? value === expected
+        : op === '<>' ? value !== expected
+        : op === '<' ? value < (expected as any)
+        : op === '<=' ? value <= (expected as any)
+        : op === '>' ? value > (expected as any)
+        : value >= (expected as any);
+    })
+  );
+
+/**
+ * @description Splits a list into chunks of the given size.
+ * @description Parte una lista en lotes del tamaño dado.
+ */
+const chunked = <V>(list: V[], size: number): V[][] =>
+  Array.from({ length: Math.ceil(list.length / size) }, (_unused, i) => list.slice(i * size, i * size + size));
 
 type WhereFilters<M> = {
   [K in keyof InferAttributes<M>]?:
@@ -53,6 +99,12 @@ export interface MutationOptions {
   hook?: boolean;
   tx?: TransactionContext;
 }
+
+/**
+ * @description Result of a query: the instances plus the cursor of the next page, when there is one.
+ * @description Resultado de una consulta: las instancias más el cursor de la página siguiente, cuando la hay.
+ */
+export type QueryResult<M> = M[] & { cursor?: Record<string, any> };
 
 export default class Table<T = any> {
   static [SCHEMA]: Schema;
@@ -280,12 +332,51 @@ export default class Table<T = any> {
       return true;
     }
 
+    // La instancia ya tiene el registro completo: se escribe un solo UpdateItem con los
+    // campos tocados, sin leerlo antes y sin reescribir las columnas que nadie cambió.
+    const touched = Object.keys(filtered_data);
+    for (const col_name in schema.columns) {
+      if (schema.columns[col_name].store?.updatedAt && !(col_name in filtered_data)) touched.push(col_name);
+    }
+
+    if (!options?.tx && touched.length > 0) {
+      for (const key of touched) (this as any)[key] = filtered_data[key];
+
+      const names: Record<string, string> = { '#pk': schema.columns[schema.primary_key]?.name || schema.primary_key };
+      const values: Record<string, any> = {};
+      const assignments: string[] = [];
+
+      touched.forEach((key, position) => {
+        const next = (this as any)[key];
+        if (next === undefined) return;
+        names[`#u${position}`] = schema.columns[key].name || key;
+        values[`:u${position}`] = next;
+        assignments.push(`#u${position} = :u${position}`);
+      });
+
+      if (assignments.length === 0) return true;
+
+      try {
+        await requireClient().send(new UpdateItemCommand({
+          TableName: schema.name,
+          Key: marshall(Table._key(schema, (this as any)[schema.primary_key])),
+          UpdateExpression: `SET ${assignments.join(', ')}`,
+          ConditionExpression: 'attribute_exists(#pk)',
+          ExpressionAttributeNames: names,
+          ExpressionAttributeValues: marshall(values, { removeUndefinedValues: true }),
+        }));
+        return true;
+      } catch (e: any) {
+        if (e.name === 'ConditionalCheckFailedException') return false;
+        throw e;
+      }
+    }
+
     const affected = await (this.constructor as any).update(filtered_data, {
       [schema.primary_key]: (this as any)[schema.primary_key],
     }, { tx: options?.tx });
 
     if (affected > 0) {
-      // Actualizar la instancia con los nuevos valores (incluyendo updated_at)
       for (const key in filtered_data) {
         (this as any)[key] = filtered_data[key];
       }
@@ -332,12 +423,12 @@ export default class Table<T = any> {
 
     const tx = options?.tx;
     if (tx) {
-      tx.addDelete(schema.name, { [schema.primary_key]: id });
+      tx.addDelete(schema.name, Table._key(schema, id));
     } else {
       await requireClient().send(
         new DeleteItemCommand({
           TableName: schema.name,
-          Key: marshall({ [schema.primary_key]: id }),
+          Key: marshall(Table._key(schema, id)),
         })
       );
     }
@@ -394,22 +485,12 @@ export default class Table<T = any> {
 
     const foreign_key_value = (this as any)[relation.localKey];
 
-    const result = await requireClient().send(
-      new ScanCommand({
-        TableName: relation.pivotTable,
-        FilterExpression: "#fk = :local_id AND #rk = :related_id",
-        ExpressionAttributeNames: {
-          "#fk": relation.foreignKey,
-          "#rk": relation.relatedKey,
-        },
-        ExpressionAttributeValues: marshall({
-          ":local_id": foreign_key_value,
-          ":related_id": related_id,
-        }),
-      })
-    );
+    const existing = await pivotRows(relation.pivotTable, relation.foreignKey, foreign_key_value, {
+      field: relation.relatedKey,
+      value: related_id,
+    });
 
-    if (result.Items && result.Items.length > 0) return;
+    if (existing.length > 0) return;
 
     await requireClient().send(
       new PutItemCommand({
@@ -454,29 +535,16 @@ export default class Table<T = any> {
     const local_id = (this as any)[relation.localKey];
     if (!local_id) return;
 
-    const result = await requireClient().send(
-      new ScanCommand({
-        TableName: relation.pivotTable,
-        FilterExpression: "#fk = :local_id AND #rk = :related_id",
-        ExpressionAttributeNames: {
-          "#fk": relation.foreignKey,
-          "#rk": relation.relatedKey,
-        },
-        ExpressionAttributeValues: marshall({
-          ":local_id": local_id,
-          ":related_id": related_id,
-        }),
-      })
-    );
+    const existing = await pivotRows(relation.pivotTable, relation.foreignKey, local_id, {
+      field: relation.relatedKey,
+      value: related_id,
+    });
 
-    if (!result.Items || result.Items.length === 0) return;
+    if (existing.length === 0) return;
 
-    await requireClient().send(
-      new DeleteItemCommand({
-        TableName: relation.pivotTable,
-        Key: marshall({ id: unmarshall(result.Items[0]).id }),
-      })
-    );
+    await Table._batchWrite(relation.pivotTable, existing.map(row => ({
+      DeleteRequest: { Key: marshall({ id: row.id }) },
+    })));
   }
 
   /**
@@ -519,36 +587,73 @@ export default class Table<T = any> {
       throw new Error(`El valor de ${relation.localKey} no está definido`);
     }
 
-    // 1. Obtener todas las relaciones existentes
-    const scan_result = await requireClient().send(
-      new ScanCommand({
-        TableName: relation.pivotTable,
-        FilterExpression: "#fk = :local_id",
-        ExpressionAttributeNames: { "#fk": relation.foreignKey },
-        ExpressionAttributeValues: marshall({ ":local_id": local_id }),
-      })
-    );
-
-    const existing_ids = new Set(
-      (scan_result.Items || []).map(
-        (item) => unmarshall(item)[relation.relatedKey]
-      )
-    );
+    // 1. Las relaciones existentes salen de una sola Query indexada sobre el pivote
+    const rows = await pivotRows(relation.pivotTable, relation.foreignKey, local_id);
+    const existing_ids = new Set(rows.map(row => row[relation.relatedKey]));
     const target_ids = new Set(related_ids);
 
-    // 2. Detach relaciones que no están en la lista objetivo
-    for (const existing_id of existing_ids) {
-      if (!target_ids.has(existing_id)) {
-        await this.detach(RelatedModel, existing_id);
-      }
+    // 2. Las bajas y las altas viajan juntas en lotes de 25
+    const writes = [
+      ...rows
+        .filter(row => !target_ids.has(row[relation.relatedKey]))
+        .map(row => ({ DeleteRequest: { Key: marshall({ id: row.id }) } })),
+      ...[...target_ids]
+        .filter(id => !existing_ids.has(id))
+        .map(id => ({
+          PutRequest: {
+            Item: marshall({
+              id: `${local_id}_${id}`,
+              [relation.foreignKey]: local_id,
+              [relation.relatedKey]: id,
+              created_at: new Date().toISOString(),
+            }, { removeUndefinedValues: true }),
+          },
+        })),
+    ];
+
+    if (writes.length > 0) await Table._batchWrite(relation.pivotTable, writes);
+  }
+
+  /**
+   * @description Builds the DynamoDB key of a record from its primary key value.
+   * @description Construye la clave DynamoDB de un registro a partir del valor de su clave primaria.
+   */
+  private static _key(schema: Schema, value: any): Record<string, any> {
+    return { [schema.columns[schema.primary_key]?.name || schema.primary_key]: value };
+  }
+
+  /**
+   * @description Sends write requests in batches of 25, retrying whatever DynamoDB leaves unprocessed.
+   * @description Envía peticiones de escritura en lotes de 25, reintentando lo que DynamoDB deje sin procesar.
+   */
+  private static async _batchWrite(table_name: string, requests: any[]): Promise<void> {
+    const client = requireClient();
+
+    // Un solo registro no necesita lote: el comando directo informa mejor sus errores
+    if (requests.length === 1) {
+      const [request] = requests;
+      await client.send(request.PutRequest
+        ? new PutItemCommand({ TableName: table_name, Item: request.PutRequest.Item })
+        : new DeleteItemCommand({ TableName: table_name, Key: request.DeleteRequest.Key }) as any);
+      return;
     }
 
-    // 3. Attach nuevas relaciones que no existen
-    for (const target_id of target_ids) {
-      if (!existing_ids.has(target_id)) {
-        await this.attach(RelatedModel, target_id);
+    await Promise.all(chunked(requests, BATCH_WRITE_SIZE).map(async (chunk) => {
+      let pending = chunk;
+      for (let attempt = 0; pending.length > 0; attempt++) {
+        const result = await client.send(new BatchWriteItemCommand({ RequestItems: { [table_name]: pending } }));
+        pending = (result.UnprocessedItems?.[table_name] ?? []) as any[];
+        if (pending.length > 0) await new Promise(resolve => setTimeout(resolve, 2 ** attempt * 50));
       }
-    }
+    }));
+  }
+
+  /**
+   * @description Runs the write pipeline of a column over a value, with the current one as reference.
+   * @description Ejecuta el pipeline de escritura de una columna sobre un valor, con el actual como referencia.
+   */
+  private static _apply(column: Schema['columns'][string], next: any, current?: any): any {
+    return column.set.reduce((accumulated: any, fn: any) => fn(accumulated, current), next);
   }
 
   /**
@@ -608,6 +713,83 @@ export default class Table<T = any> {
   }
 
   /**
+   * @description Creates several records with BatchWriteItem, 25 items per request. It does not check
+   * for duplicate primary keys, which BatchWriteItem cannot express: an existing record is overwritten.
+   * @description Crea varios registros con BatchWriteItem, 25 items por petición. No comprueba claves
+   * primarias duplicadas, que BatchWriteItem no admite: un registro existente se sobreescribe.
+   * @param rows Datos de cada registro
+   * @param options Opciones de mutación
+   * @example
+   * const logs = await Log.createMany([{ message: "a" }, { message: "b" }]);
+   */
+  static async createMany<M extends Table>(
+    this: new (data: any) => M,
+    rows: Array<Partial<InferAttributes<M>>>,
+    options?: MutationOptions
+  ): Promise<M[]> {
+    const schema: Schema = (this as any)[SCHEMA];
+    const instances = rows.map(row => new this(row));
+    if (instances.length === 0) return instances;
+
+    if (options?.hook) {
+      for (const instance of instances) await Table._run_hooks(instance, 'beforeCreate');
+    }
+
+    const tx = options?.tx;
+    if (tx) {
+      for (const instance of instances) tx.addPut(schema.name, (instance as any)._toDBPayload());
+      tx.onCommit(() => { for (const instance of instances) (instance as any).__isPersisted = true; });
+      if (options?.hook) {
+        tx.onCommit(async () => { for (const instance of instances) await Table._run_hooks(instance, 'afterCreate'); });
+      }
+      return instances;
+    }
+
+    await Table._batchWrite(schema.name, instances.map(instance => ({
+      PutRequest: { Item: marshall((instance as any)._toDBPayload(), { removeUndefinedValues: true }) },
+    })));
+
+    for (const instance of instances) (instance as any).__isPersisted = true;
+    if (options?.hook) {
+      for (const instance of instances) await Table._run_hooks(instance, 'afterCreate');
+    }
+
+    return instances;
+  }
+
+  /**
+   * @description Deletes records by primary key with BatchWriteItem, without reading them first.
+   * Always a hard delete: it ignores `@DeleteAt` and does not run destroy hooks.
+   * @description Elimina registros por clave primaria con BatchWriteItem, sin leerlos antes.
+   * Siempre es borrado definitivo: ignora `@DeleteAt` y no ejecuta hooks de destrucción.
+   * @param ids Claves primarias a eliminar
+   * @param options Opciones de mutación
+   * @example
+   * await Log.deleteMany(["01H...", "01J..."]);
+   */
+  static async deleteMany<M extends Table>(
+    this: new (data: any) => M,
+    ids: Array<string | number>,
+    options?: MutationOptions
+  ): Promise<number> {
+    const schema: Schema = (this as any)[SCHEMA];
+    const keys = [...new Set(ids)].filter(id => id !== null && id !== undefined);
+    if (keys.length === 0) return 0;
+
+    const tx = options?.tx;
+    if (tx) {
+      for (const id of keys) tx.addDelete(schema.name, Table._key(schema, id));
+      return keys.length;
+    }
+
+    await Table._batchWrite(schema.name, keys.map(id => ({
+      DeleteRequest: { Key: marshall(Table._key(schema, id)) },
+    })));
+
+    return keys.length;
+  }
+
+  /**
    * @description Extract PK value from filters if the filter is a simple PK equality. Returns null otherwise.
    * @description Extrae el valor de PK de los filtros si es una igualdad simple por PK. Retorna null en otro caso.
    */
@@ -643,15 +825,56 @@ export default class Table<T = any> {
       }
     }
 
-    // Optimización: si el filtro es PK exacta, GetItem directo
     const pk_value = (this as any)._extractPK(filters);
+
+    // Escritura directa por clave: un solo UpdateItem con los campos tocados y sin leer antes.
+    // Solo cuando ningún pipeline de esos campos necesita el valor actual del registro.
+    if (pk_value !== null && !tx && !options?.hook) {
+      const touched = Object.keys(parsed_updates);
+      for (const col_name in schema.columns) {
+        if (schema.columns[col_name].store?.updatedAt && !(col_name in parsed_updates)) touched.push(col_name);
+      }
+
+      if (touched.length > 0 && !touched.some(key => schema.columns[key]?.store.readsCurrent)) {
+        const names: Record<string, string> = { '#pk': schema.columns[schema.primary_key]?.name || schema.primary_key };
+        const values: Record<string, any> = {};
+        const assignments: string[] = [];
+
+        touched.forEach((key, position) => {
+          const column = schema.columns[key];
+          const next = Table._apply(column, parsed_updates[key]);
+          if (next === undefined) return;
+          names[`#u${position}`] = column.name || key;
+          values[`:u${position}`] = next;
+          assignments.push(`#u${position} = :u${position}`);
+        });
+
+        if (assignments.length > 0) {
+          try {
+            await requireClient().send(new UpdateItemCommand({
+              TableName: schema.name,
+              Key: marshall(Table._key(schema, pk_value)),
+              UpdateExpression: `SET ${assignments.join(', ')}`,
+              ConditionExpression: 'attribute_exists(#pk)',
+              ExpressionAttributeNames: names,
+              ExpressionAttributeValues: marshall(values, { removeUndefinedValues: true }),
+            }));
+            return 1;
+          } catch (e: any) {
+            if (e.name === 'ConditionalCheckFailedException') return 0;
+            throw e;
+          }
+        }
+      }
+    }
+
     let records: M[];
 
     if (pk_value !== null) {
       const client = requireClient();
       const result = await client.send(new GetItemCommand({
         TableName: schema.name,
-        Key: marshall({ [schema.primary_key]: pk_value }),
+        Key: marshall(Table._key(schema, pk_value)),
       }));
 
       if (!result.Item) return 0;
@@ -682,18 +905,20 @@ export default class Table<T = any> {
       }
 
       if (options?.hook) await Table._run_hooks(record, 'beforeUpdate', parsed_updates);
+      if (tx) tx.addPut(schema.name, (record as any)._toDBPayload());
+    }
 
-      if (tx) {
-        tx.addPut(schema.name, (record as any)._toDBPayload());
-        if (options?.hook) tx.onCommit(() => Table._run_hooks(record, 'afterUpdate', parsed_updates));
-      } else {
-        await requireClient().send(
-          new PutItemCommand({
-            TableName: schema.name,
-            Item: marshall((record as any)._toDBPayload(), { removeUndefinedValues: true }),
-          })
-        );
-        if (options?.hook) await Table._run_hooks(record, 'afterUpdate', parsed_updates);
+    // Fuera de una transacción el lote va por BatchWriteItem: 25 registros por petición
+    if (!tx) {
+      await Table._batchWrite(schema.name, records.map(record => ({
+        PutRequest: { Item: marshall((record as any)._toDBPayload(), { removeUndefinedValues: true }) },
+      })));
+    }
+
+    if (options?.hook) {
+      for (const record of records) {
+        if (tx) tx.onCommit(() => Table._run_hooks(record, 'afterUpdate', parsed_updates));
+        else await Table._run_hooks(record, 'afterUpdate', parsed_updates);
       }
     }
 
@@ -715,43 +940,43 @@ export default class Table<T = any> {
 
     if (pk_value !== null && !has_soft_delete && !has_destroy_hooks) {
       if (tx) {
-        tx.addDelete(schema.name, { [schema.primary_key]: pk_value });
+        tx.addDelete(schema.name, Table._key(schema, pk_value));
       } else {
         await requireClient().send(
           new DeleteItemCommand({
             TableName: schema.name,
-            Key: marshall({ [schema.primary_key]: pk_value }),
+            Key: marshall(Table._key(schema, pk_value)),
           })
         );
       }
       return 1;
     }
 
-    // Fallback: where() + delete por cada uno
+    // Fallback: where() y borrado por lotes
     const records = await (this as any).where(filters);
-    if (records.length === 0) return 0;
+    const targets = records.filter((record: any) => record[schema.primary_key]);
+    if (targets.length === 0) return 0;
 
-    for (const record of records) {
-      const id = (record as any)[schema.primary_key];
-      if (!id) continue;
+    if (options?.hook) {
+      for (const record of targets) await Table._run_hooks(record, 'beforeDestroy');
+    }
 
-      if (options?.hook) await Table._run_hooks(record, 'beforeDestroy');
+    if (tx) {
+      for (const record of targets) tx.addDelete(schema.name, Table._key(schema, (record as any)[schema.primary_key]));
+    } else {
+      await Table._batchWrite(schema.name, targets.map((record: any) => ({
+        DeleteRequest: { Key: marshall(Table._key(schema, record[schema.primary_key])) },
+      })));
+    }
 
-      if (tx) {
-        tx.addDelete(schema.name, { [schema.primary_key]: id });
-        if (options?.hook) tx.onCommit(() => Table._run_hooks(record, 'afterDestroy'));
-      } else {
-        await requireClient().send(
-          new DeleteItemCommand({
-            TableName: schema.name,
-            Key: marshall({ [schema.primary_key]: id }),
-          })
-        );
-        if (options?.hook) await Table._run_hooks(record, 'afterDestroy');
+    if (options?.hook) {
+      for (const record of targets) {
+        if (tx) tx.onCommit(() => Table._run_hooks(record, 'afterDestroy'));
+        else await Table._run_hooks(record, 'afterDestroy');
       }
     }
 
-    return records.length;
+    return targets.length;
   }
 
   /**
@@ -777,7 +1002,7 @@ export default class Table<T = any> {
     const pk_value = (table_class as any)._extractPK(filters);
 
     if (pk_value !== null) {
-      const key = { [schema.primary_key]: pk_value };
+      const key = Table._key(schema, pk_value);
       if (tx) {
         tx.addUpdate(schema.name, key, expr, names, values);
       } else {
@@ -797,14 +1022,14 @@ export default class Table<T = any> {
 
     if (tx) {
       for (const record of records) {
-        tx.addUpdate(schema.name, { [schema.primary_key]: (record as any)[schema.primary_key] }, expr, names, values);
+        tx.addUpdate(schema.name, Table._key(schema, (record as any)[schema.primary_key]), expr, names, values);
       }
     } else {
       const client = requireClient();
       await Promise.all(records.map((record: any) =>
         client.send(new UpdateItemCommand({
           TableName: schema.name,
-          Key: marshall({ [schema.primary_key]: record[schema.primary_key] }),
+          Key: marshall(Table._key(schema, record[schema.primary_key])),
           UpdateExpression: expr,
           ExpressionAttributeNames: names,
           ExpressionAttributeValues: marshall(values),
@@ -856,10 +1081,10 @@ export default class Table<T = any> {
     (this as any)[field as string] = ((this as any)[field as string] || 0) - amount;
   }
 
-  static where<M extends Table>(this: new (props?: any) => M, key: keyof InferAttributes<M>, value: InferAttributes<M>[typeof key], options?: WhereOptions<M>): Promise<M[]>;
-  static where<M extends Table>(this: new (props?: any) => M, key: keyof InferAttributes<M>, operator: QueryOperator, value: any, options?: WhereOptions<M>): Promise<M[]>;
-  static where<M extends Table>(this: new (props?: any) => M, filters: WhereFilters<M>, options?: WhereOptions<M>): Promise<M[]>;
-  static async where<M extends Table>(this: new (props?: any) => M, field_or_filters: any, operator_or_value?: any, value?: any, options?: WhereOptions<M>): Promise<M[]> {
+  static where<M extends Table>(this: new (props?: any) => M, key: keyof InferAttributes<M>, value: InferAttributes<M>[typeof key], options?: WhereOptions<M>): Promise<QueryResult<M>>;
+  static where<M extends Table>(this: new (props?: any) => M, key: keyof InferAttributes<M>, operator: QueryOperator, value: any, options?: WhereOptions<M>): Promise<QueryResult<M>>;
+  static where<M extends Table>(this: new (props?: any) => M, filters: WhereFilters<M>, options?: WhereOptions<M>): Promise<QueryResult<M>>;
+  static async where<M extends Table>(this: new (props?: any) => M, field_or_filters: any, operator_or_value?: any, value?: any, options?: WhereOptions<M>): Promise<QueryResult<M>> {
     const schema: Schema = (this as any)[SCHEMA];
 
     // -- Normalización: todas las sobrecargas -> { field: { $op: value } } --
@@ -881,7 +1106,7 @@ export default class Table<T = any> {
     }
 
     const filters: Record<string, Record<string, any>> = {};
-    for (const [field, val] of Object.entries(raw_filters)) {
+    for (const [field, val] of Object.entries({ ...raw_filters, ...(opts.where as Record<string, any> | undefined) })) {
       if (val === undefined) continue;
       if (!schema.columns[field]) throw new Error(`Unknown column '${field}' in ${schema.name}`);
       if (val !== null && typeof val === 'object' && !Array.isArray(val) && Object.keys(val).some(k => OPERATORS.has(k))) {
@@ -891,10 +1116,10 @@ export default class Table<T = any> {
       }
     }
 
-    if (opts.limit === 0) return [];
+    if (opts.limit === 0) return [] as unknown as QueryResult<M>;
 
     // Soft delete: excluir registros eliminados salvo que se pida lo contrario
-    if (!opts._includeTrashed) {
+    if (!(opts.deleted ?? opts._includeTrashed)) {
       for (const col_name in schema.columns) {
         if (schema.columns[col_name].store?.softDelete && !(col_name in filters)) {
           filters[col_name] = { $notExists: true };
@@ -1020,9 +1245,10 @@ export default class Table<T = any> {
       }
     }
 
-    // -- Ejecución: Query o Scan --
-    let use_query = query_field !== null && key_expressions.length > 0;
+    // -- Ejecución --
+    const client = requireClient();
     let items: any[] = [];
+    let use_query = query_field !== null && key_expressions.length > 0;
 
     const base_params: any = { TableName: schema.name };
     if (Object.keys(attr_names).length > 0) base_params.ExpressionAttributeNames = attr_names;
@@ -1031,97 +1257,175 @@ export default class Table<T = any> {
     if (opts.attributes?.length) {
       base_params.ProjectionExpression = Object.keys(attr_names).filter(k => k.startsWith('#p')).join(', ');
     }
-
     if (use_query) {
       base_params.KeyConditionExpression = key_expressions.join(' AND ');
       if (query_index) base_params.IndexName = query_index;
     }
+    if (opts.cursor) base_params.ExclusiveStartKey = marshall(opts.cursor, { removeUndefinedValues: true });
 
-    const client = requireClient();
-    const unmarshal_items = (raw_items: any[]) => {
-      for (const item of raw_items) {
-        const raw = unmarshall(item);
-        const mapped: Record<string, any> = {};
-        for (const k in raw) {
-          if (raw[k] != null) mapped[db_to_prop[k] || k] = raw[k];
-        }
-        items.push(mapped);
-      }
-    };
-
-    const run = async (Command: typeof QueryCommand | typeof ScanCommand) => {
-      let last_key: any;
-      do {
-        if (last_key) base_params.ExclusiveStartKey = last_key;
-        else delete base_params.ExclusiveStartKey;
-        const result = await client.send(new Command(base_params));
-        if (result.Items) unmarshal_items(result.Items);
-        last_key = result.LastEvaluatedKey;
-      } while (last_key);
-    };
-    // Una Query por valor cuando la clave viene de un $in; una sola cuando viene de $eq
-    const run_query = async () => {
-      for (const value of query_values ?? [query_value]) {
-        if (in_placeholder) base_params.ExpressionAttributeValues = marshall({ ...attr_values, [in_placeholder]: value }, { removeUndefinedValues: true });
-        await run(QueryCommand);
-      }
-    };
-
-    // Intentar Query. Si el GSI no existe, fall back a Scan y desregistrar GSI.
-    if (use_query && query_index) {
-      try {
-        await run_query();
-      } catch (e: any) {
-        if (e.name === 'ResourceNotFoundException' || e.message?.includes('index')) {
-          // GSI no existe: remover del cache, mover KeyCondition a Filter, reintentar como Scan
-          schema.gsis.delete(schema.columns[query_field!]?.name || query_field!);
-          delete base_params.KeyConditionExpression;
-          delete base_params.IndexName;
-          delete base_params.ExclusiveStartKey;
-          const key_as_filter = query_values
-            ? `(${query_values.map((v, i) => { attr_values[`${in_placeholder}_${i}`] = v; return `${in_name} = ${in_placeholder}_${i}`; }).join(' OR ')})`
-            : key_expressions.join(' AND ');
-          base_params.ExpressionAttributeValues = marshall(attr_values, { removeUndefinedValues: true });
-          base_params.FilterExpression = base_params.FilterExpression
-            ? `${key_as_filter} AND ${base_params.FilterExpression}`
-            : key_as_filter;
-          use_query = false;
-          items = [];
-        } else {
-          throw e;
-        }
-      }
-    }
-
-    // Query por PK (sin GSI, no puede fallar por índice faltante) o Scan fallback
-    if (!use_query) await run(ScanCommand);
-    else if (!query_index) await run_query();
-
-    // Ordenar antes de paginar
+    // Campo y dirección de orden, resueltos antes de leer para saber si el índice ya los da
+    let sort_field: string | null = null;
+    let sort_dir: 'ASC' | 'DESC' = 'ASC';
     if (opts.order) {
-      let sort_field = schema.primary_key;
-      let sort_dir: 'ASC' | 'DESC' = 'ASC';
-
       if (typeof opts.order === 'string') {
         sort_dir = opts.order;
+        sort_field = schema.primary_key;
         for (const cn in schema.columns) {
           if (schema.columns[cn].store?.createdAt) { sort_field = cn; break; }
         }
       } else {
-        const [f] = Object.keys(opts.order);
-        sort_field = f;
-        sort_dir = opts.order[f];
+        const [field] = Object.keys(opts.order);
+        sort_field = field;
+        sort_dir = (opts.order as Record<string, 'ASC' | 'DESC'>)[field];
+      }
+    }
+
+    // Una Query sobre la tabla base ordenada por su sort key ya viene ordenada de DynamoDB:
+    // ScanIndexForward evita traer todo a memoria solo para ordenarlo
+    const sort_key = Object.values(schema.columns).find(c => c.store.indexSort && !c.store.primaryKey);
+    let scan_forward: boolean | undefined = undefined;
+    if (sort_field && sort_key && use_query && !query_index && schema.columns[sort_field]?.name === sort_key.name) {
+      scan_forward = sort_dir === 'ASC';
+      base_params.ScanIndexForward = scan_forward;
+    }
+
+    const skip = opts.cursor ? 0 : (opts.skip ?? opts.offset ?? 0);
+    const needed = opts.limit === undefined ? Infinity : skip + opts.limit;
+    const early_stop = needed !== Infinity && (!sort_field || scan_forward !== undefined);
+
+    const page_of = (raw_items: any[] = []) => raw_items.map(raw_item => {
+      const raw = unmarshall(raw_item);
+      const mapped: Record<string, any> = {};
+      for (const k in raw) {
+        if (raw[k] != null) mapped[db_to_prop[k] || k] = raw[k];
+      }
+      return mapped;
+    });
+
+    let cursor: Record<string, any> | undefined = undefined;
+
+    // Recorre las páginas de un comando. Con `stop` corta en cuanto junta los ítems
+    // pedidos y devuelve la clave donde quedó, que es el cursor de la página siguiente.
+    const drain = async (Command: new (input: any) => any, params: any, into: any[], stop: boolean): Promise<Record<string, any> | undefined> => {
+      let last_key: any = params.ExclusiveStartKey;
+      for (;;) {
+        const page: any = { ...params };
+        if (last_key) page.ExclusiveStartKey = last_key;
+        else delete page.ExclusiveStartKey;
+        if (stop && !page.FilterExpression) page.Limit = Math.max(1, needed - into.length);
+        const result: any = await client.send(new Command(page));
+        into.push(...page_of(result.Items));
+        last_key = result.LastEvaluatedKey;
+        if (!last_key) return undefined;
+        if (stop && into.length >= needed) return unmarshall(last_key);
+      }
+    };
+
+    // Lectura directa por clave primaria: GetItem para un valor y BatchGetItem para varios.
+    // Cuesta las mismas unidades de lectura que la Query equivalente y ahorra viajes;
+    // el resto de los filtros se evalúa sobre el ítem ya leído.
+    const key_route = !sort_key && !query_index && query_field === schema.primary_key;
+
+    if (key_route) {
+      const pk_db_name = schema.columns[schema.primary_key]?.name || schema.primary_key;
+      const keys = (query_values ?? [query_value]).map(value => marshall({ [pk_db_name]: value }));
+      const projection = opts.attributes?.length && Object.keys(filters).length === 1
+        ? { ProjectionExpression: base_params.ProjectionExpression, ExpressionAttributeNames: attr_names }
+        : {};
+
+      if (keys.length === 1) {
+        const result = await client.send(new GetItemCommand({ TableName: schema.name, Key: keys[0], ...projection }));
+        items = page_of(result.Item ? [result.Item] : []);
+      } else {
+        const chunks: any[][] = [];
+        for (const chunk of chunked(keys, BATCH_GET_SIZE)) chunks.push(chunk);
+        const pages = await Promise.all(chunks.map(async (chunk) => {
+          const found: any[] = [];
+          let pending = chunk;
+          while (pending.length > 0) {
+            const result = await client.send(new BatchGetItemCommand({
+              RequestItems: { [schema.name]: { Keys: pending, ...projection } },
+            }));
+            found.push(...(result.Responses?.[schema.name] ?? []));
+            pending = result.UnprocessedKeys?.[schema.name]?.Keys ?? [];
+          }
+          return page_of(found);
+        }));
+        for (const page of pages) items.push(...page);
       }
 
+      items = items.filter(item => matches(item, filters));
+    } else {
+      // Un Scan que igual va a leer la tabla entera se parte en segmentos paralelos:
+      // las mismas unidades de lectura, la latencia dividida entre SCAN_SEGMENTS
+      const run_scan = async () => {
+        if (needed === Infinity && !opts.cursor) {
+          const parts = await Promise.all(
+            Array.from({ length: SCAN_SEGMENTS }, async (_unused, segment) => {
+              const into: any[] = [];
+              await drain(ScanCommand, { ...base_params, Segment: segment, TotalSegments: SCAN_SEGMENTS }, into, false);
+              return into;
+            })
+          );
+          for (const part of parts) items.push(...part);
+          return;
+        }
+        cursor = await drain(ScanCommand, base_params, items, early_stop);
+      };
+
+      // Una Query por valor cuando la clave viene de un $in; una sola cuando viene de $eq
+      const run_query = async () => {
+        const values = query_values ?? [query_value];
+        for (const value of values) {
+          if (in_placeholder) base_params.ExpressionAttributeValues = marshall({ ...attr_values, [in_placeholder]: value }, { removeUndefinedValues: true });
+          const last_key = await drain(QueryCommand, base_params, items, early_stop);
+          cursor = values.length === 1 ? last_key : undefined;
+          if (early_stop && items.length >= needed) break;
+        }
+      };
+
+      // Intentar Query. Si el GSI no existe, fall back a Scan y desregistrar GSI.
+      if (use_query && query_index) {
+        try {
+          await run_query();
+        } catch (e: any) {
+          if (e.name === 'ResourceNotFoundException' || e.message?.includes('index')) {
+            // GSI no existe: remover del cache, mover KeyCondition a Filter, reintentar como Scan
+            schema.gsis.delete(schema.columns[query_field!]?.name || query_field!);
+            delete base_params.KeyConditionExpression;
+            delete base_params.IndexName;
+            delete base_params.ExclusiveStartKey;
+            delete base_params.ScanIndexForward;
+            const key_as_filter = query_values
+              ? `(${query_values.map((v, i) => { attr_values[`${in_placeholder}_${i}`] = v; return `${in_name} = ${in_placeholder}_${i}`; }).join(' OR ')})`
+              : key_expressions.join(' AND ');
+            base_params.ExpressionAttributeValues = marshall(attr_values, { removeUndefinedValues: true });
+            base_params.FilterExpression = base_params.FilterExpression
+              ? `${key_as_filter} AND ${base_params.FilterExpression}`
+              : key_as_filter;
+            use_query = false;
+            items = [];
+          } else {
+            throw e;
+          }
+        }
+      }
+
+      if (!use_query) await run_scan();
+      else if (!query_index) await run_query();
+    }
+
+    // Ordenar antes de paginar, salvo que el índice ya haya devuelto el orden pedido
+    if (sort_field && scan_forward === undefined) {
+      const field = sort_field;
       items.sort((a, b) => {
-        if (a[sort_field] < b[sort_field]) return sort_dir === 'ASC' ? -1 : 1;
-        if (a[sort_field] > b[sort_field]) return sort_dir === 'ASC' ? 1 : -1;
+        if (a[field] < b[field]) return sort_dir === 'ASC' ? -1 : 1;
+        if (a[field] > b[field]) return sort_dir === 'ASC' ? 1 : -1;
         return 0;
       });
     }
 
     // Paginar
-    const skip = opts.skip ?? opts.offset ?? 0;
     if (skip > 0 || opts.limit !== undefined) {
       items = items.slice(skip, opts.limit !== undefined ? skip + opts.limit : undefined);
     }
@@ -1144,11 +1448,13 @@ export default class Table<T = any> {
       const instance = new this(item);
       (instance as any).__isPersisted = true;
       return instance;
-    });
+    }) as QueryResult<M>;
 
     if (opts.include) {
       await processIncludes(instances, opts.include as any, this);
     }
+
+    Object.defineProperty(instances, 'cursor', { value: cursor, enumerable: false, configurable: true });
 
     return instances;
   }
