@@ -14,14 +14,14 @@
   },
   "description": "Modern decorator-first ORM for AWS DynamoDB with TypeScript support. Type-safe models, relationships, validations, and transactions.",
   "devDependencies": {
-    "@eslint/js": "^9.39.1",
+    "@eslint/js": "^10",
     "@types/node": "^24.0.6",
-    "eslint": "^9.39.1",
+    "eslint": "^10",
     "globals": "^16.5.0",
     "tsc-alias": "^1.8.16",
     "tsx": "^4.20.3",
-    "typescript": "^5.8.3",
-    "typescript-eslint": "^8.49.0"
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.73.0"
   },
   "exports": {
     ".": {
@@ -58,12 +58,12 @@
     "url": "https://github.com/arcaelas/dynamite.git"
   },
   "scripts": {
-    "build": "rm -rf build && tsc --module commonjs --moduleResolution node --outDir build/cjs && tsc-alias --outDir build/cjs && echo '{\"type\":\"commonjs\"}' > build/cjs/package.json && tsc --module ESNext --moduleResolution bundler --outDir build/esm && tsc-alias --resolve-full-paths --outDir build/esm && echo '{\"type\":\"module\"}' > build/esm/package.json",
+    "build": "rm -rf build && tsc --module commonjs --moduleResolution bundler --outDir build/cjs && tsc-alias --outDir build/cjs && echo '{\"type\":\"commonjs\"}' > build/cjs/package.json && tsc --module ESNext --moduleResolution bundler --outDir build/esm && tsc-alias --resolve-full-paths --outDir build/esm && echo '{\"type\":\"module\"}' > build/esm/package.json",
     "test": "tsx src/test/index.ts",
     "docs": "mkdocs gh-deploy --force",
     "release": "npm publish --access public",
     "prepublishOnly": "yarn build"
   },
   "types": "./build/esm/index.d.ts",
-  "version": "3.4.0"
+  "version": "3.4.1"
 }
