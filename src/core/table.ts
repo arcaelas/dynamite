@@ -701,7 +701,7 @@ export default class Table<T = any> {
         );
       } catch (e: any) {
         if (e.name === 'ConditionalCheckFailedException') {
-          throw new Error(`Record with ${schema.primary_key} '${(instance as any)[schema.primary_key]}' already exists in ${schema.name}`);
+          throw new Error(`Record with ${schema.primary_key} '${(instance as any)[schema.primary_key]}' already exists in ${schema.name}`, { cause: e });
         }
         throw e;
       }
